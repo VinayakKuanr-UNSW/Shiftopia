@@ -1254,6 +1254,51 @@ export type Database = {
           },
         ]
       }
+      casual_fairness_ledger: {
+        Row: {
+          actual_hours: number
+          computed_at: string
+          confidence: number
+          debt_hours: number
+          employee_id: string
+          expected_hours: number
+          metric: string
+          opportunity_count: number
+          organization_id: string
+          run_id: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          actual_hours: number
+          computed_at?: string
+          confidence: number
+          debt_hours: number
+          employee_id: string
+          expected_hours: number
+          metric: string
+          opportunity_count: number
+          organization_id: string
+          run_id: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          actual_hours?: number
+          computed_at?: string
+          confidence?: number
+          debt_hours?: number
+          employee_id?: string
+          expected_hours?: number
+          metric?: string
+          opportunity_count?: number
+          organization_id?: string
+          run_id?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       cancellation_history: {
         Row: {
           cancelled_at: string | null

@@ -38,15 +38,14 @@ import type { ShiftMeta, EmployeeMeta } from './optimizer/solution-parser';
 import { isFullTimeEmployee, toTargetEmploymentType } from '@/modules/core/model/employment.types';
 import type { AvailabilityOverrideRef, ExistingShiftRef } from './types';
 import { auditor } from './audit/auditor';
-import { rosterFetcher, durationMinutes } from './data/roster-fetcher';
+import { rosterFetcher, durationMinutes, shiftDate } from './data/roster-fetcher';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
 import {
-    debtsToMap,
-    classifyShift,
+    categoryMinutes,
+    effectiveDebtsByEmployee,
     strategyMult,
     shiftFairnessPenaltyCents,
-    debtToObjectiveCoeff,
-    type ShiftForFairness,
+    type FairnessMetric,
 } from '@/modules/rosters/domain/fairness-ledger';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
@@ -684,11 +683,10 @@ interface AutoSchedulerInput {
     /** Allows the caller to abort an in-flight run before it overwrites state. */
     signal?: AbortSignal;
     /**
-     * Org scope for the F1 fairness ledger. When provided, the optimizer reads
-     * each employee's cumulative fairness debts and biases the roster toward
-     * whoever is "owed" undesirable shifts, then writes the committed shifts
-     * back to the ledger. When ABSENT, the ledger is cleanly skipped (no debts,
-     * no write-back) — the feature is purely additive.
+     * Org scope for the casual fairness ledger. When provided, the optimizer
+     * reads each casual's opportunity-adjusted debts and biases the roster
+     * toward whoever is owed work. When ABSENT, the ledger is cleanly skipped.
+     * The ledger is recomputed nightly from approved billables, never here.
      */
     organizationId?: string;
     /** B4 — when true, the solver also returns Pareto "what-if" alternatives
@@ -718,6 +716,19 @@ interface CommitResult {
 // =============================================================================
 
 /**
+ * The employment basis the solver's HC-5c compares against
+ * `shift.target_employment_type`. The raw contract status wins: in prod 17 of
+ * 122 staff have a `profiles.employment_type` that disagrees with their Active
+ * contract, and the DB trigger compares against the contract.
+ * `toTargetEmploymentType` mirrors the solver's `normalize_employment_type()`.
+ */
+function solverEmploymentType(e: EmployeeMeta): string {
+    if (e.employment_status) return toTargetEmploymentType(e.employment_status);
+    if (/casual/i.test(e.contract_type || '')) return 'Casual';
+    return e.contract_type === 'PT' || /part/i.test(e.contract_type || '') ? 'Part-Time' : 'Full-Time';
+}
+
+/**
  * When OR-Tools is unavailable or returns INFEASIBLE, fall back to a greedy
  * first-fit strategy: iterate employees in load-ascending order, assign each
  * unfilled shift to the first employee that passes compliance simulation.
@@ -740,6 +751,8 @@ async function greedyFallback(
      * entirely, which is the correct reading for casuals.
      */
     windowObligation?: ReadonlyMap<string, number>,
+    /** Casual employees' confidence-weighted ledger debts — the solver's `fairness_debts`. */
+    fairnessDebts?: ReadonlyMap<string, Partial<Record<FairnessMetric, number>>>,
 ): Promise<ValidatedProposal[]> {
     // Resolve strategy once here with the same defaults used when building
     // the Python optimizer request (see OptimizeRequest construction below).
@@ -771,17 +784,14 @@ async function greedyFallback(
 
     for (const shift of shifts) {
         let assigned = false;
-        // Shared classifier (audit F-11). This block used to roll its own:
-        //   `new Date(shift.shift_date).getDay()`  — parses as UTC midnight and
-        //       reads back in LOCAL time, so a Saturday shift classified as
-        //       Friday for any viewer west of UTC; and
-        //   `startH < 6 || endH <= startH`         — treated every shift merely
-        //       ENDING at midnight (18:00–00:00, a very common close) as night
-        //       work, which neither the ledger nor the solver does.
-        // A fallback run therefore scored these shifts differently from the
-        // solver — and the fallback fires exactly when the optimizer is
-        // unhealthy, i.e. when nobody is watching.
-        const shiftFlags = classifyShift(shift.shift_date, shift.start_time, shift.end_time);
+        // The ledger's own category split (Sat/Sun/PH/night 22:00–06:00), so the
+        // fallback prices this shift exactly as the solver's SC-11/SC-11b do.
+        const shiftMinutes = categoryMinutes(
+            shift.shift_date,
+            shift.start_time,
+            shift.end_time,
+            Math.max(0, durationMinutes(shift.start_time, shift.end_time) - (shift.unpaid_break_minutes ?? 0)),
+        );
 
         // Score each employee for this shift
         const candidateScores = employees.map(emp => {
@@ -861,31 +871,14 @@ async function greedyFallback(
             const { utilization: utl, penalty: utilizationPenalty, bonus: fairnessBonus } =
                 greedyUtilizationTerms(scheduledMins, contractedMins, fairnessMult);
 
-            // F1 Ledger bias — the SHARED scoring kernel, identical to the
-            // solver's SC-11 (audit F-10/F-13). This block used to hardcode 50¢
-            // per debt unit where the solver uses 300¢/500¢, and contained a
-            // leftover duplicated line that counted the negative-weekend-debt
-            // bonus TWICE, so the fallback over-preferred weekend assignment by
-            // 2× relative to night and 6× weaker than the solver overall.
+            // Casual ledger bias — the SHARED pricing kernel, identical to the
+            // solver's SC-11/SC-11b (audit F-10/F-13). Only casuals carry debts.
             // Sign note: `shiftFairnessPenaltyCents` returns a PENALTY (positive
             // = bias away), and this scorer maximises, so it is subtracted.
-            const debts = details?.fairness_debts;
-            const debtBonus = -shiftFairnessPenaltyCents(debts, shiftFlags, fairnessWeight);
+            const debtBonus = -shiftFairnessPenaltyCents(fairnessDebts?.get(emp.id), shiftMinutes, fairnessWeight);
 
-            // Preference discount/bonus
             const pref = new Set(details?.preferred_shift_ids || []);
-            let preferenceBonus = 0;
-            if (pref.has(shift.id)) {
-                preferenceBonus += 50; // base preference bonus ($5.00 equivalent)
-                // Owed-preference boost, via the same coefficient table the
-                // solver uses (2000¢/rate-unit) rather than a local 20.
-                // One-sided by design — a BELOW-average denial rate must not
-                // penalise you for bidding successfully.
-                preferenceBonus += Math.max(
-                    0,
-                    debtToObjectiveCoeff(debts?.denial_rate ?? 0, 'denial_rate', fairnessWeight),
-                );
-            }
+            const preferenceBonus = pref.has(shift.id) ? 50 : 0; // base preference bonus ($5.00 equivalent)
 
             const score = 1000 - fatiguePenalty - utilizationPenalty + fairnessBonus + debtBonus + preferenceBonus;
 
@@ -1244,6 +1237,9 @@ export class AutoSchedulerController {
                 paid_break_minutes: s.paid_break_minutes ?? 0,
                 is_sunday: dayType.isSunday,
                 is_public_holiday: dayType.isPublicHoliday,
+                // A cross-midnight shift's minutes after 00:00 fall on the next
+                // day; the solver's fairness split needs to know if that is a PH.
+                is_public_holiday_next_day: getShiftDayType(shiftDate(s.shift_date, 1)).isPublicHoliday,
             };
         });
 
@@ -1287,12 +1283,16 @@ export class AutoSchedulerController {
             ]),
         );
 
-        // F1 Ledger: fetch cumulative fairness debts for the optimizer run.
+        // Casual fairness ledger: fairness is casual-only, so it is read for
+        // casual employees and only their (confidence-weighted) debts steer.
         // Requires a real org scope. When absent we SKIP entirely rather than
         // invent one — the ledger's organization_id is a uuid, so a fabricated
         // value would error and silently disable the feature anyway.
         const orgId = input.organizationId;
-        let debtsMap: Map<string, Record<string, number>> | null = null;
+        const casualIds = new Set(
+            input.employees.filter(e => solverEmploymentType(e) === 'Casual').map(e => e.id),
+        );
+        let debtsMap: Map<string, Partial<Record<FairnessMetric, number>>> | undefined;
         // Audit F-04: record WHY the ledger did or didn't influence this run. An
         // empty debts map used to be indistinguishable from "nobody owes
         // anything", so longitudinal fairness could be silently off for weeks.
@@ -1300,13 +1300,14 @@ export class AutoSchedulerController {
             applied: false, reason: 'no_org_scope',
             employeesWithDebts: 0, windowEnd: null, ageDays: null,
         };
-        if (orgId) {
+        if (orgId && casualIds.size === 0) {
+            ledgerStatus = { applied: false, reason: 'no_data', employeesWithDebts: 0, windowEnd: null, ageDays: null };
+        } else if (orgId) {
             try {
-                const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(
-                    orgId,
-                    input.employees.map(e => e.id),
-                );
-                debtsMap = debtsToMap(read.debts);
+                // Org-wide, filtered below: hundreds of casual ids in an `.in()`
+                // filter overrun the request URL.
+                const read = await fairnessLedgerService.getStandingsWithStatus(orgId, null);
+                debtsMap = effectiveDebtsByEmployee(read.standings.filter(s => casualIds.has(s.employeeId)));
                 ledgerStatus = {
                     applied: read.status !== 'unavailable',
                     reason: read.status === 'unavailable' ? 'no_data' : read.status,
@@ -1404,9 +1405,7 @@ export class AutoSchedulerController {
                 // raw contract status here is what keeps the two in step.
                 // `toTargetEmploymentType` is the TS mirror of the solver's
                 // `normalize_employment_type()`, so both ends canonicalise identically.
-                employment_type: e.employment_status
-                    ? toTargetEmploymentType(e.employment_status)
-                    : /casual/i.test(e.contract_type || '') ? 'Casual' : isPT ? 'Part-Time' : 'Full-Time',
+                employment_type: solverEmploymentType(e),
                 // Compat/display only — the solver prefers the effective-minute
                 // field below. Still anchored to today because that is what the
                 // score means (fatigue as of now, Sydney).
@@ -1632,7 +1631,7 @@ export class AutoSchedulerController {
                 const validationStart = performance.now();
                 // Past shifts are excluded from greedy too — appended
                 // back as failed proposals so they stay visible in the UI.
-                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes);
+                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes, debtsMap);
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -1668,7 +1667,7 @@ export class AutoSchedulerController {
                 usedFallback = true;
                 optimizerStatus = 'UNKNOWN';
                 const validationStart = performance.now();
-                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes);
+                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes, debtsMap);
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -1853,7 +1852,6 @@ export class AutoSchedulerController {
             // Null when the greedy fallback path was taken (usedFallback=true)
             // because greedyFallback never calls the optimizer.
             objective_breakdown: optimizerObjectiveBreakdown,
-            organizationId: input.organizationId,
             fairnessLedger: ledgerStatus,
             // B3/B5/B4 — single-mode transparency for the scorecard, constraint
             // banner, trade-off explorer, and per-shift "why" panel.
@@ -1969,37 +1967,6 @@ export class AutoSchedulerController {
             failedEmployees: allFailedEmployees,
             concurrencyConflicts: allConflicts,
         });
-
-        // ── F1 fairness-ledger write-back ─────────────────────────────────────
-        // Record the shifts we actually committed so future runs see updated
-        // weekend/night/PH/hours debts. Fire-and-forget: a ledger hiccup must
-        // never fail an already-committed roster. Skipped when no org scope.
-        if (result.organizationId && atomicResult.totalCommitted > 0) {
-            const conflictSet = new Set(allConflicts);
-            const proposalById = new Map(result.proposals.map(p => [p.shiftId, p]));
-            const committedShifts: ShiftForFairness[] = [];
-            for (const pair of atomicAssignments) {
-                for (const shiftId of pair.shiftIds) {
-                    if (conflictSet.has(shiftId)) continue;
-                    const p = proposalById.get(shiftId);
-                    if (!p) continue;
-                    committedShifts.push({
-                        id: shiftId,
-                        employeeId: pair.employeeId,
-                        shiftDate: p.shiftDate,
-                        startTime: p.startTime,
-                        endTime: p.endTime,
-                    });
-                }
-            }
-            if (committedShifts.length > 0) {
-                fairnessLedgerService
-                    .updateAfterCommit(result.organizationId, committedShifts)
-                    .catch(err =>
-                        console.error('[AutoScheduler] Fairness ledger write-back failed:', err),
-                    );
-            }
-        }
 
         const success = atomicResult.success
             && allFailedEmployees.length === 0

@@ -32,11 +32,12 @@ import {
     FATIGUE_BAND_LABEL,
     UTILIZATION_STATUS_LABEL,
     fairnessBand,
+    holdsCasualContract,
     unsociableDebt,
     weekUtilization,
     type DayFairnessContribution,
     type EmployeeFatigue,
-    type FairnessStanding,
+    type MemberFairness,
     type FatigueBand,
     type UtilizationStatus,
 } from '../../domain/team-metrics';
@@ -98,8 +99,8 @@ interface Props {
     fatigueByProfile?: Map<string, EmployeeFatigue>;
     /** profileId -> date -> that day's contribution to the fairness ledger. */
     fairnessContribution?: Map<string, Map<string, DayFairnessContribution>>;
-    /** profileId -> their 91-day standing against the cohort. */
-    fairnessStanding?: Map<string, FairnessStanding>;
+    /** profileId -> their standing against their fair share of casual work. */
+    fairnessStanding?: Map<string, MemberFairness>;
 }
 
 const NAME_COL = 220;
@@ -267,19 +268,20 @@ const WeekTotalCell: React.FC<{
  * Row summary. Icon + written status — the fill is never the only signal.
  *
  * Mode-aware, because two of the six metrics have no per-day value and this is
- * where they are actually reported: fairness is a 91-day standing against the
- * cohort, and utilization is a period figure.
+ * where they are actually reported: fairness is a standing against each
+ * casual's fair share, and utilization is a period figure.
  */
 const RowSummary: React.FC<{
     comp: EmpComp | undefined;
     isDark: boolean;
     cellMode: CellMode;
     fatigue?: EmployeeFatigue;
-    standing?: FairnessStanding;
+    standing?: MemberFairness;
+    isCasual: boolean;
     periodHours: number;
     contractedWeeklyHours?: number;
     weeksOnScreen: number;
-}> = ({ comp, isDark, cellMode, fatigue, standing, periodHours, contractedWeeklyHours, weeksOnScreen }) => {
+}> = ({ comp, isDark, cellMode, fatigue, standing, isCasual, periodHours, contractedWeeklyHours, weeksOnScreen }) => {
     let severity: ComplianceSeverity;
     let title: string;
     let detail: string;
@@ -302,13 +304,15 @@ const RowSummary: React.FC<{
                 : `${Math.round(util.pct)}% of ${contractedWeeklyHours}h/wk`;
     } else if (cellMode === 'fairness') {
         const debt = unsociableDebt(standing);
-        const band = fairnessBand(debt);
-        severity = band === 'balanced' ? 'ok' : 'warning';
+        const band = fairnessBand(standing, isCasual);
+        severity = band === 'over' || band === 'under' ? 'warning' : 'ok';
         title = FAIRNESS_BAND_LABEL[band];
         detail =
-            debt === null
-                ? 'No ledger entry'
-                : `${debt > 0 ? '+' : ''}${debt} vs team over 91 days`;
+            band === 'na'
+                ? 'Fairness covers casual work only'
+                : band === 'building' || debt === null
+                  ? 'Too few casual shifts yet'
+                  : `${debt > 0 ? '+' : ''}${debt}h vs fair share`;
     } else {
         severity = comp?.overallV8Severity ?? 'ok';
         title = SEVERITY_LABEL[severity];
@@ -578,7 +582,7 @@ const TeamAvailabilityGrid: React.FC<Props> = ({
                     <div
                         tabIndex={0}
                         role="img"
-                        aria-label={`${member.fullName}, ${when}: not rostered`}
+                        aria-label={`${member.fullName}, ${when}: no casual shift`}
                         className={cn(base, 'border-transparent text-muted-foreground/30')}
                     >
                         —
@@ -600,7 +604,7 @@ const TeamAvailabilityGrid: React.FC<Props> = ({
                     style={{
                         backgroundColor: ordinary
                             ? 'transparent'
-                            : (hoursFill(Math.min(12, contribution.weight * 2), isDark) ?? 'transparent'),
+                            : (hoursFill(Math.min(12, contribution.weight), isDark) ?? 'transparent'),
                         borderColor: ordinary ? '#89878133' : '#8987817a',
                     }}
                 >
@@ -869,6 +873,7 @@ const TeamAvailabilityGrid: React.FC<Props> = ({
                                                 cellMode={cellMode}
                                                 fatigue={empFatigue}
                                                 standing={fairnessStanding?.get(member.profileId)}
+                                                isCasual={holdsCasualContract(member)}
                                                 periodHours={empHours?.totalHours ?? 0}
                                                 contractedWeeklyHours={member.contractedWeeklyHours}
                                                 weeksOnScreen={Math.max(1, weekColumns.length)}

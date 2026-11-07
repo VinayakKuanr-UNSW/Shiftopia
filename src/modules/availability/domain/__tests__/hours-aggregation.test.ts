@@ -22,6 +22,7 @@ const shift = (over: Partial<RawTeamShift> & { shiftDate: string }): RawTeamShif
     deptName: null,
     subDeptName: null,
     unpaidBreakMinutes: 30,
+    targetEmploymentType: 'Casual',
     ...over,
 });
 

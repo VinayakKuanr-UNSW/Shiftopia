@@ -29,6 +29,7 @@ const shiftBase = {
     deptName: null,
     subDeptName: null,
     unpaidBreakMinutes: 30,
+    targetEmploymentType: 'Casual',
 };
 
 function member(over: Partial<TeamMember> & { profileId: string }): TeamMember {

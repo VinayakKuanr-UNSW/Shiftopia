@@ -52,7 +52,7 @@ interface AutoSchedulerModalProps {
     shifts: ShiftMeta[];
     employees: EmployeeMeta[];
     onComplete: () => void;
-    /** Org scope for the F1 fairness ledger. When omitted, the ledger is skipped. */
+    /** Org scope for the casual fairness ledger. When omitted, the ledger is skipped. */
     organizationId?: string;
     queryFilters?: ShiftFilters;
     /** The window to open on (the roster period on screen). */
@@ -549,7 +549,7 @@ export function AutoSchedulerModal({
                                                         return 'Fatigue penalty points used to balance staff fatigue. Part of Tier-4 (Wellbeing) to distribute hours and prevent burnout.';
                                                     case 'fairness':
                                                     case 'longitudinal_fairness':
-                                                        return 'Fairness penalty points from the cross-roster fairness ledger. Balances weekend/night shifts over multiple roster cycles.';
+                                                        return 'Casual fairness penalty points. Each casual is measured against their fair share of the shifts they were eligible and available for (billed hours − fair share), across this roster and the last 13 weeks of approved work.';
                                                     case 'undesirable_balance':
                                                         return 'Penalty points to avoid assigning excessive consecutive weekend or night shifts.';
                                                     case 'continuity':

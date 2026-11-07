@@ -41,8 +41,8 @@ def test_shift_assignments_distribute_fairly():
         make_shift(sid="s2", date="2026-05-16", start="09:00", end="17:00", role_id="role-A"),
     ]
     employees = [
-        make_employee(eid="e1", contracted_role_ids=["role-A"]),
-        make_employee(eid="e2", contracted_role_ids=["role-A"]),
+        make_employee(eid="e1", employment_type="Casual", contracted_role_ids=["role-A"]),
+        make_employee(eid="e2", employment_type="Casual", contracted_role_ids=["role-A"]),
     ]
 
     output = solve(shifts, employees, constraints=ROLE_ON)
@@ -74,8 +74,8 @@ def test_shared_lower_role_distributes_across_holders():
         make_shift(sid="tm2", date="2026-05-16", start="09:00", end="17:00", role_id="TM"),
     ]
     employees = [
-        make_employee(eid="multi", contracted_role_ids=["TL", "TM"]),
-        make_employee(eid="tm_only", contracted_role_ids=["TM"]),
+        make_employee(eid="multi", employment_type="Casual", contracted_role_ids=["TL", "TM"]),
+        make_employee(eid="tm_only", employment_type="Casual", contracted_role_ids=["TM"]),
     ]
 
     output = solve(shifts, employees, constraints=ROLE_ON)

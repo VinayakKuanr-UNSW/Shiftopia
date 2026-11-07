@@ -37,11 +37,12 @@ import {
     FATIGUE_BAND_LABEL,
     UTILIZATION_STATUS_LABEL,
     fairnessBand,
+    holdsCasualContract,
     unsociableDebt,
     weekUtilization,
     type DayFairnessContribution,
     type EmployeeFatigue,
-    type FairnessStanding,
+    type MemberFairness,
 } from '../../domain/team-metrics';
 import { severityStyle, stateSoft, type ComplianceSeverity } from './coverage-palette';
 import {
@@ -63,7 +64,7 @@ interface Props {
     onSelectMember?: (member: TeamMember) => void;
     fatigueByProfile?: Map<string, EmployeeFatigue>;
     fairnessContribution?: Map<string, Map<string, DayFairnessContribution>>;
-    fairnessStanding?: Map<string, FairnessStanding>;
+    fairnessStanding?: Map<string, MemberFairness>;
 }
 
 const SEVERITY_ICON = {
@@ -156,8 +157,9 @@ const TeamMobileDayList: React.FC<Props> = ({
                     const dayFatigue = fatigueByProfile?.get(member.profileId)?.byDate.get(date);
                     const contribution = fairnessContribution?.get(member.profileId)?.get(date);
                     const util = weekUtilization(weekHours, member.contractedWeeklyHours);
-                    const debt = unsociableDebt(fairnessStanding?.get(member.profileId));
-                    const band = fairnessBand(debt);
+                    const standing = fairnessStanding?.get(member.profileId);
+                    const debt = unsociableDebt(standing);
+                    const band = fairnessBand(standing, holdsCasualContract(member));
 
                     // The headline badge follows the mode, so a fatigue view is
                     // not headlined by a compliance verdict.
@@ -167,7 +169,7 @@ const TeamMobileDayList: React.FC<Props> = ({
                             : cellMode === 'utilization'
                               ? UTILIZATION_SEVERITY[util.status]
                               : cellMode === 'fairness'
-                                ? (band === 'balanced' ? 'ok' : 'warning')
+                                ? (band === 'over' || band === 'under' ? 'warning' : 'ok')
                                 : (empComp?.overallV8Severity ?? 'ok');
                     const severityLabel =
                         cellMode === 'fatigue'
@@ -355,16 +357,18 @@ const TeamMobileDayList: React.FC<Props> = ({
                                         <Fact label="This day contributed">
                                             {contribution && contribution.weight > 0
                                                 ? contribution.labels.join(' · ')
-                                                : shiftsToday.length > 0
+                                                : contribution
                                                   ? 'Ordinary shift'
-                                                  : 'Not rostered'}
+                                                  : shiftsToday.length > 0
+                                                    ? 'No casual shift'
+                                                    : 'Not rostered'}
                                         </Fact>
-                                        {/* The standing is a 91-day cohort
-                                            comparison — not a property of today. */}
-                                        <Fact label="Share over 91 days">
-                                            {debt === null
-                                                ? 'No ledger entry'
-                                                : `${debt > 0 ? '+' : ''}${debt} · ${FAIRNESS_BAND_LABEL[band]}`}
+                                        {/* The standing is against their fair
+                                            share — not a property of today. */}
+                                        <Fact label="Fair share">
+                                            {band === 'na' || band === 'building' || debt === null
+                                                ? FAIRNESS_BAND_LABEL[band === 'na' ? 'na' : 'building']
+                                                : `${debt > 0 ? '+' : ''}${debt}h · ${FAIRNESS_BAND_LABEL[band]}`}
                                         </Fact>
                                     </>
                                 )}

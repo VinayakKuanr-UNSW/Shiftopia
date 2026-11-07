@@ -39,6 +39,9 @@ export interface OptimizerShift {
     is_sunday?: boolean;
     is_saturday?: boolean;
     is_public_holiday?: boolean;
+    /** The day after `shift_date` is a public holiday: the fairness split
+     *  counts a cross-midnight shift's post-00:00 minutes as PH. */
+    is_public_holiday_next_day?: boolean;
     /** Lower min-engagement floor (training shifts can be 2h vs 3h). */
     is_training?: boolean;
     /**
@@ -247,7 +250,8 @@ export interface OptimizerEmployee {
      * forward-compat the Python service.
      */
     availability_overrides?: AvailabilityOverrideRef[];
-    /** F1: Ledger debts. Positive = penalty for assigning more, Negative = bonus. */
+    /** Casual ledger debts in hours × confidence, keyed by FairnessMetric; casuals only.
+     *  Positive = above their fair share (penalty for assigning more), negative = owed. */
     fairness_debts?: Record<string, number>;
     /** Prior circadian load in EFFECTIVE MINUTES spilling into the horizon's
      *  first ISO week — SC-7's own unit. Supersedes the `initial_fatigue_score
@@ -532,9 +536,6 @@ export interface AutoSchedulerResult {
      *  Null/undefined when the optimizer was unreachable or returned no solution
      *  (greedy fallback path). Safe to access with optional-chaining. */
     objective_breakdown?: Record<string, number> | null;
-    /** Org scope echoed from the run input, so commit() can write the F1
-     *  fairness ledger back. Undefined when no org was supplied (ledger off). */
-    organizationId?: string;
     /** F1 ledger health for THIS run (audit F-04). A silently-empty ledger used
      *  to be indistinguishable from "nobody owes anything", so longitudinal
      *  fairness could be off for weeks with no signal. Now every run reports

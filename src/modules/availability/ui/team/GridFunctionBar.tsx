@@ -83,7 +83,7 @@ export const CELL_MODES: Array<{
     key: 'fairness',
     label: 'Fairness',
     Icon: Scale,
-    note: 'Fairness is a 91-day comparison against the team, so the standing is reported per person in the right-hand column. Cells show what each day contributed — Saturday, Sunday, night or public holiday.',
+    note: 'Fairness covers casual shifts only. Each casual is compared with their fair share of the casual shifts they were eligible and available for, so the standing is reported per person in the right-hand column. Cells show the Saturday, Sunday, night and public-holiday hours each day contributed.',
   },
 ];
 

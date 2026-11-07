@@ -34,7 +34,9 @@ import { addDaysISO } from '../domain/team-coverage';
 import { resolveComplianceBasis, resolveScopedBasis, sortByComplianceBasis } from '../domain/contract-basis';
 import type { AvailabilityScopeRef } from '../domain/contract-basis';
 import { resolveNetMinutes } from '../domain/hours-compliance';
-import type { FairnessStanding } from '../domain/team-metrics';
+import type { MemberFairness } from '../domain/team-metrics';
+import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
+import { CONFIDENCE_SHIFTS } from '@/modules/rosters/domain/fairness-ledger';
 
 /** "HH:mm:ss" | "HH:mm" -> "HH:mm" */
 function toHHMM(time: string): string {
@@ -303,7 +305,7 @@ export async function getTeamMembers(scope: ScopeSelection): Promise<TeamMember[
  */
 const TEAM_SHIFT_SELECT =
     'id,shift_date,start_time,end_time,assigned_employee_id,' +
-    'net_length_minutes,scheduled_length_minutes,unpaid_break_minutes,is_draft,lifecycle_status,' +
+    'net_length_minutes,scheduled_length_minutes,unpaid_break_minutes,is_draft,lifecycle_status,target_employment_type,' +
     'roles(name),departments(name),sub_departments(name)';
 
 const SHIFT_PAGE_SIZE = 1000;
@@ -382,6 +384,7 @@ export async function getTeamShifts(
             deptName: row.departments?.name ?? null,
             subDeptName: row.sub_departments?.name ?? null,
             unpaidBreakMinutes: Math.max(0, Number(row.unpaid_break_minutes) || 0),
+            targetEmploymentType: row.target_employment_type ?? null,
         })),
         truncated,
     };
@@ -550,57 +553,52 @@ export { getResolvedAvailabilities };
 // ============================================================================
 
 /**
- * Each member's position against the cohort, straight off `fairness_ledger`.
+ * Each casual member's standing against their fair share, straight off the
+ * casual fairness ledger.
  *
- * READ-ONLY, and deliberately not recomputed here. The ledger is maintained by
- * a cron-driven `recompute_fairness_ledger`; in production it holds one row per
- * (employee, metric) over a 91-day window ending today, refreshed daily. This
- * page reports that standing, it does not derive a second one — a grid that
- * computed its own fairness would be the sixth rival definition of the word.
+ * READ-ONLY, and deliberately not recomputed here: `run_casual_fairness_nightly`
+ * maintains one current generation per organization. This page reports that
+ * standing, it does not derive a second one.
  *
- * Consequence worth knowing: the window is fixed to the ledger's, NOT to the
- * dates on screen. Navigating the grid to March does not re-window fairness,
- * and the UI has to say so rather than implying the number moved with the view.
+ * Consequence worth knowing: the window is the ledger's, NOT the dates on
+ * screen. Navigating the grid to March does not re-window fairness.
  */
 export async function getTeamFairnessStanding(
     scope: ScopeSelection,
     profileIds: string[],
-): Promise<Map<string, FairnessStanding>> {
+): Promise<Map<string, MemberFairness>> {
     const orgIds = (scope.org_ids ?? []).filter(isValidUuid);
     const ids = profileIds.filter(isValidUuid);
     if (orgIds.length === 0 || ids.length === 0) return new Map();
 
-    const { data, error } = await supabase
-        .from('fairness_ledger')
-        .select('employee_id,metric,debt,window_start,window_end')
-        .in('organization_id', orgIds)
-        .in('employee_id', ids);
+    // Org-wide reads, filtered here: a team can be hundreds of people, and an
+    // `.in()` filter that long overruns the request URL.
+    const wanted = new Set(ids);
+    const reads = await Promise.allSettled(
+        orgIds.map((orgId) => fairnessLedgerService.getStandingsWithStatus(orgId, null)),
+    );
 
-    if (error) {
-        // An overlay, not the subject of the page — degrade rather than fail.
-        console.warn('[TeamAvailability] fairness ledger unavailable; standing omitted', error);
-        return new Map();
-    }
-
-    const out = new Map<string, FairnessStanding>();
-    for (const row of (data ?? []) as Array<{
-        employee_id: string;
-        metric: string;
-        debt: number | string | null;
-        window_start: string | null;
-        window_end: string | null;
-    }>) {
-        const entry = out.get(row.employee_id) ?? {
-            debtByMetric: {},
-            windowStart: row.window_start,
-            windowEnd: row.window_end,
-        };
-        // `debt` is numeric — PostgREST may hand it back as a string.
-        const debt = row.debt === null ? null : Number(row.debt);
-        if (debt !== null && Number.isFinite(debt)) {
-            entry.debtByMetric[row.metric as keyof FairnessStanding['debtByMetric']] = debt;
+    const out = new Map<string, MemberFairness>();
+    for (const read of reads) {
+        if (read.status === 'rejected') {
+            // An overlay, not the subject of the page — degrade that organization only.
+            console.warn('[TeamAvailability] fairness ledger unavailable for one organization', read.reason);
+            continue;
         }
-        out.set(row.employee_id, entry);
+        for (const s of read.value.standings) {
+            if (!wanted.has(s.employeeId)) continue;
+            const entry = out.get(s.employeeId) ?? { byMetric: {}, windowStart: s.windowStart, windowEnd: s.windowEnd };
+            // Debts are additive across organizations; confidence follows the combined record.
+            const prev = entry.byMetric[s.metric];
+            const debtHours = (prev?.debtHours ?? 0) + s.debtHours;
+            const opportunityCount = (prev?.opportunityCount ?? 0) + s.opportunityCount;
+            entry.byMetric[s.metric] = {
+                debtHours,
+                opportunityCount,
+                confidence: Math.min(1, opportunityCount / CONFIDENCE_SHIFTS),
+            };
+            out.set(s.employeeId, entry);
+        }
     }
     return out;
 }

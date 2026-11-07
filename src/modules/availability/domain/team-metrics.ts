@@ -29,15 +29,15 @@
  *       A per-cell utilization would have to invent the denominator that file
  *       deliberately removed. The week column is the honest home for it.
  *
- *   FAIRNESS     per (member), over a 91-day window.  NOT per day OR per week.
- *       `fairness_ledger` is one row per (employee, metric, window) holding
- *       `rolling_value`, `team_average` and `debt` — fairness is a COMPARISON
- *       against the cohort, so a single person on a single day has no fairness
- *       value at all. What IS per (member, day) is their CONTRIBUTION: whether
- *       that day was a Saturday, Sunday, night or public holiday shift, which
- *       is exactly what the ledger counts. So the cells show contribution and
- *       the row shows standing. They are different things and are labelled as
- *       different things.
+ *   FAIRNESS     per (member), over the ledger window.  NOT per day OR per week.
+ *       `casual_fairness_ledger` holds, per casual and metric, actual billed
+ *       hours against their fair share of the casual shifts they were eligible
+ *       and available for — a COMPARISON, so a single person on a single day
+ *       has no fairness value at all. What IS per (member, day) is their
+ *       CONTRIBUTION: the Saturday, Sunday, night and public-holiday hours of
+ *       that day's casual shifts, which is exactly what the ledger measures. So
+ *       the cells show contribution and the row shows standing. They are
+ *       different things and are labelled as different things.
  *
  * @see docs/architecture/availability-manager-grid-merge-plan.md §9
  */
@@ -48,7 +48,11 @@ import {
     type FatigueBand,
 } from '@/modules/rosters/domain/projections/utils/fatigue';
 import { computeUtilizationPct } from '@/modules/rosters/domain/projections/utils/workload';
-import { classifyShift, type FairnessMetric } from '@/modules/rosters/domain/fairness-ledger';
+import {
+    SC11_COEFF_PER_HOUR2,
+    categoryMinutes,
+    type FairnessMetric,
+} from '@/modules/rosters/domain/fairness-ledger';
 import type { RawTeamShift, TeamMember } from '../model/team-availability.types';
 
 // ============================================================================
@@ -180,109 +184,115 @@ export function weekUtilization(
 // ============================================================================
 
 /**
+ * Unsociability weight per hour, Saturday = 1: the solver's SC-11 coefficients
+ * (EBA cl 41 Sat : Sun : PH = 1 : 2 : 6, night on its own scale) normalised,
+ * so this page weighs an hour exactly as the autoscheduler prices it.
+ */
+const UNSOCIABLE_METRICS = ['saturday_hours', 'sunday_hours', 'public_holiday_hours', 'night_hours'] as const;
+const WEIGHT: Record<(typeof UNSOCIABLE_METRICS)[number], number> = {
+    saturday_hours: 1,
+    sunday_hours: SC11_COEFF_PER_HOUR2.sunday_hours / SC11_COEFF_PER_HOUR2.saturday_hours,
+    public_holiday_hours: SC11_COEFF_PER_HOUR2.public_holiday_hours / SC11_COEFF_PER_HOUR2.saturday_hours,
+    night_hours: SC11_COEFF_PER_HOUR2.night_hours / SC11_COEFF_PER_HOUR2.saturday_hours,
+};
+
+const round1 = (n: number): number => Math.round(n * 10) / 10;
+
+/**
  * What a single worked day contributes to the fairness ledger.
  *
- * This is NOT that person's fairness. It is the classification the ledger
- * counts, for one day, for one person — the raw material the 91-day standing is
- * built from. Naming matters here: calling this "their fairness on Tuesday"
- * would be the sixth rival definition of a word this codebase has already had
- * to reconcile once.
+ * This is NOT that person's fairness. It is the unsociable hours the ledger
+ * measures, for one day, for one person — the raw material the standing is
+ * built from. Only casual shifts count: fairness is casual-only.
  */
 export interface DayFairnessContribution {
-    isSaturday: boolean;
-    isSunday: boolean;
-    isNight: boolean;
-    isPublicHoliday: boolean;
-    /**
-     * EBA cl 41 unsociability weight — Sat 1, Sun 2, public holiday 6, and a
-     * night shift counts 1 on its own. Zero for an ordinary weekday day shift.
-     */
+    /** Unsociable hours weighted Sat 1 / Sun 2 / PH 6 / night 1.5. Zero for an ordinary weekday day shift. */
     weight: number;
     labels: string[];
 }
 
-/** cl 41 weights. Sat : Sun : PH = 1 : 2 : 6. */
-const WEIGHT = { saturday: 1, sunday: 2, publicHoliday: 6, night: 1 } as const;
-
 export function dayFairnessContribution(
     shifts: readonly RawTeamShift[],
 ): DayFairnessContribution | null {
-    if (shifts.length === 0) return null;
+    const casual = shifts.filter((s) => s.targetEmploymentType === 'Casual');
+    if (casual.length === 0) return null;
 
-    let isSaturday = false;
-    let isSunday = false;
-    let isNight = false;
-    let isPublicHoliday = false;
-
-    for (const s of shifts) {
-        // Uses the ledger's own classifier, so the public-holiday source is
-        // whichever one the ledger uses — this app has had three rival holiday
-        // lists and picking one here by hand is how they diverge again.
-        const flags = classifyShift(s.shiftDate, s.startTime, s.endTime);
-        isSaturday ||= flags.isSaturday;
-        isSunday ||= flags.isSunday;
-        isNight ||= flags.isNight;
-        isPublicHoliday ||= flags.isPublicHoliday;
+    const hours = { saturday_hours: 0, sunday_hours: 0, public_holiday_hours: 0, night_hours: 0 };
+    for (const s of casual) {
+        // The ledger's own split, so the public-holiday source and the night
+        // window are whichever ones the ledger uses.
+        const m = categoryMinutes(s.shiftDate, s.startTime, s.endTime, s.netMinutes);
+        hours.saturday_hours += m.saturday / 60;
+        hours.sunday_hours += m.sunday / 60;
+        hours.public_holiday_hours += m.public_holiday / 60;
+        hours.night_hours += m.night / 60;
     }
 
     const labels: string[] = [];
-    let weight = 0;
-    if (isPublicHoliday) { labels.push('Public holiday'); weight += WEIGHT.publicHoliday; }
-    if (isSunday) { labels.push('Sunday'); weight += WEIGHT.sunday; }
-    if (isSaturday) { labels.push('Saturday'); weight += WEIGHT.saturday; }
-    if (isNight) { labels.push('Night'); weight += WEIGHT.night; }
+    if (hours.public_holiday_hours > 0) labels.push('Public holiday');
+    if (hours.sunday_hours > 0) labels.push('Sunday');
+    if (hours.saturday_hours > 0) labels.push('Saturday');
+    if (hours.night_hours > 0) labels.push('Night');
+    const weight = UNSOCIABLE_METRICS.reduce((sum, metric) => sum + hours[metric] * WEIGHT[metric], 0);
 
-    return { isSaturday, isSunday, isNight, isPublicHoliday, weight, labels };
+    return { weight: round1(weight), labels };
 }
 
-/** One employee's standing, straight off the ledger. */
-export interface FairnessStanding {
-    /** metric -> how far they sit from the team average over the window. */
-    debtByMetric: Partial<Record<FairnessMetric, number>>;
+/** One casual's standing, straight off the ledger. */
+export interface MemberFairness {
+    /** metric -> hours above (+) or below (−) their fair share, and how much to trust it. */
+    byMetric: Partial<Record<FairnessMetric, { debtHours: number; confidence: number; opportunityCount: number }>>;
     /** yyyy-MM-dd bounds of the ledger window these came from. */
     windowStart: string | null;
     windowEnd: string | null;
 }
 
 /**
- * The single headline number: unsociable-shift debt against the cohort.
+ * The single headline number: confidence-weighted unsociable hours above (+)
+ * or below (−) their fair share.
  *
- * Combines the cl 41-weighted metrics only. `total_hours` and `denial_rate`
- * are deliberately excluded — they are fairness metrics, but they are not
- * *unsociability*, and averaging them into one figure would make a person who
- * simply works a lot indistinguishable from one who works every Sunday.
- *
- * Positive = carrying MORE than their share.
+ * Total and overtime hours are deliberately excluded — they are fairness
+ * metrics, but they are not *unsociability*, and folding them in would make a
+ * person who simply works a lot indistinguishable from one who works every
+ * Sunday.
  */
-export function unsociableDebt(standing: FairnessStanding | undefined): number | null {
-    if (!standing) return null;
-    const { debtByMetric } = standing;
-    const parts: Array<[FairnessMetric, number]> = [
-        ['saturday_shifts', WEIGHT.saturday],
-        ['sunday_shifts', WEIGHT.sunday],
-        ['public_holiday_shifts', WEIGHT.publicHoliday],
-        ['night_shifts', WEIGHT.night],
-    ];
+export function unsociableDebt(member: MemberFairness | undefined): number | null {
+    if (!member) return null;
     let total = 0;
     let seen = 0;
-    for (const [metric, weight] of parts) {
-        const v = debtByMetric[metric];
-        if (typeof v === 'number' && Number.isFinite(v)) {
-            total += v * weight;
-            seen += 1;
-        }
+    for (const metric of UNSOCIABLE_METRICS) {
+        const entry = member.byMetric[metric];
+        if (!entry || !Number.isFinite(entry.debtHours)) continue;
+        total += entry.debtHours * entry.confidence * WEIGHT[metric];
+        seen += 1;
     }
-    return seen > 0 ? Math.round(total * 10) / 10 : null;
+    return seen > 0 ? round1(total) : null;
 }
 
-type FairnessBand = 'over' | 'balanced' | 'under';
+type FairnessBand = 'over' | 'balanced' | 'under' | 'building' | 'na';
+
+/** Below this confidence a standing is too thin to call either way. */
+const BUILDING_BELOW_CONFIDENCE = 0.3;
+
+/** Fairness is casual-only: does this member hold a Casual contract in scope? */
+export function holdsCasualContract(member: Pick<TeamMember, 'contracts' | 'employmentStatus'>): boolean {
+    return member.contracts
+        ? member.contracts.some((c) => c.employmentStatus === 'Casual')
+        : member.employmentStatus === 'Casual';
+}
 
 /**
- * A debt of exactly zero is the ideal, so the band has to be a tolerance rather
- * than a sign test — otherwise a rounding-level 0.1 reads as unfair.
+ * A debt of zero is the ideal, so the band is a tolerance — half a shift
+ * (4 weighted hours) — rather than a sign test. Too few opportunities is
+ * neither balanced nor unbalanced: it is 'building'. Someone with no casual
+ * contract is outside the model altogether: 'na'.
  */
-export function fairnessBand(debt: number | null, tolerance = 1): FairnessBand {
-    if (debt === null || Math.abs(debt) <= tolerance) return 'balanced';
+export function fairnessBand(member: MemberFairness | undefined, isCasual: boolean, tolerance = 4): FairnessBand {
+    if (!isCasual) return 'na';
+    const entries = UNSOCIABLE_METRICS.map((m) => member?.byMetric[m]).filter((e) => e !== undefined);
+    if (entries.every((e) => e.confidence < BUILDING_BELOW_CONFIDENCE)) return 'building';
+    const debt = unsociableDebt(member) ?? 0;
+    if (Math.abs(debt) <= tolerance) return 'balanced';
     return debt > 0 ? 'over' : 'under';
 }
 
@@ -290,6 +300,8 @@ export const FAIRNESS_BAND_LABEL: Record<FairnessBand, string> = {
     over: 'Over share',
     balanced: 'Balanced',
     under: 'Under share',
+    building: 'Building history',
+    na: 'Casual only',
 };
 
 export const UTILIZATION_STATUS_LABEL: Record<UtilizationStatus, string> = {

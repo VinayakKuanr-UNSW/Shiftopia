@@ -123,6 +123,8 @@ class ShiftReq(BaseModel):
     is_sunday: bool = False
     is_saturday: bool = False  # cl 41.1 ×1.25; also derived server-side from shift_date
     is_public_holiday: bool = False
+    # The next calendar day is a PH — fairness counts post-midnight minutes as PH.
+    is_public_holiday_next_day: bool = False
     # 'NORMAL' or 'MULTI_HIRE' — affects the rest-gap rule (480m vs 600m).
     # MULTI_HIRE handling is currently approximated by AddNoOverlap with
     # the 600m pad; flag is here for forward-compat.
@@ -236,9 +238,10 @@ class EmployeeReq(BaseModel):
     # Security against the general envelope, under-utilised them by 4h/week, and
     # could never produce the roster V8 would have accepted.
     is_security_role: bool = False
-    # F1 fairness-ledger debts per metric. Declared so it survives the wire and
-    # reaches EmployeeInput.fairness_debts (consumed by SC-11). Without this the
-    # controller's debts are silently dropped here.
+    # Casual fairness-ledger debts: confidence-weighted HOURS per metric
+    # (model_builder.FAIRNESS_METRICS). Declared so it survives the wire and
+    # reaches EmployeeInput.fairness_debts (consumed by SC-11/SC-11b). Without
+    # this the controller's debts are silently dropped here.
     fairness_debts: dict[str, float] = Field(default_factory=dict)
     # Prior-week circadian load in EFFECTIVE MINUTES — SC-7's own unit. Preferred
     # over `initial_fatigue_score * 60`, which overstated prior load ~2.2x and

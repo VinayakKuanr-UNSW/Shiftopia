@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+    FAIRNESS_BAND_LABEL,
     buildFatigueByEmployee,
     dayFairnessContribution,
     fairnessBand,
+    holdsCasualContract,
     unsociableDebt,
     utilizationStatus,
     weekUtilization,
+    type MemberFairness,
 } from '../team-metrics';
 import type { RawTeamShift } from '../../model/team-availability.types';
 
@@ -13,8 +16,9 @@ import type { RawTeamShift } from '../../model/team-availability.types';
  * These tests exist mostly to pin the GRANULARITY, not the arithmetic.
  *
  * Fatigue is a real per-day quantity. Utilization is per ISO week because its
- * denominator is a weekly contract. Fairness is a 91-day cohort comparison, so
- * what a cell can show is a day's CONTRIBUTION, never a fairness score. Any
+ * denominator is a weekly contract. Fairness is a per-person standing against
+ * their fair share of casual work, so what a cell can show is a day's
+ * CONTRIBUTION, never a fairness score. Any
  * future change that quietly pushes one of them to a finer grain should fail
  * here.
  */
@@ -31,6 +35,7 @@ const shift = (over: Partial<RawTeamShift> & { shiftDate: string }): RawTeamShif
     deptName: null,
     subDeptName: null,
     unpaidBreakMinutes: 30,
+    targetEmploymentType: 'Casual',
     ...over,
 });
 
@@ -179,6 +184,11 @@ describe('dayFairnessContribution', () => {
         expect(dayFairnessContribution([])).toBeNull();
     });
 
+    // Fairness is casual-only: a Full-Time shift contributes nothing at all.
+    it('returns nothing for a day with no casual shift', () => {
+        expect(dayFairnessContribution([shift({ shiftDate: '2026-08-16', targetEmploymentType: 'FT' })])).toBeNull();
+    });
+
     it('gives an ordinary weekday shift no unsociable weight', () => {
         // 2026-08-12 is a Wednesday.
         const c = dayFairnessContribution([shift({ shiftDate: '2026-08-12' })])!;
@@ -186,102 +196,131 @@ describe('dayFairnessContribution', () => {
         expect(c.labels).toEqual([]);
     });
 
-    // EBA cl 41 — Sat : Sun : PH = 1 : 2 : 6.
-    it('weights Saturday below Sunday', () => {
+    // Weighted HOURS, at the solver's EBA cl 41 ratio — Sat : Sun = 1 : 2.
+    it('weights each unsociable hour, Sunday double Saturday', () => {
         const sat = dayFairnessContribution([shift({ shiftDate: '2026-08-15' })])!;
         const sun = dayFairnessContribution([shift({ shiftDate: '2026-08-16' })])!;
-        expect(sat.isSaturday).toBe(true);
-        expect(sun.isSunday).toBe(true);
-        expect(sun.weight).toBeGreaterThan(sat.weight);
+        expect(sat).toEqual({ weight: 7.5, labels: ['Saturday'] });   // 7.5 net hours × 1
+        expect(sun).toEqual({ weight: 15, labels: ['Sunday'] });      // 7.5 net hours × 2
     });
 
-    it('adds a night loading on top of the day-of-week loading', () => {
-        const satDay = dayFairnessContribution([
-            shift({ shiftDate: '2026-08-15', startTime: '09:00', endTime: '17:00' }),
-        ])!;
-        const satNight = dayFairnessContribution([
+    it('splits an overnight shift across the days and adds its night hours', () => {
+        // Sat 22:00 → Sun 06:00, 30 min unpaid: 2h Sat, 6h Sun, 8h night, ×450/480.
+        const c = dayFairnessContribution([
             shift({ shiftDate: '2026-08-15', startTime: '22:00', endTime: '06:00' }),
         ])!;
-        expect(satNight.weight).toBeGreaterThan(satDay.weight);
-        expect(satNight.labels).toContain('Night');
+        expect(c.labels).toEqual(['Sunday', 'Saturday', 'Night']);
+        expect(c.weight).toBe(24.4); // 1.875×1 + 5.625×2 + 7.5×1.5
     });
 
-    // The ledger's night zone is 00:00–06:00, so a late-evening shift that
-    // never crosses midnight is NOT night work. Worth pinning: "starts at 22:00"
-    // is the intuitive reading and it is not this codebase's.
-    it('does not count a late evening shift that never reaches midnight', () => {
+    // Night is 22:00–06:00 now, the same window the ledger and solver use.
+    it('counts a late evening shift as night work from 22:00', () => {
         const c = dayFairnessContribution([
-            shift({ shiftDate: '2026-08-15', startTime: '22:00', endTime: '23:30' }),
+            shift({ shiftDate: '2026-08-12', startTime: '20:00', endTime: '23:30', netMinutes: 210, unpaidBreakMinutes: 0 }),
         ])!;
-        expect(c.isNight).toBe(false);
+        expect(c.labels).toEqual(['Night']);
+        expect(c.weight).toBe(2.3); // 1.5 night hours × 1.5
     });
 
-    it('folds several shifts on one day into a single classification', () => {
+    it('folds several casual shifts on one day into one contribution', () => {
         const c = dayFairnessContribution([
-            shift({ shiftDate: '2026-08-15', startTime: '06:00', endTime: '10:00' }),
-            shift({ shiftDate: '2026-08-15', startTime: '22:00', endTime: '02:00' }),
+            shift({ shiftDate: '2026-08-12', startTime: '06:00', endTime: '10:00', netMinutes: 240, unpaidBreakMinutes: 0 }),
+            shift({ shiftDate: '2026-08-12', startTime: '22:00', endTime: '23:00', netMinutes: 60, unpaidBreakMinutes: 0 }),
         ])!;
-        expect(c.isSaturday).toBe(true);
-        expect(c.isNight).toBe(true);
+        expect(c).toEqual({ weight: 1.5, labels: ['Night'] });
     });
 });
 
 describe('unsociableDebt', () => {
-    it('is null when the person has no ledger entry', () => {
-        expect(unsociableDebt(undefined)).toBeNull();
-        expect(unsociableDebt({ debtByMetric: {}, windowStart: null, windowEnd: null })).toBeNull();
+    type Entry = { debtHours: number; confidence: number };
+    const member = (entries: Partial<Record<keyof MemberFairness['byMetric'], Entry>>): MemberFairness => ({
+        byMetric: Object.fromEntries(
+            Object.entries(entries).map(([m, e]) => [m, { ...e, opportunityCount: 10 }]),
+        ) as MemberFairness['byMetric'],
+        windowStart: null,
+        windowEnd: null,
     });
 
-    it('weights the metrics by their cl 41 loading', () => {
-        const debt = unsociableDebt({
-            debtByMetric: { sunday_shifts: 1, saturday_shifts: 1 },
-            windowStart: null,
-            windowEnd: null,
-        });
-        // Sunday counts double a Saturday: 1*2 + 1*1.
-        expect(debt).toBe(3);
+    it('is null when the person has no ledger entry', () => {
+        expect(unsociableDebt(undefined)).toBeNull();
+        expect(unsociableDebt(member({}))).toBeNull();
+    });
+
+    it('weights the debts by the solver’s ratio — Sat 1, Sun 2, PH 6, night 1.5', () => {
+        expect(unsociableDebt(member({
+            sunday_hours: { debtHours: 3, confidence: 1 },
+            saturday_hours: { debtHours: 1, confidence: 1 },
+            night_hours: { debtHours: 2, confidence: 1 },
+        }))).toBe(10); // 3×2 + 1×1 + 2×1.5
+    });
+
+    it('lets a thin record steer only as far as its confidence', () => {
+        expect(unsociableDebt(member({ sunday_hours: { debtHours: 4, confidence: 0.5 } }))).toBe(4);
     });
 
     /**
-     * `total_hours` and `denial_rate` are fairness metrics but they are not
+     * Total and overtime hours are fairness metrics but they are not
      * UNSOCIABILITY. Folding them in would make someone who simply works a lot
      * indistinguishable from someone who works every Sunday.
      */
-    it('excludes total_hours and denial_rate from the unsociability figure', () => {
-        expect(
-            unsociableDebt({
-                debtByMetric: { total_hours: 100, denial_rate: 0.5 },
-                windowStart: null,
-                windowEnd: null,
-            }),
-        ).toBeNull();
+    it('excludes total and overtime hours from the unsociability figure', () => {
+        expect(unsociableDebt(member({
+            total_hours: { debtHours: 100, confidence: 1 },
+            overtime_hours: { debtHours: 5, confidence: 1 },
+        }))).toBeNull();
     });
 
     it('carries the sign — negative means carrying less than their share', () => {
-        const debt = unsociableDebt({
-            debtByMetric: { public_holiday_shifts: -1 },
-            windowStart: null,
-            windowEnd: null,
-        });
-        expect(debt).toBe(-6);
+        expect(unsociableDebt(member({ public_holiday_hours: { debtHours: -1, confidence: 1 } }))).toBe(-6);
     });
 });
 
 describe('fairnessBand', () => {
-    // Debt is a deviation from the team mean, so exact zero is the ideal and
-    // the band has to be a tolerance — a rounding-level 0.1 is not unfairness.
-    it('treats a near-zero debt as balanced', () => {
-        expect(fairnessBand(0)).toBe('balanced');
-        expect(fairnessBand(0.5)).toBe('balanced');
-        expect(fairnessBand(-0.9)).toBe('balanced');
+    const member = (debtHours: number, confidence = 1): MemberFairness =>
+        ({ byMetric: { sunday_hours: { debtHours, confidence, opportunityCount: 10 } }, windowStart: null, windowEnd: null });
+
+    // Debt is a deviation from a fair share, so zero is the ideal and the band
+    // is a tolerance — half a shift (4 weighted hours) is not unfairness.
+    it('treats a debt within half a shift as balanced', () => {
+        expect(fairnessBand(member(0), true)).toBe('balanced');
+        expect(fairnessBand(member(2), true)).toBe('balanced');   // weighted 4
+        expect(fairnessBand(member(-2), true)).toBe('balanced');
     });
 
     it('separates carrying more from carrying less', () => {
-        expect(fairnessBand(4)).toBe('over');
-        expect(fairnessBand(-4)).toBe('under');
+        expect(fairnessBand(member(4), true)).toBe('over');
+        expect(fairnessBand(member(-4), true)).toBe('under');
     });
 
-    it('reads a missing standing as balanced rather than as a problem', () => {
-        expect(fairnessBand(null)).toBe('balanced');
+    // Too few opportunities is neither balanced nor unbalanced: it is unknown.
+    it('says history is still building rather than calling it balanced', () => {
+        expect(fairnessBand(undefined, true)).toBe('building');
+        expect(fairnessBand(member(8, 0.2), true)).toBe('building');
+        expect(FAIRNESS_BAND_LABEL.building).toBe('Building history');
+    });
+
+    // Fairness is casual-only: a Full-Time or Part-Time member is outside the
+    // model, not a casual whose history is still building.
+    it('reports non-casual members as casual-only, whatever the ledger holds', () => {
+        expect(fairnessBand(undefined, false)).toBe('na');
+        expect(fairnessBand(member(8), false)).toBe('na');
+        expect(FAIRNESS_BAND_LABEL.na).toBe('Casual only');
+    });
+});
+
+describe('holdsCasualContract', () => {
+    it('is true when any contract in scope is Casual, even beside a Full-Time one', () => {
+        expect(holdsCasualContract({ employmentStatus: 'Full-Time', contracts: [
+            { roleId: 'r1', roleName: 'Supervisor', employmentStatus: 'Full-Time' },
+            { roleId: 'r2', roleName: 'Team Leader', employmentStatus: 'Casual' },
+        ] })).toBe(true);
+    });
+
+    it('is false for Full-Time / Part-Time only, and falls back to the member status without contracts', () => {
+        expect(holdsCasualContract({ employmentStatus: 'Casual', contracts: [
+            { roleId: 'r1', roleName: 'Supervisor', employmentStatus: 'Part-Time' },
+        ] })).toBe(false);
+        expect(holdsCasualContract({ employmentStatus: 'Casual' })).toBe(true);
+        expect(holdsCasualContract({ employmentStatus: 'Full-Time', contracts: [] })).toBe(false);
     });
 });

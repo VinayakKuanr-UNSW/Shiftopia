@@ -11,7 +11,6 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
 import { cn } from '@/modules/core/lib/utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { Drawer, DrawerContent, DrawerTitle } from '@/modules/core/ui/primitives/drawer';
@@ -59,9 +58,10 @@ import { getAvailabilitySlots } from '@/modules/availability/api/availability.ap
 import { classifyBuckets, getBucketSummary } from '@/modules/compliance/ui/bucket-map';
 import type { UseCompliancePanelReturn, PanelStatus, PanelResult } from '@/modules/compliance/ui/useCompliancePanel';
 import { calculateFatigueWithRecovery, getFatigueBand } from '@/modules/rosters/domain/projections/utils/fatigue';
-import { projectFairnessImpact, classifyShift, aggregateShiftsToEntries, type EmployeeLedgerEntry, type FairnessMetric } from '@/modules/rosters/domain/fairness-ledger';
+import { projectFairnessImpact } from '@/modules/rosters/domain/fairness-ledger';
 import { fairnessLedgerQueries } from '@/modules/rosters/api/fairnessLedger.queries';
 import { BidLedgerImpact, type BidLedgerImpactData } from './BidLedgerImpact';
+import { isCasualTargetShift, orderBidsByFairness } from './bid-fairness';
 import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 import type { GroupVariant } from '@/modules/rosters/domain/shift-ui';
 
@@ -152,7 +152,7 @@ function getInitials(name: string): string {
 // useBidsCompliancePanel — custom hook wrapping DB-fetch compliance for bids
 // =============================================================================
 
-function useBidsCompliancePanel(
+export function useBidsCompliancePanel(
   selectedBid: EmployeeBid | null,
   expandedShift: ReturnType<typeof useManagerBidShifts>['shifts'][number] | null,
   toastFn: ReturnType<typeof useToast>['toast'],
@@ -163,9 +163,14 @@ function useBidsCompliancePanel(
   const [warningsAcknowledged, setWarningsAcknowledged] = useState(false);
   const [ledgerImpact, setLedgerImpact] = useState<BidLedgerImpactData | null>(null);
   const runningRef = useRef(false);
+  // Bumped on every selection change and every run: a check whose id is no
+  // longer current belongs to a previous bidder and must not write state.
+  const requestIdRef = useRef(0);
 
   // Reset when selection changes
   useEffect(() => {
+    requestIdRef.current += 1;
+    runningRef.current = false;
     setStatus('idle');
     setResult(null);
     setError(null);
@@ -175,6 +180,8 @@ function useBidsCompliancePanel(
 
   const run = useCallback(async () => {
     if (!selectedBid || !expandedShift || runningRef.current) return;
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestId !== requestIdRef.current;
     runningRef.current = true;
     setStatus('running');
     setError(null);
@@ -355,55 +362,29 @@ function useBidsCompliancePanel(
         const fat = calculateFatigueWithRecovery(fatigueShifts, expandedShift.date, candidate);
         const fatigue = { current: fat.current, projected: fat.projected, band: getFatigueBand(fat.projected) };
 
-        // Fairness — current team entries: persisted ledger first, else recompute from assigned shifts.
+        // Fairness — casual shifts only, from the opportunity-adjusted ledger.
+        const casualShift = isCasualTargetShift(expandedShift);
         const orgId = expandedShift.organizationId;
-        let entries: EmployeeLedgerEntry[] = [];
-        if (orgId) {
-          // Latest window at or before today, NOT an exact `window_end = today`
-          // match (audit F-04) — the exact match found nothing on any day
-          // without a recompute, silently pushing this preview onto the
-          // department-scoped fallback below, whose team average disagrees with
-          // the org-scoped ledger the solver actually uses (audit F-14).
-          const rows = await fairnessLedgerQueries.getLatestDebts(orgId, null, format(new Date(), 'yyyy-MM-dd'));
-          if (rows.length > 0) {
-            const byEmp = new Map<string, Record<FairnessMetric, number>>();
-            for (const r of rows) {
-              const v = byEmp.get(r.employee_id) ?? { saturday_shifts: 0, sunday_shifts: 0, night_shifts: 0, public_holiday_shifts: 0, overtime_minutes: 0, total_hours: 0, denial_rate: 0 };
-              (v as Record<FairnessMetric, number>)[r.metric] = r.rolling_value;
-              byEmp.set(r.employee_id, v);
-            }
-            entries = [...byEmp].map(([employeeId, values]) => ({ employeeId, values }));
-          } else {
-            // ORG-WIDE, deliberately (audit F-14). This fallback used to pass
-            // `expandedShift.departmentId`, so when the ledger was empty the
-            // preview silently switched to a department-scoped team average
-            // while the solver kept using the org-wide one — the same employee
-            // showed a different debt depending on whether a recompute had run,
-            // with nothing on screen saying which basis was in play.
-            const raw = await fairnessLedgerQueries.fetchAssignedShifts(
-              orgId,
-              format(subDays(new Date(), 90), 'yyyy-MM-dd'),
-              format(new Date(), 'yyyy-MM-dd'),
-              undefined,
-            );
-            const classified = raw.map(s => ({
-              id: s.id, shiftDate: s.shift_date, startTime: s.start_time, endTime: s.end_time,
-              employeeId: s.assigned_employee_id, unpaidBreakMinutes: s.unpaid_break_minutes,
-              flags: classifyShift(s.shift_date, s.start_time, s.end_time),
-            }));
-            entries = aggregateShiftsToEntries(classified);
-          }
-        }
-        const fairness = entries.length > 0
-          ? projectFairnessImpact(entries, selectedBid.employeeId, {
+        let fairness: BidLedgerImpactData['fairness'] = null;
+        let unavailable = casualShift && !orgId;
+        if (casualShift && orgId) {
+          try {
+            const standings = await fairnessLedgerQueries.getStandings(orgId, [selectedBid.employeeId]);
+            // Pool = the shift's live bidders: the candidates demonstrably eligible, available and willing.
+            fairness = projectFairnessImpact(standings, {
               shiftDate: expandedShift.date, startTime: expandedShift.startTime,
               endTime: expandedShift.endTime, unpaidBreakMinutes: expandedShift.unpaidBreak || 0,
-            })
-          : null;
-        ledger = { fatigue, fairness };
+            }, Math.max(1, expandedShift.bidCount));
+          } catch (fairnessErr) {
+            console.warn('[useBidsCompliancePanel] fairness standing unavailable', fairnessErr);
+            unavailable = true;
+          }
+        }
+        ledger = { fatigue, fairness, casualShift, unavailable, poolSize: Math.max(1, expandedShift.bidCount) };
       } catch (impactErr) {
         console.warn('[useBidsCompliancePanel] ledger impact failed', impactErr);
       }
+      if (isStale()) return;
       setLedgerImpact(ledger);
 
       setResult({
@@ -414,11 +395,12 @@ function useBidsCompliancePanel(
       });
       setStatus('results');
     } catch (e: unknown) {
+      if (isStale()) return;
       console.error('[useBidsCompliancePanel] Error during compliance check:', e);
       setError(e instanceof Error ? e.message : 'Compliance check failed');
       setStatus('error');
     } finally {
-      runningRef.current = false;
+      if (!isStale()) runningRef.current = false;
     }
   }, [selectedBid, expandedShift, toastFn]);
 
@@ -1158,33 +1140,21 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
         if (!allBids || allBids.length === 0) { skipped++; continue; }
 
-        // F3 — Preference equity: the loop below awards the shift to the FIRST
-        // compliance-clear bidder, so order bidders the fairness ledger says are
-        // "owed" (highest denied-preference debt) ahead of the rest. Stable sort
-        // preserves FIFO within equal debt. Falls back to plain FIFO when there
-        // is no org scope or no ledger data.
+        // The loop below awards the shift to the FIRST compliance-clear bidder,
+        // so on a casual shift try the bidders the fairness ledger says are
+        // most owed this kind of work first — priced exactly as the solver
+        // prices it. Stable: equal standing keeps FIFO. Non-casual shifts and
+        // a failed ledger read stay FIFO.
         let orderedBids = allBids;
-        if (organizationId && allBids.length > 1) {
+        if (organizationId && allBids.length > 1 && isCasualTargetShift(shift)) {
           try {
-            const debts = await fairnessLedgerService.getEmployeeDebts(
+            const standings = await fairnessLedgerQueries.getStandings(
               organizationId,
               allBids.map(b => b.employee_id),
             );
-            // Highest denial RATE first — the share of their own bids this
-            // employee loses, relative to the org. Was a raw denial count,
-            // which ranked whoever bid most rather than whoever loses most
-            // (stakeholder decision Q5).
-            const owed = new Map<string, number>();
-            for (const d of debts) {
-              if (d.metric === 'denial_rate') owed.set(d.employeeId, d.debt);
-            }
-            if (owed.size > 0) {
-              orderedBids = [...allBids].sort(
-                (a, b) => (owed.get(b.employee_id) ?? 0) - (owed.get(a.employee_id) ?? 0),
-              );
-            }
+            orderedBids = orderBidsByFairness(allBids, standings, shift);
           } catch (err) {
-            console.warn('[Bidding] F3 preference-equity ordering skipped:', err);
+            console.warn('[Bidding] fairness ordering skipped:', err);
           }
         }
 
