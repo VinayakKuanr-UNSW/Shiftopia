@@ -108,6 +108,9 @@ export function AutoSchedulerInsights({
     const pillars = result.pillars ?? null;
     const alternatives: ParetoAlternative[] = result.alternatives ?? [];
     const binding = result.bindingConstraints ?? [];
+    const isPermanentMode = result.mode === 'FT_STANDARD' || result.mode === 'FT_SECURITY' || result.mode === 'PT' || result.mode === 'FPT';
+    const balanceLabel = isPermanentMode ? 'Workload Balance' : 'Fairness';
+    const balanceLower = isPermanentMode ? 'workload balance' : 'fairness';
 
     // Options for the radar: the chosen roster + each alternative.
     const radarData = useMemo(() => {
@@ -120,11 +123,11 @@ export function AutoSchedulerInsights({
         // 2026-10-09). The solver still weighs it as its last tier.
         const rows = [
             toRadarRow('Coverage', p => p.coverage.score, options),
-            toRadarRow('Fairness', p => p.fairness.score, options),
+            toRadarRow(balanceLabel, p => p.fairness.score, options),
             toRadarRow('Wellbeing', p => p.fatigue.score, options),
         ];
         return { rows, options };
-    }, [pillars, alternatives]);
+    }, [pillars, alternatives, balanceLabel]);
 
     if (!pillars) return null;
 
@@ -195,7 +198,7 @@ export function AutoSchedulerInsights({
                 <PillarCard
                     index={2}
                     icon={<Scale className="h-3.5 w-3.5" />}
-                    label="Fairness"
+                    label={balanceLabel}
                     score={pillars.fairness.score}
                     value={`${pillars.fairness.score}`}
                     sub={`${pillars.fairness.employees_used} staff · ${Math.round(pillars.fairness.spread_minutes / 60)}h spread`}
@@ -233,8 +236,8 @@ export function AutoSchedulerInsights({
                     <p className="text-[11px] leading-relaxed text-muted-foreground">
                         The <span className="font-medium text-amber-600 dark:text-amber-400">cost-first</span> roster
                         {fairnessDelta > 0
-                            ? <> drops fairness by <span className="font-semibold text-foreground">{fairnessDelta} pts</span>.</>
-                            : <> scores about the same on fairness.</>}
+                            ? <> drops {balanceLower} by <span className="font-semibold text-foreground">{fairnessDelta} pts</span>.</>
+                            : <> scores about the same on {balanceLower}.</>}
                         {' '}This roster is optimised for wellbeing before cost.
                     </p>
                 </Card>
@@ -274,8 +277,8 @@ export function AutoSchedulerInsights({
                                 <p>
                                     The <span className="font-medium text-amber-600 dark:text-amber-400">cost-first</span> roster
                                     {fairnessDelta > 0
-                                        ? <> drops fairness by <span className="font-semibold text-foreground">{fairnessDelta} pts</span>.</>
-                                        : <> scores about the same on fairness.</>}
+                                        ? <> drops {balanceLower} by <span className="font-semibold text-foreground">{fairnessDelta} pts</span>.</>
+                                        : <> scores about the same on {balanceLower}.</>}
                                 </p>
                             )}
                             <p>Higher is better on every axis. The chosen roster is optimised for wellbeing before cost.</p>

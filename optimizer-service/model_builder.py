@@ -132,6 +132,39 @@ def normalize_availability_mode(value: Optional[str]) -> str:
     return _AVAILABILITY_MODE_ALIASES.get(key, 'OPT_IN')
 
 
+# Dedicated employment-mode partitions for the Autoscheduler (5 EBA modes +
+# legacy None/'ALL' mixed mode for backward compatibility).
+SCHEDULER_MODES = ('FT_STANDARD', 'FT_SECURITY', 'PT', 'FPT', 'CASUAL')
+_SCHEDULER_MODE_ALIASES = {
+    'ft_standard': 'FT_STANDARD',
+    'ft-standard': 'FT_STANDARD',
+    'ft_security': 'FT_SECURITY',
+    'ft-security': 'FT_SECURITY',
+    'pt': 'PT',
+    'fpt': 'FPT',
+    'casual': 'CASUAL',
+}
+
+
+def normalize_scheduler_mode(value: Optional[str]) -> Optional[str]:
+    """Canonicalize scheduler_mode to SCHEDULER_MODES or None (mixed/legacy).
+
+    None, '', and 'ALL' map to None so existing mixed-pool callers/tests keep
+    identical behaviour. Unknown non-empty mode tokens raise ValueError so a
+    mis-spelled mode fails loudly rather than silently running mixed rules.
+    """
+    if value is None:
+        return None
+    key = str(value).strip().lower()
+    if not key or key == 'all':
+        return None
+    if key in _SCHEDULER_MODE_ALIASES:
+        return _SCHEDULER_MODE_ALIASES[key]
+    raise ValueError(
+        f"Invalid scheduler_mode {value!r}; expected one of {SCHEDULER_MODES} or None/'ALL'"
+    )
+
+
 # ---------------------------------------------------------------------------
 # EBA NUMERIC THRESHOLDS
 #
@@ -183,8 +216,60 @@ MAX_CASUAL_DAILY_ENGAGEMENTS = 2
 # all. `split-shift-eligibility.ts` uses this same 180 on the pricing side.
 MAX_SPLIT_SHIFT_GAP_MINUTES = 180
 
-# cl 35.1(d)/35.2(d)/35.3(d)/35.4(c) — daily ordinary hours ceiling.
+# cl 35.1(c) — Full-Time minimum daily ordinary hours: 7.6h (456 net minutes).
+FT_MIN_ORDINARY_DAY_MINUTES = 456
+
+# cl 12.3(e) / cl 35.2(e) / Sch 3 §5.2(e) — Regular (predetermined) Part-Time
+# minimum engagement: flat 3 consecutive hours (180 net/paid minutes) on ANY
+# standard/Sunday/training day worked. Unlike Flexible Part-Time (cl 12.4(c))
+# and Casual (cl 12.5(c)), plain Part-Time has NO 2h training exception and NO
+# 4h Sunday uplift — matching `requiredMinEngagementMinutes` in shape/evaluate.ts.
+PT_MIN_ENGAGEMENT_MINUTES = 180
+
+# cl 12.4(c) / cl 35.3(f) — Flexible Part-Time minimum engagement:
+# - Flat 3 consecutive hours (180 minutes) on standard days (cl 12.4(c))
+# - 2 consecutive hours (120 minutes) for training/meeting on a non-event day (cl 12.4(c)a)
+# - 4 consecutive hours (240 minutes) on Sunday or public holiday (cl 12.4(c)c)
+FPT_MIN_ENGAGEMENT_MINUTES = 180
+FPT_TRAINING_MIN_ENGAGEMENT_MINUTES = 120
+FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES = 240
+
+# cl 12.5(c) / cl 35.4 & Sch 3 §5.3 — Casual minimum engagement:
+# - Flat 3 consecutive hours (180 minutes) on standard days (cl 12.5(c)(iii))
+# - 2 consecutive hours (120 minutes) for training/meeting on non-event day (cl 12.5(c)(i))
+# - 4 consecutive hours (240 minutes) on Sunday or public holiday (cl 12.5(c)(ii), cl 56.2)
+# - 4 consecutive hours (240 minutes) for Event Security on ANY day (Sch 3 §5.3(e))
+CASUAL_MIN_ENGAGEMENT_MINUTES = 180
+CASUAL_TRAINING_MIN_ENGAGEMENT_MINUTES = 120
+CASUAL_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES = 240
+CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES = 240
+
+# cl 56.2 — Minimum payment of 4 consecutive hours (240 minutes) on a public
+# holiday for every Team Member (`SHAPE_MIN_ENGAGEMENT_PH` in shape/evaluate.ts).
+PUBLIC_HOLIDAY_MIN_ENGAGEMENT_MINUTES = 240
+
+# cl 35.1(d)/35.2(d)/35.3(d)/35.4(c) — daily ordinary hours ceiling (12h net).
 MAX_DAILY_MINUTES = 720
+
+# cl 35.1(e) — guardrail penalty (cents) per missing pair of consecutive days
+# off per whole week for non-Security Full-Time staff (V8_FT_DAYS_OFF / SC-13).
+FT_PAIRED_RDO_PENALTY_CENTS = 25_000
+
+
+def net_shift_minutes(shift, is_security: bool = False) -> int:
+    """Net paid/worked minutes of `shift`.
+
+    Under ICC EBA cl 36.1, non-Security meal breaks (`unpaid_break_minutes`) are
+    unpaid and excluded from worked hours (matching V8 `maxDailyHoursRule`,
+    `ordinaryHoursAvgRule`, `studentVisaRule`, and `SHAPE_FT_MIN_DAY`). Under
+    Schedule 3 §3.2(a) / §5.3(a), Security meal breaks are paid, so the full
+    duration is counted.
+    """
+    dur = int(getattr(shift, 'duration_minutes', 0) or 0)
+    if is_security:
+        return max(0, dur)
+    unpaid = int(getattr(shift, 'unpaid_break_minutes', 0) or 0)
+    return max(0, dur - unpaid)
 
 # Sch 3 §5.3(g) — where a casual Event Security Team Member works two shifts in
 # one day, EACH engagement must be at least three hours. A flat floor: the
@@ -299,25 +384,41 @@ def _night_allowance_rate(hourly_rate: float, employment_type: str, conclusion_w
     return hourly_rate * (1 + _PERMANENT_NIGHT_PCT[conclusion_weekday])
 
 
-def _assignment_cost_cents_with_night(hourly_rate: float, employment_type: str, shift: 'ShiftInput') -> int:
+def _assignment_cost_cents_with_night(
+    hourly_rate: float,
+    employment_type: str,
+    shift: 'ShiftInput',
+    is_security: bool = False,
+) -> int:
     """Labour cost in cents for the FULL shift: cl 41.1-41.3 Sat/Sun/PH
-    loading applies to every minute, and the cl 43 night allowance
+    loading applies to every paid minute, and the cl 43 night allowance
     additionally applies — as a MAX, not cumulative (cl 41.4) — to whichever
-    portion of the shift falls in the 22:00-06:00 window. Shared by
-    `_assignment_cost_cents` (the rationale helper) and the SC-1 objective
-    term so the two can never diverge.
+    paid portion of the shift falls in the 22:00-06:00 window. Unpaid meal
+    breaks (cl 36.1) are excluded via `net_shift_minutes`; Security meal breaks
+    (Sch 3 §3.2(a)) remain paid. Shared by `_assignment_cost_cents` and SC-1.
     """
+    paid_min = net_shift_minutes(shift, is_security)
+    if paid_min <= 0 or shift.duration_minutes <= 0:
+        return 0
+    # EBA Schedule 3 §4.1(b) / Schedule 2 §2: Full-Time Security Team Members
+    # receive an all-in annualised hourly rate that absorbs Saturday/Sunday/PH
+    # penalty rates (cl 41) and night-shift allowances (cl 43) on rostered hours.
+    # Part-Time & Casual Event Security (Sch 3 §5.2-5.3) retain cl 41 / cl 43.
+    if is_security and employment_type == 'FT':
+        return int(round((paid_min / 60.0) * hourly_rate * 100))
     weekend_rate = _penalty_adjusted_rate(hourly_rate, employment_type, shift)
     night_min = _night_minutes(shift)
     if night_min <= 0:
-        return int(round((shift.duration_minutes / 60.0) * weekend_rate * 100))
+        return int(round((paid_min / 60.0) * weekend_rate * 100))
 
-    non_night_min = shift.duration_minutes - night_min
+    scale = paid_min / float(shift.duration_minutes)
+    paid_night_min = night_min * scale
+    paid_non_night_min = max(0.0, paid_min - paid_night_min)
     night_rate = _night_allowance_rate(hourly_rate, employment_type, _conclusion_weekday(shift))
     effective_night_rate = max(weekend_rate, night_rate)
     return int(round(
-        (non_night_min / 60.0) * weekend_rate * 100
-        + (night_min / 60.0) * effective_night_rate * 100
+        (paid_non_night_min / 60.0) * weekend_rate * 100
+        + (paid_night_min / 60.0) * effective_night_rate * 100
     ))
 
 
@@ -663,6 +764,13 @@ class OptimizerConstraints:
     # through `__dataclass_fields__` on the way in, so a field missing from
     # either side is dropped without an error.
     split_shift_allowance_cents: int = 0
+    # Dedicated employment-mode partition ('FT_STANDARD', 'FT_SECURITY', 'PT',
+    # 'FPT', 'CASUAL', or None for legacy mixed runs). Declared BOTH here and on
+    # ConstraintsReq so it crosses the Pydantic → dataclass wire boundary intact.
+    scheduler_mode: Optional[str] = None
+
+    def __post_init__(self):
+        self.scheduler_mode = normalize_scheduler_mode(self.scheduler_mode)
 
 
 @dataclass
@@ -942,6 +1050,7 @@ def existing_blocks_proposal(
     existing_list: list[ExistingShiftInput],
     standard_min_rest: int,
     emp: Optional['EmployeeInput'] = None,
+    scheduler_mode: Optional[str] = None,
 ) -> bool:
     """True if any of the employee's existing (pinned) shifts overlaps or
     violates rest-gap or same-day labour rules against the proposed shift.
@@ -949,10 +1058,17 @@ def existing_blocks_proposal(
     Respects ICC EBA Multi-Hire rule: 8h (480m) gap if either shift is MULTI_HIRE, 
     otherwise standard 10h (600m).
     """
-    # FT works at most one shift per day (cl 39.1 + trigger fn_shift_ft_one_per_day)
-    # trg_shift_ft_one_per_day triggers when target_employment_type == 'FT'
-    if getattr(proposed, 'target_employment_type', None) == 'FT' or (
-        emp is not None and emp.employment_type == 'FT' and getattr(proposed, 'target_employment_type', None) is not None
+    # FT works at most one shift per day (cl 35.1(e) continuous work + cl 39.1
+    # no split shifts + trigger fn_shift_ft_one_per_day). Unconditional in
+    # FT_STANDARD / FT_SECURITY modes even when target_employment_type was left None.
+    if (
+        scheduler_mode in ('FT_STANDARD', 'FT_SECURITY')
+        or getattr(proposed, 'target_employment_type', None) == 'FT'
+        or (
+            emp is not None
+            and emp.employment_type == 'FT'
+            and getattr(proposed, 'target_employment_type', None) is not None
+        )
     ):
         if any(ex.shift_date == proposed.shift_date for ex in existing_list):
             return True
@@ -1021,7 +1137,7 @@ def existing_blocks_proposal(
     return False
 
 
-def _calculate_effective_minutes(s) -> int:
+def _calculate_effective_minutes(s, is_security: bool = False) -> int:
     """Calculates effective duration (weighted by circadian penalties).
     
     Weights (per Award MA000080 fatigue principles):
@@ -1063,8 +1179,8 @@ def _calculate_effective_minutes(s) -> int:
         if overlap_end > overlap_start:
             weighted_mins += (overlap_end - overlap_start) * weight
             
-    # Subtract unpaid break (pro-rated)
-    unpaid = getattr(s, 'unpaid_break_minutes', 0)
+    # Subtract unpaid break (pro-rated); Security meal breaks are paid (Sch 3 §3.2(a))
+    unpaid = 0 if is_security else getattr(s, 'unpaid_break_minutes', 0)
     if unpaid > 0:
         ratio = weighted_mins / total_mins
         weighted_mins -= unpaid * ratio
@@ -1176,6 +1292,103 @@ def employee_eligible(
     shift: ShiftInput,
     c: OptimizerConstraints,
 ) -> bool:
+    # Layer 1 (Mode Isolation):
+    # - FT_STANDARD: non-Security Full-Time employees & Full-Time shifts within
+    #   EBA cl 35.1(c)-(d) net bounds (7.6h <= net <= 12.0h).
+    # - FT_SECURITY: Schedule 3 Full-Time Security employees & Full-Time shifts
+    #   within Sch 3 §3.1(a) / §3.2(a) / cl 35.1(c)-(d) paid bounds
+    #   (7.6h <= paid <= 12.0h, with 30m meal break paid). Excludes PT Event
+    #   Security (Sch 3 §5.2) and Casual Event Security (Sch 3 §5.3).
+    if c.scheduler_mode == 'FT_STANDARD':
+        if emp.employment_type != 'FT' or emp.is_flexible or emp.is_security_role:
+            return False
+        if shift.target_employment_type not in (None, 'FT') or shift.target_requires_flexible:
+            return False
+        net_mins = net_shift_minutes(shift, is_security=False)
+        if net_mins < FT_MIN_ORDINARY_DAY_MINUTES or net_mins > MAX_DAILY_MINUTES:
+            return False
+    elif c.scheduler_mode == 'FT_SECURITY':
+        if emp.employment_type != 'FT' or emp.is_flexible or not emp.is_security_role:
+            return False
+        if shift.target_employment_type not in (None, 'FT') or shift.target_requires_flexible:
+            return False
+        paid_mins = net_shift_minutes(shift, is_security=True)
+        if paid_mins < FT_MIN_ORDINARY_DAY_MINUTES or paid_mins > MAX_DAILY_MINUTES:
+            return False
+    elif c.scheduler_mode == 'PT':
+        # Regular / Predetermined Part-Time (cl 12.3, cl 35.2 & Sch 3 §5.2).
+        # Includes both Standard PT (`is_security_role=False`, unpaid meal break
+        # cl 36.1) and Event Security PT (`is_security_role=True`, paid meal
+        # break Sch 3 §5.3(a)). Excludes Flexible Part-Time (`is_flexible=True`,
+        # Mode #4 `FPT`), Full-Time, and Casual.
+        if emp.employment_type != 'PT' or emp.is_flexible:
+            return False
+        if shift.target_employment_type not in (None, 'PT') or shift.target_requires_flexible:
+            return False
+        worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
+        min_req = (
+            PUBLIC_HOLIDAY_MIN_ENGAGEMENT_MINUTES
+            if shift.is_public_holiday
+            else PT_MIN_ENGAGEMENT_MINUTES
+        )
+        if worked_mins < min_req or worked_mins > MAX_DAILY_MINUTES:
+            return False
+    elif c.scheduler_mode == 'FPT':
+        # Flexible Part-Time (cl 12.4, cl 35.3 & Sch 3 §5.1-§5.3).
+        # Requires PT employment type with is_flexible=True.
+        # Accepts Standard FPT (unpaid meal break cl 36.1) and Event Security
+        # FPT (paid meal break Sch 3 §5.3(a)).
+        # Strictly rejects Regular PT (is_flexible=False), Full-Time, and Casual.
+        if emp.employment_type != 'PT' or not emp.is_flexible:
+            return False
+        # Shifts in scope: explicitly targeted at Flexible PT or untargeted.
+        # If explicitly targeted at regular non-flexible PT, reject (belongs to Mode #3).
+        if shift.target_employment_type not in (None, 'PT'):
+            return False
+        if shift.target_employment_type == 'PT' and not shift.target_requires_flexible:
+            return False
+        worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
+        # cl 12.4(c) minimum engagement tiers:
+        # a. 2h (120m) for training on non-event day
+        # c. 4h (240m) on Sunday or public holiday
+        # standard: 3h (180m) on any other day
+        if shift.is_training:
+            min_req = FPT_TRAINING_MIN_ENGAGEMENT_MINUTES
+        elif shift.is_sunday or shift.is_public_holiday:
+            min_req = FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
+        else:
+            min_req = FPT_MIN_ENGAGEMENT_MINUTES
+        if worked_mins < min_req or worked_mins > MAX_DAILY_MINUTES:
+            return False
+    elif c.scheduler_mode == 'CASUAL':
+        # Casual Team Members (cl 12.5, cl 35.4 & Sch 3 §5.1-§5.3).
+        # Requires Casual employment type.
+        # Accepts Standard Casual (unpaid meal break cl 36.1) and Event Security
+        # Casual (paid meal break Sch 3 §5.3(a)).
+        # Strictly rejects Full-Time, Regular PT, and Flexible PT.
+        if emp.employment_type != 'Casual':
+            return False
+        # Shifts in scope: explicitly targeted at Casual or untargeted (target_employment_type is None).
+        # Reject shifts requiring flexible PT or targeted at FT / PT.
+        if shift.target_employment_type not in (None, 'Casual') or shift.target_requires_flexible:
+            return False
+        worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
+        # Minimum engagement tiers:
+        # 1. Event Security Casual: flat 4 consecutive hours (240m) on ANY day (Sch 3 §5.3(e))
+        # 2. Training / meeting on non-event day: 2 consecutive hours (120m) (cl 12.5(c)(i))
+        # 3. Sunday / Public Holiday: 4 consecutive hours (240m) (cl 12.5(c)(ii), cl 56.2)
+        # 4. Standard day: 3 consecutive hours (180m) (cl 12.5(c)(iii))
+        if emp.is_security_role:
+            min_req = CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES
+        elif shift.is_training:
+            min_req = CASUAL_TRAINING_MIN_ENGAGEMENT_MINUTES
+        elif shift.is_sunday or shift.is_public_holiday:
+            min_req = CASUAL_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
+        else:
+            min_req = CASUAL_MIN_ENGAGEMENT_MINUTES
+        if worked_mins < min_req or worked_mins > MAX_DAILY_MINUTES:
+            return False
+
     if shift.shift_date in emp.unavailable_dates:
         return False
     if c.enforce_role_match and shift.role_id:
@@ -1189,7 +1402,11 @@ def employee_eligible(
             return False
     # HC-3: Rest Gap / Overlap / Same-day pairing with EXISTING
     if emp.existing_shifts and existing_blocks_proposal(
-        shift, emp.existing_shifts, c.min_rest_minutes, emp=emp,
+        shift,
+        emp.existing_shifts,
+        c.min_rest_minutes,
+        emp=emp,
+        scheduler_mode=c.scheduler_mode,
     ):
         if not c.relax_constraints:
             return False
@@ -1339,6 +1556,7 @@ def compute_greedy_hint(
     employees: list[EmployeeInput],
     eligibility_map: dict[str, list[EmployeeInput]],
     rest_eliminated: set[tuple[str, str]],
+    scheduler_mode: Optional[str] = None,
 ) -> dict[tuple[str, str], int]:
     """
     Fast greedy assignment: for each shift (highest priority first),
@@ -1361,6 +1579,13 @@ def compute_greedy_hint(
             # Skip pre-eliminated pairs
             if (emp.id, shift.id) in rest_eliminated:
                 continue
+            # FT 1-shift/day (cl 35.1(e) / cl 39.1 / fn_shift_ft_one_per_day)
+            if (
+                emp.employment_type == 'FT'
+                and (scheduler_mode in ('FT_STANDARD', 'FT_SECURITY') or shift.target_employment_type == 'FT')
+                and any(s.shift_date == shift.shift_date for s in assigned_shifts[emp.id])
+            ):
+                continue
             # Check rest gap against already-assigned shifts AND the
             # employee's existing committed shifts. Without the second
             # check the hint can plant assignments that downstream
@@ -1374,10 +1599,14 @@ def compute_greedy_hint(
             if conflict:
                 continue
             if emp.existing_shifts and existing_blocks_proposal(
-                shift, emp.existing_shifts, required, emp=emp,
+                shift,
+                emp.existing_shifts,
+                required,
+                emp=emp,
+                scheduler_mode=scheduler_mode,
             ):
                 continue
-            load = sum(s.duration_minutes for s in assigned_shifts[emp.id])
+            load = sum(net_shift_minutes(s, emp.is_security_role) for s in assigned_shifts[emp.id])
             if load < best_load:
                 best_load = load
                 best_emp = emp
@@ -1387,6 +1616,158 @@ def compute_greedy_hint(
             hints[(best_emp.id, shift.id)] = 1
 
     return hints
+
+
+# =============================================================================
+# LAYER 3 PLUGINS (Fatigue & Fairness Guardrails)
+# =============================================================================
+
+class FatiguePlugin:
+    """SC-7 Safety / Circadian Fatigue Plugin.
+
+    Piecewise-linear weekly circadian bands per ISO calendar week (Mon-Sun):
+      - 0..1200 effective mins (20h): $0/min
+      - 1200..1800 effective mins (20h-30h): $5/min surcharge (Amber)
+      - 1800+ effective mins (30h+): $50/min surcharge (Critical)
+    Active across all employment modes (including FT_STANDARD and FT_SECURITY).
+    """
+
+    @staticmethod
+    def apply(builder: 'ScheduleModelBuilder', emit_term) -> None:
+        fatigue_mult = _strategy_mult(builder.data.strategy.fatigue_weight)
+        first_horizon_date = min(
+            (s.shift_date for s in builder.data.shifts), default=''
+        )
+
+        for emp in builder.data.employees:
+            eff_terms_by_week: dict[tuple[int, int], list] = {}
+            for s in builder.data.shifts:
+                if (emp.id, s.id) not in builder._x:
+                    continue
+                wk = _iso_week_key(s.shift_date)
+                eff_terms_by_week.setdefault(wk, []).append(
+                    _calculate_effective_minutes(s, is_security=emp.is_security_role) * builder._x[emp.id, s.id]
+                )
+            if not eff_terms_by_week:
+                continue
+
+            init_eff_mins = int(
+                emp.initial_effective_minutes
+                if emp.initial_effective_minutes is not None
+                else emp.initial_fatigue_score * 60
+            )
+            earliest_week = min(eff_terms_by_week)
+
+            existing_eff_by_week: dict[tuple[int, int], int] = {}
+            for es in emp.existing_shifts:
+                if first_horizon_date and es.shift_date >= first_horizon_date:
+                    wk_es = _iso_week_key(es.shift_date)
+                    existing_eff_by_week[wk_es] = (
+                        existing_eff_by_week.get(wk_es, 0)
+                        + _calculate_effective_minutes(es, is_security=emp.is_security_role)
+                    )
+
+            for wk, eff_terms in eff_terms_by_week.items():
+                week_init = (
+                    (init_eff_mins if wk == earliest_week else 0)
+                    + existing_eff_by_week.get(wk, 0)
+                )
+                tag = f'{emp.id[:6]}_{wk[0] % 100:02d}{wk[1]:02d}'
+
+                eff_total_week = builder.model.NewIntVar(
+                    0, builder._eff_ub + week_init, f'eff_{tag}'
+                )
+                builder.model.Add(
+                    eff_total_week == cp_model.LinearExpr.Sum(eff_terms) + week_init
+                )
+
+                amber_mins = builder.model.NewIntVar(
+                    0, builder._eff_ub + week_init, f'amber_{tag}'
+                )
+                critical_mins = builder.model.NewIntVar(
+                    0, builder._eff_ub + week_init, f'crit_{tag}'
+                )
+                builder.model.AddMaxEquality(amber_mins, [eff_total_week - 1200, 0])
+                builder.model.AddMaxEquality(critical_mins, [eff_total_week - 1800, 0])
+
+                emit_term(int(500 * fatigue_mult) * amber_mins, 'fatigue')
+                emit_term(int(4500 * fatigue_mult) * critical_mins, 'fatigue')
+
+
+class FairnessPlugin:
+    """Opportunity-Adjusted Casual Fairness Plugin (SC-4, SC-10, SC-11, SC-11b).
+
+    Strictly Casual-only. Disabled completely in permanent-only modes such as
+    FT_STANDARD so zero fairness variables or ledger terms enter the model.
+    """
+
+    @staticmethod
+    def apply(builder: 'ScheduleModelBuilder', emit_term) -> None:
+        fair_mult = _strategy_mult(builder.data.strategy.fairness_weight)
+        casual_ids = {
+            e.id for e in builder.data.employees if e.employment_type == 'Casual'
+        }
+        casual_shift_ids = {
+            s.id for s in builder.data.shifts if s.target_employment_type == 'Casual'
+        }
+        if not casual_ids or not casual_shift_ids:
+            return
+
+        casual_pairs: dict[str, list[str]] = {}
+        casual_pool_size: dict[str, int] = {}
+        for e_id, s_id in builder._x:
+            if e_id in casual_ids and s_id in casual_shift_ids:
+                casual_pairs.setdefault(e_id, []).append(s_id)
+                casual_pool_size[s_id] = casual_pool_size.get(s_id, 0) + 1
+        if not casual_pairs:
+            return
+
+        cat_minutes = {s.id: _category_minutes(s) for s in builder.data.shifts}
+        net_min = {s_id: int(round(cm['total'])) for s_id, cm in cat_minutes.items()}
+
+        # SC-4: Opportunity-adjusted in-run total hours balance (excess only).
+        sc4_coeff = max(1, round(fair_mult))
+        for e_id, pairs in casual_pairs.items():
+            expected = int(round(sum(net_min[s_id] / casual_pool_size[s_id] for s_id in pairs)))
+            assigned = cp_model.LinearExpr.Sum([net_min[s_id] * builder._x[e_id, s_id] for s_id in pairs])
+            over = builder.model.NewIntVar(0, sum(net_min[s_id] for s_id in pairs), f'fair_over_{e_id[:6]}')
+            builder.model.Add(over >= assigned - expected)
+            emit_term(sc4_coeff * over, 'fairness')
+
+        # SC-10: Night/weekend/PH undesirable hours balance (excess only).
+        und_q = {s_id: int(round(cm['undesirable'] / 15)) for s_id, cm in cat_minutes.items()}
+        undsr_coeff = max(1, round(50 * fair_mult / 32))
+        for e_id, all_pairs in casual_pairs.items():
+            pairs = [s_id for s_id in all_pairs if und_q[s_id] > 0]
+            if not pairs:
+                continue
+            expected_q = int(round(sum(und_q[s_id] / casual_pool_size[s_id] for s_id in pairs)))
+            u_q = cp_model.LinearExpr.Sum([und_q[s_id] * builder._x[e_id, s_id] for s_id in pairs])
+            high_v = builder.model.NewIntVar(0, sum(und_q[s_id] for s_id in pairs), f'undsr_hi_{e_id[:6]}')
+            builder.model.Add(high_v >= u_q - expected_q)
+            emit_term(undsr_coeff * high_v, 'undesirable_balance')
+
+        # SC-11 / SC-11b: Longitudinal casual fairness ledger debts.
+        for emp in builder.data.employees:
+            debts = _casual_debts(emp)
+            if not debts:
+                continue
+            th_debt = debts.get('total_hours', 0.0)
+            ot_debt = debts.get('overtime_hours', 0.0)
+            for s_id in casual_pairs.get(emp.id, ()):
+                cm = cat_minutes[s_id]
+                sc11 = int(fair_mult * sum(
+                    SC11_COEFF_PER_HOUR2[k] * debts.get(k, 0.0) * cm[cat] / 60
+                    for k, cat in _SC11_CATEGORY.items()
+                ))
+                if sc11 != 0:
+                    emit_term(sc11 * builder._x[emp.id, s_id], 'longitudinal_fairness')
+                sc11b = int(
+                    (th_debt * SC11B_TOTAL_HOURS_COEFF + ot_debt * SC11B_OVERTIME_HOURS_COEFF)
+                    * (cm['total'] / 60) * fair_mult
+                )
+                if sc11b != 0:
+                    emit_term(sc11b * builder._x[emp.id, s_id], 'longitudinal_fairness')
 
 
 # =============================================================================
@@ -1413,6 +1794,9 @@ class ScheduleModelBuilder:
         # escalation rather than assigning it (policy locked 2026-07-05,
         # see [[eba-compliance-audit-remediation]]).
         self._hard_legal_slack_terms: list[cp_model.LinearExpr] = []
+        # SC-13 (cl 35.1(e) paired consecutive days off for non-Security FT):
+        # guardrail-tier terms encouraging 2 consecutive days off per week.
+        self._rdo_slack_terms: list[cp_model.LinearExpr] = []
         self._metrics = OptimizerDebugMetrics(
             raw_pairs=0, eligible_pairs=0, rest_eliminated_pairs=0,
             final_variables=0, num_constraints=0, greedy_hint_applied=False,
@@ -1434,6 +1818,7 @@ class ScheduleModelBuilder:
             'cost': [],
             'fairness': [],
             'fatigue': [],
+            'ft_days_off': [],  # SC-13: cl 35.1(e) paired consecutive RDOs
             'coverage': [],
             'continuity': [],
             'employment_mix': [],
@@ -1456,6 +1841,34 @@ class ScheduleModelBuilder:
         # (coverage > guardrails > cost); 'cheapest' / 'fairest' are used only to
         # generate Pareto "what-if" alternatives for the UI trade-off explorer.
         self.tier_profile: str = 'balanced'
+
+    @property
+    def is_ft_standard(self) -> bool:
+        return self.data.constraints.scheduler_mode == 'FT_STANDARD'
+
+    @property
+    def is_ft_security(self) -> bool:
+        return self.data.constraints.scheduler_mode == 'FT_SECURITY'
+
+    @property
+    def is_ft_mode(self) -> bool:
+        return self.data.constraints.scheduler_mode in ('FT_STANDARD', 'FT_SECURITY')
+
+    @property
+    def is_pt_mode(self) -> bool:
+        return self.data.constraints.scheduler_mode == 'PT'
+
+    @property
+    def is_fpt_mode(self) -> bool:
+        return self.data.constraints.scheduler_mode == 'FPT'
+
+    @property
+    def is_casual_mode(self) -> bool:
+        return self.data.constraints.scheduler_mode == 'CASUAL'
+
+    @property
+    def is_permanent_mode(self) -> bool:
+        return self.is_ft_mode or self.is_pt_mode or self.is_fpt_mode
 
     # -- Objective breakdown ---------------------------------------------------
 
@@ -1500,7 +1913,9 @@ class ScheduleModelBuilder:
         so the rationale's cost_rank can diverge from the solver's true
         marginal cost for employees near their contract ceiling.
         """
-        return _assignment_cost_cents_with_night(emp.hourly_rate, emp.employment_type, shift)
+        return _assignment_cost_cents_with_night(
+            emp.hourly_rate, emp.employment_type, shift, is_security=emp.is_security_role
+        )
 
     def _assignment_rationale(self, emp: 'EmployeeInput', shift: 'ShiftInput') -> dict:
         """Per-assignment 'why this person' factors for the UI."""
@@ -1528,10 +1943,16 @@ class ScheduleModelBuilder:
 
         total_cost = round(sum(a.cost for a in assignments), 2)
 
-        dur = {s.id: s.duration_minutes for s in shifts}
+        shift_map = {s.id: s for s in shifts}
+        emp_map = {e.id: e for e in self.data.employees}
         mins_by_emp: dict[str, float] = {}
         for a in assignments:
-            mins_by_emp[a.employee_id] = mins_by_emp.get(a.employee_id, 0) + dur.get(a.shift_id, 0)
+            s = shift_map.get(a.shift_id)
+            e = emp_map.get(a.employee_id)
+            if s is not None:
+                mins_by_emp[a.employee_id] = mins_by_emp.get(a.employee_id, 0) + net_shift_minutes(
+                    s, bool(e and e.is_security_role)
+                )
         casual_ids = {e.id for e in self.data.employees if e.employment_type == 'Casual'}
         used = len(mins_by_emp)
         loads = [m for e_id, m in mins_by_emp.items() if e_id in casual_ids]
@@ -1557,7 +1978,15 @@ class ScheduleModelBuilder:
         # at 0.
         eff = {s.id: _calculate_effective_minutes(s) for s in shifts}
         week_of = {s.id: _iso_week_key(s.shift_date) for s in shifts}
-        init = {e.id: e.initial_fatigue_score * 60 for e in self.data.employees}
+        init = {
+            e.id: (
+                e.initial_effective_minutes
+                if e.initial_effective_minutes is not None
+                else e.initial_fatigue_score * 60
+            )
+            for e in self.data.employees
+        }
+        first_horizon_date = min((s.shift_date for s in shifts), default='')
 
         # Per-employee → {iso_week: effective_minutes}.
         eff_by_emp_week: dict[str, dict[tuple[int, int], float]] = {}
@@ -1567,6 +1996,15 @@ class ScheduleModelBuilder:
                 continue
             wmap = eff_by_emp_week.setdefault(a.employee_id, {})
             wmap[wk] = wmap.get(wk, 0) + eff.get(a.shift_id, 0)
+        for e in self.data.employees:
+            if e.id not in eff_by_emp_week:
+                continue
+            for es in e.existing_shifts:
+                if first_horizon_date and es.shift_date >= first_horizon_date:
+                    wk = _iso_week_key(es.shift_date)
+                    eff_by_emp_week[e.id][wk] = (
+                        eff_by_emp_week[e.id].get(wk, 0) + _calculate_effective_minutes(es)
+                    )
 
         amber = critical = 0
         for emp_id, wmap in eff_by_emp_week.items():
@@ -1603,7 +2041,7 @@ class ScheduleModelBuilder:
             if cap <= 0:
                 continue
             worked = mins_by_emp.get(emp.id, 0) + sum(
-                es.duration_minutes for es in emp.existing_shifts
+                net_shift_minutes(es, emp.is_security_role) for es in emp.existing_shifts
             )
             over = round(worked - cap)
             if over > 0:
@@ -1839,9 +2277,10 @@ class ScheduleModelBuilder:
         # HC-8 (minimum engagement) is not modelled here: it is a SHAPE rule,
         # enforced BLOCKING when a shift is created, so no shift reaching the
         # solver can be below its own minimum. See the degenerate-shift guard
-        # in `employee_eligible`.
-        self._add_spread_of_hours()     # HC-9: 12h daily spread
-        self._add_daily_pairing_rules() # HC-13: Sch 3 §5.3(g) floor + cl 36.1 break
+        # in `employee_eligible` (and the 7.6h cl 35.1(c) guard in FT_STANDARD).
+        if not self.is_ft_mode:
+            self._add_spread_of_hours()     # HC-9: 12h daily spread (PT / Casual Security)
+            self._add_daily_pairing_rules() # HC-13: 2-shift/day rules (unreachable under FT 1-shift/day)
         self._add_objective()
 
         self._metrics.num_constraints = len(self.model.proto.constraints)
@@ -1957,13 +2396,19 @@ class ScheduleModelBuilder:
         self._metrics.final_variables = len(self._x)
         
         # C2: Create Workload Variables (shared by limits and objective)
+        # Measured in NET paid/worked minutes (excluding unpaid breaks for
+        # non-Security per cl 36.1; full duration for Security per Sch 3 §3.2(a))
+        # so HC-4 max weekly, HC-7 min contract (38h = 2280m), and SC-5 overtime
+        # agree with V8 and contract obligations.
         for emp in self.data.employees:
             wterms = [
-                s.duration_minutes * self._x[emp.id, s.id]
+                net_shift_minutes(s, emp.is_security_role) * self._x[emp.id, s.id]
                 for s in self.data.shifts
                 if (emp.id, s.id) in self._x
             ]
-            existing_minutes = sum(es.duration_minutes for es in emp.existing_shifts)
+            existing_minutes = sum(
+                net_shift_minutes(es, emp.is_security_role) for es in emp.existing_shifts
+            )
             # Domain = everything this employee could possibly accrue (all
             # shift minutes + their pinned existing minutes). The old
             # `max_weekly_minutes + 10000` bound both under-bounded long
@@ -2193,31 +2638,35 @@ class ScheduleModelBuilder:
         dN_abs = _time_to_abs_minutes(last_date, "00:00") // 1440
         num_calendar_days = dN_abs - d0_abs + 1
 
+        first_d_global = datetime.date.fromisoformat(str(first_date)[:10])
+        day_strs = [
+            (first_d_global + datetime.timedelta(days=i)).isoformat()
+            for i in range(num_calendar_days)
+        ]
+        day_ub = max(1440, self._minute_ub)
+
         for emp in self.data.employees:
-            # day_vars[i] = total minutes worked on calendar day (d0 + i).
-            # Domain is a full calendar day (1440). The old 720 (12h) cap made
-            # `day_vars[i] == sum(...)` INFEASIBLE for any 12h+ day (a single
-            # long shift, or two shifts sharing the day) — audit C3.
-            day_vars = [self.model.NewIntVar(0, 1440, f'd_{emp.id[:4]}_{i}') for i in range(num_calendar_days)]
+            # day_vars[i] = total NET minutes worked for shifts starting on
+            # calendar day (d0 + i), matching V8 `maxDailyHoursRule`,
+            # `ordinaryHoursAvgRule`, and `studentVisaRule` (locked 2026-08-15).
+            day_vars = [self.model.NewIntVar(0, day_ub, f'd_{emp.id[:4]}_{i}') for i in range(num_calendar_days)]
             work_day_vars = [self.model.NewBoolVar(f'wd_{emp.id[:4]}_{i}') for i in range(num_calendar_days)]
             
             for i in range(num_calendar_days):
-                # d0_abs is a DAY index (…//1440); the absolute-minute base for
-                # calendar day i is therefore (d0_abs + i) * 1440. The old
-                # `d0_abs + i*1440` mixed day-units with minute-units, so
-                # minutes_on_day() returned 0 for EVERY shift and day_vars was
-                # identically 0 — silently no-op'ing the 12h/day, 152h/28d,
-                # 20-in-28, flexi-streak and student-visa caps (audit CRIT-1).
+                day_str = day_strs[i]
                 day_start_abs = (d0_abs + i) * 1440
-                day_end_abs = day_start_abs + 1440
                 shift_terms = []
                 for s in self.data.shifts:
-                    if (emp.id, s.id) in self._x:
-                        dur_on_day = minutes_on_day(s, day_start_abs)
-                        if dur_on_day > 0:
-                            shift_terms.append((dur_on_day, self._x[emp.id, s.id]))
+                    if (emp.id, s.id) in self._x and s.shift_date == day_str:
+                        net_dur = net_shift_minutes(s, emp.is_security_role)
+                        if net_dur > 0:
+                            shift_terms.append((net_dur, self._x[emp.id, s.id]))
                 
-                existing_mins = sum(max(0, min(ex.end_abs, day_end_abs) - max(ex.start_abs, day_start_abs)) for ex in emp.existing_shifts)
+                existing_mins = sum(
+                    net_shift_minutes(ex, emp.is_security_role)
+                    for ex in emp.existing_shifts
+                    if ex.shift_date == day_str
+                )
                 
                 # Link day_vars
                 self.model.Add(day_vars[i] == cp_model.LinearExpr.Sum([dur * var for dur, var in shift_terms]) + existing_mins)
@@ -2228,23 +2677,29 @@ class ScheduleModelBuilder:
                 # cap was removed). Matches the V8 auditor's maxDailyHours block
                 # (audit M2): the solver now prefers to spread a day's minutes
                 # across people rather than pile >12h on one.
-                day_over = self.model.NewIntVar(0, 1440, f'daycap_{emp.id[:4]}_{i}')
-                self.model.Add(day_vars[i] - day_over <= 720)
+                day_over = self.model.NewIntVar(0, day_ub, f'daycap_{emp.id[:4]}_{i}')
+                self.model.Add(day_vars[i] - day_over <= MAX_DAILY_MINUTES)
                 # Tier 0: Hard Legal Compliance (100,000,000 penalty per minute)
                 self._hard_legal_slack_terms.append(100_000_000 * day_over)
 
-                # Link work_day_vars
-                # Link work_day_vars (Precision Fix #7: mark BOTH days for cross-midnight)
+                # Link work_day_vars (Precision Fix #7: mark BOTH days for cross-midnight,
+                # matching V8 `maxWorkdayLimitsRule` and `ftDaysOffRule`). Bound from
+                # BOTH sides so work_day_vars[i] == 1 iff day i is actually occupied.
+                wd_touch_vars = []
                 for s in self.data.shifts:
-                    if (emp.id, s.id) in self._x:
-                        if minutes_on_day(s, day_start_abs) > 0:
-                            self.model.Add(work_day_vars[i] >= self._x[emp.id, s.id])
+                    if (emp.id, s.id) in self._x and minutes_on_day(s, day_start_abs) > 0:
+                        v_s = self._x[emp.id, s.id]
+                        self.model.Add(work_day_vars[i] >= v_s)
+                        wd_touch_vars.append(v_s)
                 
-                # Also check existing shifts for workday linking
                 if any(minutes_on_day(ex, day_start_abs) > 0 for ex in emp.existing_shifts):
                     self.model.Add(work_day_vars[i] == 1)
+                elif wd_touch_vars:
+                    self.model.Add(work_day_vars[i] <= cp_model.LinearExpr.Sum(wd_touch_vars))
+                else:
+                    self.model.Add(work_day_vars[i] == 0)
 
-            S = [self.model.NewIntVar(0, num_calendar_days * 1440, f'S_{emp.id[:4]}_{i}') for i in range(num_calendar_days)]
+            S = [self.model.NewIntVar(0, num_calendar_days * day_ub, f'S_{emp.id[:4]}_{i}') for i in range(num_calendar_days)]
             self.model.Add(S[0] == day_vars[0])
             for i in range(1, num_calendar_days):
                 self.model.Add(S[i] == S[i-1] + day_vars[i])
@@ -2381,14 +2836,15 @@ class ScheduleModelBuilder:
                     # Tier 0: Hard Legal Compliance (100,000,000 penalty)
                     self._hard_legal_slack_terms.append(100_000_000 * engage_over)
 
-            # 4d. Full-Time 1-shift/day (ICC EBA cl. 39.1 + fn_shift_ft_one_per_day)
-            # A full-time employee works one shift a day; split shifts are not permitted.
-            # trg_shift_ft_one_per_day enforces this when target_employment_type == 'FT'.
+            # 4d. Full-Time 1-shift/day (ICC EBA cl. 35.1(e) continuous work +
+            # cl. 39.1 no split shifts + fn_shift_ft_one_per_day).
+            # In FT_STANDARD / FT_SECURITY modes this binds every shift unconditionally; in
+            # legacy mixed mode it triggers when target_employment_type == 'FT'.
             if emp.employment_type == 'FT':
                 ft_new: dict[int, list] = {}
                 ft_existing: set[int] = set()
                 for s in self.data.shifts:
-                    if s.target_employment_type != 'FT':
+                    if not self.is_ft_mode and s.target_employment_type != 'FT':
                         continue
                     var = self._x.get((emp.id, s.id))
                     if var is None:
@@ -2413,27 +2869,81 @@ class ScheduleModelBuilder:
                         )
                         self._hard_legal_slack_terms.append(100_000_000 * ft_over)
 
+            # 4e. SC-13: Full-Time Paired Consecutive Days Off (ICC EBA cl 35.1(e)
+            # ↔ V8_FT_DAYS_OFF). Non-Security full-timers are entitled, on average,
+            # to two consecutive days off per week during the work cycle ("unless
+            # otherwise mutually agreed", so V8 surfaces this as a WARNING and we
+            # place it in the `guardrail` tier — strictly below legal_hard,
+            # coverage, and soft contract hours, and strictly above cost).
+            #
+            # Disjoint adjacent off-day pairs `pair_vars[d]` satisfy:
+            #   pair_vars[d] + work_day_vars[d]   <= 1
+            #   pair_vars[d] + work_day_vars[d+1] <= 1
+            #   pair_vars[d] + pair_vars[d+1]     <= 1
+            # A maximal run of L off-days admits at most floor(L / 2) disjoint
+            # pairs — matching V8 `ftDaysOffRule`'s `Math.floor(currentRun / 2)`
+            # exactly. Exempt for FT Security (Sch 3 §3.1(b) even-time roster).
+            if (
+                emp.employment_type == 'FT'
+                and not emp.is_security_role
+                and not self.is_ft_security
+                and num_calendar_days >= 7
+                and (
+                    self.is_ft_standard
+                    or any(s.target_employment_type == 'FT' for s in self.data.shifts)
+                )
+            ):
+                required_pairs = num_calendar_days // 7
+                pair_vars = [
+                    self.model.NewBoolVar(f'rdo2_{emp.id[:4]}_{d}')
+                    for d in range(num_calendar_days - 1)
+                ]
+                for d, p_var in enumerate(pair_vars):
+                    self.model.Add(p_var + work_day_vars[d] <= 1)
+                    self.model.Add(p_var + work_day_vars[d + 1] <= 1)
+                for d in range(len(pair_vars) - 1):
+                    self.model.Add(pair_vars[d] + pair_vars[d + 1] <= 1)
+                missing_pairs = self.model.NewIntVar(
+                    0, required_pairs, f'rdo_miss_{emp.id[:4]}'
+                )
+                self.model.Add(
+                    missing_pairs >= required_pairs - cp_model.LinearExpr.Sum(pair_vars)
+                )
+                self._rdo_slack_terms.append(FT_PAIRED_RDO_PENALTY_CENTS * missing_pairs)
+
             # 5. Student Visa Constraint (HC-12: Rolling 14 days, Dynamic Limit)
-            if emp.is_student:
-                for i in range(num_calendar_days):
-                    if i >= 13: # 14-day window
-                        start_idx = i - 13
-                        start_val = S[start_idx-1] if start_idx > 0 else 0
-                        visa_slack = self.model.NewIntVar(0, 10000, f'visa_{emp.id[:4]}_{i}')
-                        self.model.Add(S[i] - start_val - visa_slack <= emp.visa_limit)
-                        # Tier 0: Hard Legal Compliance (100,000,000 penalty)
-                        self._hard_legal_slack_terms.append(100_000_000 * visa_slack)
+            # Clip lookback to 0 when num_calendar_days < 14 (e.g. a 7-day or
+            # 13-day roster) so a single week exceeding 48h is still caught,
+            # matching V8 `studentVisaRule`'s per-end-date 14-day lookback.
+            if emp.is_student and num_calendar_days > 0:
+                visa_check_days = (
+                    range(13, num_calendar_days)
+                    if num_calendar_days >= 14
+                    else [num_calendar_days - 1]
+                )
+                visa_ub = max(10_000, self._minute_ub)
+                for i in visa_check_days:
+                    start_idx = max(0, i - 13)
+                    start_val = S[start_idx - 1] if start_idx > 0 else 0
+                    visa_slack = self.model.NewIntVar(0, visa_ub, f'visa_{emp.id[:4]}_{i}')
+                    self.model.Add(S[i] - start_val - visa_slack <= emp.visa_limit)
+                    # Tier 0: Hard Legal Compliance (100,000,000 penalty)
+                    self._hard_legal_slack_terms.append(100_000_000 * visa_slack)
 
             # 6. Anti-Hogging Constraint (Precision Fix #7: Ensure Slack)
-            total_demand_mins = sum(s.duration_minutes for s in self.data.shifts)
-            if total_demand_mins > 0:
-                share_limit = int(0.65 * total_demand_mins)
-                w_var = self._emp_workload_vars.get(emp.id)
-                if w_var is not None:
-                    hog_slack = self.model.NewIntVar(0, self._minute_ub, f'hog_{emp.id[:6]}')
-                    self.model.Add(w_var - hog_slack <= share_limit)
-                    # Tier 2: Fairness Slack (Reduced from 1,000 to 10 to prioritize coverage)
-                    self._workload_slack_terms.append(10 * hog_slack)
+            # Disabled in permanent modes (FT_STANDARD / FT_SECURITY / PT / FPT): permanent staff
+            # have contractual obligations (HC-7), so penalising
+            # an employee for carrying >65% of a small demand pool contradicts HC-7.
+            if not self.is_permanent_mode:
+                total_demand_mins = sum(s.duration_minutes for s in self.data.shifts)
+                if total_demand_mins > 0:
+                    share_limit = int(0.65 * total_demand_mins)
+                    w_var = self._emp_workload_vars.get(emp.id)
+                    if w_var is not None:
+                        hog_slack = self.model.NewIntVar(0, self._minute_ub, f'hog_{emp.id[:6]}')
+                        self.model.Add(w_var - hog_slack <= share_limit)
+                        # Tier 2: Fairness Slack (Reduced from 1,000 to 10 to prioritize coverage)
+                        self._workload_slack_terms.append(10 * hog_slack)
 
             # 7. HC-4: Maximum hours over the window (audit fix — previously
             # NEVER enforced; only the `w` variable's loose upper bound capped
@@ -2763,13 +3273,15 @@ class ScheduleModelBuilder:
             if emp.min_contract_minutes <= 0:
                 continue
             terms = [
-                s.duration_minutes * self._x[emp.id, s.id]
+                net_shift_minutes(s, emp.is_security_role) * self._x[emp.id, s.id]
                 for s in self.data.shifts
                 if (emp.id, s.id) in self._x
             ]
             if not terms:
                 continue
-            existing_minutes = sum(es.duration_minutes for es in emp.existing_shifts)
+            existing_minutes = sum(
+                net_shift_minutes(es, emp.is_security_role) for es in emp.existing_shifts
+            )
             remaining_min = max(0, emp.min_contract_minutes - existing_minutes)
             if remaining_min > 0:
                 # Soften min contract hours with Tier 1 penalty
@@ -2804,7 +3316,12 @@ class ScheduleModelBuilder:
                     # allowance (MAX, not cumulative, per cl 41.4) — see
                     # `_assignment_cost_cents_with_night` (audit findings #1
                     # and #3). Must stay identical to _assignment_cost_cents above.
-                    cost_cents = _assignment_cost_cents_with_night(emp.hourly_rate, emp.employment_type, shift)
+                    cost_cents = _assignment_cost_cents_with_night(
+                        emp.hourly_rate,
+                        emp.employment_type,
+                        shift,
+                        is_security=emp.is_security_role,
+                    )
 
                     # Apply cost weight (symmetric: 0% -> 0.5x, 50% -> 1.0x, 100% -> 2.0x)
                     cost_mult = _strategy_mult(self.data.strategy.cost_weight)
@@ -2953,91 +3470,12 @@ class ScheduleModelBuilder:
         for shift in self.data.shifts:
             _t(coverage_penalty * shift.priority * self._uncovered[shift.id], 'coverage')
 
-        # -- SC-4: Production Fairness (Tier 2: 1,000) --------------------------
-        # DELIVERABLE 2 — FAIRNESS ALWAYS ACTIVE
-        # The previous version gated this block on
-        #   `total_demand >= 0.4 * sum(max_weekly_minutes)`
-        # which silently disabled workload balancing whenever demand was low
-        # (e.g. a single day's shifts for a large pool, or a partial-week run).
-        # This made the solver concentrate all work on arbitrary employees
-        # when there was slack capacity.  The gate is removed so fairness
-        # applies at ALL demand levels, still scaled by `fairness_weight`.
-        # Fairness Weight (symmetric: 0% -> 0.5x, 50% -> 1.0x, 100% -> 2.0x)
-        fair_mult = _strategy_mult(self.data.strategy.fairness_weight)
-        # Fairness is CASUAL-ONLY and OPPORTUNITY-ADJUSTED. A casual's expected
-        # share is Σ over the shifts they could take of duration / pool size,
-        # where the pool is every casual with a variable for that shift — the
-        # same equal-split-of-each-opportunity rule the DB ledger uses. Casuals
-        # have no contracted capacity, so no baseline or headcount split.
-        # Only Casual-target shifts are casual work — the DB ledger's definition.
-        casual_ids = {e.id for e in self.data.employees if e.employment_type == 'Casual'}
-        casual_shift_ids = {s.id for s in self.data.shifts if s.target_employment_type == 'Casual'}
-        casual_pairs: dict[str, list[str]] = {}
-        casual_pool_size: dict[str, int] = {}
-        for e_id, s_id in self._x:
-            if e_id in casual_ids and s_id in casual_shift_ids:
-                casual_pairs.setdefault(e_id, []).append(s_id)
-                casual_pool_size[s_id] = casual_pool_size.get(s_id, 0) + 1
-        cat_minutes = {s.id: _category_minutes(s) for s in self.data.shifts}
-        net_min = {s_id: int(round(cm['total'])) for s_id, cm in cat_minutes.items()}
-
-        # Excess only: a two-sided term pushed work toward casuals and drowned out the ledger.
-        sc4_coeff = max(1, round(fair_mult))
-        for e_id, pairs in casual_pairs.items():
-            expected = int(round(sum(net_min[s_id] / casual_pool_size[s_id] for s_id in pairs)))
-            assigned = cp_model.LinearExpr.Sum([net_min[s_id] * self._x[e_id, s_id] for s_id in pairs])
-            over = self.model.NewIntVar(0, sum(net_min[s_id] for s_id in pairs), f'fair_over_{e_id[:6]}')
-            self.model.Add(over >= assigned - expected)
-            _t(sc4_coeff * over, 'fairness')
-
-        # -- SC-Alignment: Skill Hierarchy & Employment Isolation --------------
-        # Pre-build dict lookups so we don't do `next(e for e in ...)` for
-        # every (employee, shift) pair — that pattern is O(E·S·(E+S)) which
-        # blows up at scale (~6M comparisons for 64k vars / 100 employees).
-        emp_by_id = {e.id: e for e in self.data.employees}
-        shift_by_id = {s.id: s for s in self.data.shifts}
-
-        for (e_id, s_id), var in self._x.items():
-            emp = emp_by_id[e_id]
-            shift = shift_by_id[s_id]
-
-
-
-            # SC-1: Employment Isolation is no longer priced here. It is now a
-            # HARD eligibility criterion in `employee_eligible` (HC-5c), so an
-            # off-target pair never becomes a variable in the first place and
-            # there is nothing left to penalize. The 'employment_mix' term
-            # category is retained so the objective breakdown keeps a stable
-            # shape for consumers.
+        # -- Layer 3: Fairness Plugin (SC-4, SC-10, SC-11, SC-11b) ------------
+        # Strictly disabled in permanent modes (casual-only fairness; active in CASUAL and ALL).
+        if not self.is_permanent_mode:
+            FairnessPlugin.apply(self, _t)
 
         # -- SC-5: Overtime penalty (EBA cl 42.2 — tiered 150%/200%) -----------
-        # cl 42.2: overtime is 150% of the ordinary rate for the FIRST THREE
-        # hours, 200% thereafter — a TIERED surcharge, not a flat 50% on every
-        # overtime minute (compliance audit finding — 2026-08-02: the flat
-        # surcharge understated the cost of overtime runs beyond 3h, where the
-        # true marginal rate steps up from 150% to 200%). SC-1 above already
-        # charges the full base rate (including any Sat/Sun/PH multiplier) for
-        # EVERY assigned minute, so this term adds only the INCREMENTAL
-        # surcharge on top for minutes past the contract floor: +50% for the
-        # first 3h of overtime, +100% (not +50%) thereafter.
-        #
-        # Simplification (documented, unchanged from the prior version):
-        # `overtime` is a HORIZON-TOTAL (minutes past the contract floor across
-        # the whole optimization window), not a per-day figure — cl 42.3 "each
-        # day stands alone" would need a separate IntVar per (employee, day),
-        # a larger structural change tracked separately. The 3h tier boundary
-        # is therefore applied once per horizon, not once per calendar day.
-        #
-        # PH is intentionally NOT re-priced here (the removed `effective_mult`
-        # heuristic used to scale the WHOLE overtime surcharge by the highest
-        # PH/Sunday multiplier active ANYWHERE in the batch, which could
-        # inflate every employee's OT rate because of an unrelated shift
-        # elsewhere in the window): SC-1 already charges any shift flagged
-        # `is_public_holiday` at its full 250%/275% rate for every minute of
-        # THAT shift, whether or not those minutes end up counted as
-        # "overtime" here. Adding a further PH surcharge at this
-        # horizon-aggregate level — which cannot tell which specific minutes
-        # came from a PH shift — would double-count the PH premium.
         OT_TIER1_MINUTES = 180  # 3h, cl 42.2
         for emp in self.data.employees:
             if emp.min_contract_minutes <= 0:
@@ -3045,12 +3483,6 @@ class ScheduleModelBuilder:
             w_var = self._emp_workload_vars.get(emp.id)
             if w_var is None:
                 continue
-            # Overtime = minutes worked beyond the contracted minimum. w_var
-            # ALREADY includes pinned existing minutes, so the threshold is the
-            # full min_contract_minutes. The old code subtracted
-            # `(min_contract - existing)`, which double-counted existing minutes
-            # and overstated overtime by `existing` for anyone with pinned
-            # shifts (audit H2).
             overtime = self.model.NewIntVar(0, self._minute_ub, f'ot_{emp.id[:6]}')
             self.model.AddMaxEquality(overtime, [w_var - emp.min_contract_minutes, 0])
 
@@ -3068,85 +3500,14 @@ class ScheduleModelBuilder:
             if tier2_surcharge_cents_per_min > 0:
                 _t(tier2_surcharge_cents_per_min * tier2, 'cost')
 
-        # -- SC-7: Safety Penalty (Non-linear Fatigue) ------------------------
-        # Uses piecewise linear approximation to simulate the exponential drain
-        # of high effective working hours (weighted by circadian factors).
-        #
-        # SC-7 caps (1200/1800 effective minutes) are *weekly* limits, so we
-        # window effective minutes per ISO calendar week (Mon-Sun) and penalise
-        # each (employee, week) bucket independently. Summing across the whole
-        # horizon (e.g. a month) saturated the penalty for ~everyone and made
-        # fatigue ~97% of the objective — an artifact of the windowing, not real
-        # weekly overload.
-        #
-        # Fatigue Weight (symmetric: 0% -> 0.5x, 50% -> 1.0x, 100% -> 2.0x)
-        fatigue_mult = _strategy_mult(self.data.strategy.fatigue_weight)
+        # -- Layer 3: Fatigue Plugin (SC-7 weekly circadian bands) ------------
+        FatiguePlugin.apply(self, _t)
 
-        for emp in self.data.employees:
-            # Group this employee's effective-minute terms by ISO week.
-            eff_terms_by_week: dict[tuple[int, int], list] = {}
-            for s in self.data.shifts:
-                if (emp.id, s.id) not in self._x:
-                    continue
-                wk = _iso_week_key(s.shift_date)
-                eff_terms_by_week.setdefault(wk, []).append(
-                    _calculate_effective_minutes(s) * self._x[emp.id, s.id]
-                )
-            if not eff_terms_by_week:
-                continue
-
-            # Prior load carried into the earliest week bucket, in effective
-            # minutes. Preferred source is `initial_effective_minutes` — the same
-            # circadian-weighted quantity this block accumulates, measured
-            # directly by the TS layer rather than inferred from a fatigue score
-            # (audit F-07). The `* 60` path remains only for older clients that
-            # don't send the new field.
-            init_eff_mins = int(
-                emp.initial_effective_minutes
-                if emp.initial_effective_minutes is not None
-                else emp.initial_fatigue_score * 60
-            )
-            earliest_week = min(eff_terms_by_week)
-
-            for wk, eff_terms in eff_terms_by_week.items():
-                week_init = init_eff_mins if wk == earliest_week else 0
-                tag = f'{emp.id[:6]}_{wk[0] % 100:02d}{wk[1]:02d}'
-
-                # Per-week effective minutes. Domain includes week_init so a high
-                # prior-fatigue baseline can never make this `==` constraint
-                # infeasible (the bug that silently forced the model INFEASIBLE →
-                # greedy fallback — audit C4). Per-week totals are <= horizon
-                # totals so self._eff_ub remains a valid upper bound.
-                eff_total_week = self.model.NewIntVar(
-                    0, self._eff_ub + week_init, f'eff_{tag}'
-                )
-                self.model.Add(
-                    eff_total_week == cp_model.LinearExpr.Sum(eff_terms) + week_init
-                )
-
-                # Non-linear penalty bands (in cents), per ISO week:
-                # 0-1200 mins (20h): $0/min
-                # 1200-1800 mins (30h): $5/min surcharge (Amber)
-                # 1800+ mins (30h+): $50/min surcharge (Critical/Red)
-                # This simulates the -76*log curve's rapid ascent.
-                amber_mins = self.model.NewIntVar(
-                    0, self._eff_ub + week_init, f'amber_{tag}'
-                )
-                critical_mins = self.model.NewIntVar(
-                    0, self._eff_ub + week_init, f'crit_{tag}'
-                )
-                # amber_mins = max(0, eff_total_week - 1200)
-                self.model.AddMaxEquality(amber_mins, [eff_total_week - 1200, 0])
-                # critical_mins = max(0, eff_total_week - 1800)
-                self.model.AddMaxEquality(critical_mins, [eff_total_week - 1800, 0])
-
-                # Penalties:
-                _t(int(500 * fatigue_mult) * amber_mins, 'fatigue')      # $5.00 per minute base
-                _t(int(4500 * fatigue_mult) * critical_mins, 'fatigue')  # Extra $45.00
+        # -- SC-13: FT Paired Consecutive Days Off (cl 35.1(e) guardrail) -----
+        for rdo_term in self._rdo_slack_terms:
+            _t(rdo_term, 'ft_days_off')
 
         # -- SC-6: Shift Continuity - reward keeping same employee on adjacent
-        # For each pair of adjacent (contiguous, non-overlapping) shifts,
-        # give a $2.00 (200 cents) bonus if the same employee works both.
         shifts_sorted = sorted(self.data.shifts, key=lambda s: shift_window(s)[0])
         continuity_bonus = 200  # cents
         for i in range(len(shifts_sorted) - 1):
@@ -3166,52 +3527,6 @@ class ScheduleModelBuilder:
                         self.model.Add(both == 0).OnlyEnforceIf(v1.Not())
                         self.model.Add(both == 0).OnlyEnforceIf(v2.Not())
                         _t(-continuity_bonus * both, 'continuity')
-
-        # -- SC-10: NIGHT/WEEKEND/PH BALANCE (casual-only, opportunity-adjusted)
-        # Undesirable minutes = the part of a shift falling on a Saturday,
-        # Sunday, public holiday or in the 22:00–06:00 night (counted once).
-        # Each casual is expected Σ und(s) / pool(s) over the shifts they could
-        # take; only the EXCESS above that is penalised. Measured in quarter-
-        # hours; the integer coefficient quantises to 1/2/3 at fairness weight
-        # 0/50/100 (≈32/64/96¢ per 8h undesirable shift over share).
-        und_q = {s_id: int(round(cm['undesirable'] / 15)) for s_id, cm in cat_minutes.items()}
-        undsr_coeff = max(1, round(50 * fair_mult / 32))
-        for e_id, all_pairs in casual_pairs.items():
-            pairs = [s_id for s_id in all_pairs if und_q[s_id] > 0]
-            if not pairs:
-                continue
-            expected_q = int(round(sum(und_q[s_id] / casual_pool_size[s_id] for s_id in pairs)))
-            u_q = cp_model.LinearExpr.Sum([und_q[s_id] * self._x[e_id, s_id] for s_id in pairs])
-            high_v = self.model.NewIntVar(0, sum(und_q[s_id] for s_id in pairs), f'undsr_hi_{e_id[:6]}')
-            self.model.Add(high_v >= u_q - expected_q)
-            _t(undsr_coeff * high_v, 'undesirable_balance')
-
-        # -- SC-11 / SC-11b: LONGITUDINAL FAIRNESS (casual ledger) -------------
-        # Debts are confidence-weighted HOURS (actual − opportunity-adjusted
-        # expected). Positive debt → penalise assigning; negative → bonus.
-        # SC-11 prices the shift's Sat/Sun/PH/night hours against the matching
-        # debt; SC-11b prices every shift's hours against total/overtime debt.
-        # Coefficients mirror src/modules/rosters/domain/fairness-ledger.ts.
-        for emp in self.data.employees:
-            debts = _casual_debts(emp)
-            if not debts:
-                continue
-            th_debt = debts.get('total_hours', 0.0)
-            ot_debt = debts.get('overtime_hours', 0.0)
-            for s_id in casual_pairs.get(emp.id, ()):
-                cm = cat_minutes[s_id]
-                sc11 = int(fair_mult * sum(
-                    SC11_COEFF_PER_HOUR2[k] * debts.get(k, 0.0) * cm[cat] / 60
-                    for k, cat in _SC11_CATEGORY.items()
-                ))
-                if sc11 != 0:
-                    _t(sc11 * self._x[emp.id, s_id], 'longitudinal_fairness')
-                sc11b = int(
-                    (th_debt * SC11B_TOTAL_HOURS_COEFF + ot_debt * SC11B_OVERTIME_HOURS_COEFF)
-                    * (cm['total'] / 60) * fair_mult
-                )
-                if sc11b != 0:
-                    _t(sc11b * self._x[emp.id, s_id], 'longitudinal_fairness')
 
         # -- SC-8: Workload Slack Penalties --------------------------------
         # Slack vars collected during constraint construction; without this
@@ -3273,9 +3588,9 @@ class ScheduleModelBuilder:
         legal_hard_t = _cat_sum(['legal_hard'])
         coverage_t = _cat_sum(['coverage', 'relaxed_violations'])
         soft_t = _cat_sum(['other'])
-        guardrail_t = _cat_sum(['fatigue', 'fairness', 'undesirable_balance',
-                                'longitudinal_fairness', 'availability',
-                                'employment_mix', 'continuity'])
+        guardrail_t = _cat_sum(['fatigue', 'ft_days_off', 'fairness',
+                                'undesirable_balance', 'longitudinal_fairness',
+                                'availability', 'employment_mix', 'continuity'])
         cost_t = _cat_sum(['cost'])
         fairness_only_t = _cat_sum(['fairness', 'undesirable_balance',
                                     'longitudinal_fairness'])
@@ -3332,6 +3647,7 @@ class ScheduleModelBuilder:
             self.data.employees,
             self._eligibility_map,
             self._rest_eliminated,
+            scheduler_mode=self.data.constraints.scheduler_mode,
         )
         for (emp_id, shift_id), value in hints.items():
             var = self._x.get((emp_id, shift_id))
@@ -3578,7 +3894,8 @@ class ScheduleModelBuilder:
             for emp_id, shift_id in pairs:
                 emp = emp_map[emp_id]
                 shift = shift_map[shift_id]
-                cost = (shift.duration_minutes / 60.0) * emp.hourly_rate
+                paid_mins = net_shift_minutes(shift, emp.is_security_role)
+                cost = (paid_mins / 60.0) * emp.hourly_rate
                 assignments.append(AssignmentProposal(
                     shift_id=shift_id,
                     employee_id=emp_id,

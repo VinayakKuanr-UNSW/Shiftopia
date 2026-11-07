@@ -12,6 +12,7 @@
     "enforce_skill_match",
     "min_rest_minutes",
     "relax_constraints",
+    "scheduler_mode",
     "split_shift_allowance_cents"
   ],
   "Employee": [

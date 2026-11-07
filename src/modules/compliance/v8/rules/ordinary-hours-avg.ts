@@ -70,28 +70,33 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     // correct answer to that. Payroll runs POST-HOC over worked hours and
     // reclassifies the excess at cl 42 rates. Re-introducing a boolean here
     // would make this the fourth rival definition of overtime in the codebase.
-    const dailyHours = new Map<string, number>();
+    // Integer minutes throughout to guarantee exact bit-for-bit parity with the
+    // CP-SAT solver (e.g. 10 × 456m = 4560m = 76.0h exact; summing 456/60 in
+    // IEEE-754 floats yields 76.00000000000001 > 76 and triggers false warnings).
+    const dailyMinutes = new Map<string, number>();
     for (const s of shifts) {
         const dateStr = s.date || s.shift_date || '';
         if (!dateStr || !s.start_time || !s.end_time) continue; // skip malformed
 
-        const breakMins = s.unpaid_break_minutes || 0;
-        const netHours = Math.max(0, shiftDurationMinutes(s.start_time, s.end_time) - breakMins) / 60;
-        dailyHours.set(dateStr, (dailyHours.get(dateStr) || 0) + netHours);
+        // Sch 3 §3.2(a) / §5.3(a): Security meal breaks are PAID on the clock,
+        // matching CP-SAT `net_shift_minutes(s, emp.is_security_role)`.
+        const breakMins = employee.is_security_role ? 0 : (s.unpaid_break_minutes || 0);
+        const netMins = Math.max(0, shiftDurationMinutes(s.start_time, s.end_time) - breakMins);
+        dailyMinutes.set(dateStr, (dailyMinutes.get(dateStr) || 0) + netMins);
     }
 
-    const sortedDates = Array.from(dailyHours.keys()).sort();
+    const sortedDates = Array.from(dailyMinutes.keys()).sort();
     if (sortedDates.length === 0) return [];
 
-    // 2. Prefix sums for O(1) window totals.
+    // 2. Prefix sums in integer minutes for O(1) window totals.
     const prefix = new Array<number>(sortedDates.length + 1).fill(0);
     for (let i = 0; i < sortedDates.length; i++) {
-        prefix[i + 1] = prefix[i] + dailyHours.get(sortedDates[i])!;
+        prefix[i + 1] = prefix[i] + dailyMinutes.get(sortedDates[i])!;
     }
 
     // Worst (max) total over any rolling window of `winSize` calendar days.
-    const worstWindow = (winSize: number): { hours: number; start: string; end: string } => {
-        let worst = { hours: 0, start: '', end: '' };
+    const worstWindow = (winSize: number): { mins: number; hours: number; start: string; end: string } => {
+        let worst = { mins: 0, hours: 0, start: '', end: '' };
         for (let endIdx = 0; endIdx < sortedDates.length; endIdx++) {
             const endDateStr = sortedDates[endIdx];
             const d = new Date(endDateStr);
@@ -101,8 +106,10 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
             let ptr = 0;
             while (ptr <= endIdx && sortedDates[ptr] < winStart) ptr++;
 
-            const windowHours = prefix[endIdx + 1] - prefix[ptr];
-            if (windowHours > worst.hours) worst = { hours: windowHours, start: winStart, end: endDateStr };
+            const windowMins = prefix[endIdx + 1] - prefix[ptr];
+            if (windowMins > worst.mins) {
+                worst = { mins: windowMins, hours: windowMins / 60, start: winStart, end: endDateStr };
+            }
         }
         return worst;
     };
@@ -141,23 +148,24 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     // ever under-counts. That is the safe direction: a partial cycle can miss a
     // breach that the next evaluation catches, where a rolling window invents one
     // that never existed.
-    const byCycle = new Map<number, { hours: number; anyDate: string }>();
-    for (const [dateStr, hrs] of dailyHours) {
+    const byCycle = new Map<number, { mins: number; anyDate: string }>();
+    for (const [dateStr, mins] of dailyMinutes) {
         const idx = cycleIndexFor(dateStr, cycleAnchor, cycleWeeks);
         const bucket = byCycle.get(idx);
-        if (bucket) bucket.hours += hrs;
-        else byCycle.set(idx, { hours: hrs, anyDate: dateStr });
+        if (bucket) bucket.mins += mins;
+        else byCycle.set(idx, { mins, anyDate: dateStr });
     }
 
-    let worstCycle: { hours: number; anyDate: string } | null = null;
+    let worstCycle: { mins: number; anyDate: string } | null = null;
     for (const bucket of byCycle.values()) {
-        if (!worstCycle || bucket.hours > worstCycle.hours) worstCycle = bucket;
+        if (!worstCycle || bucket.mins > worstCycle.mins) worstCycle = bucket;
     }
 
-    if (worstCycle && worstCycle.hours > cycleLimit) {
+    const cycleLimitMins = Math.round(cycleLimit * 60);
+    if (worstCycle && worstCycle.mins > cycleLimitMins) {
         const bounds = cycleBoundsFor(worstCycle.anyDate, cycleAnchor, cycleWeeks);
         const cycle = {
-            hours: worstCycle.hours,
+            hours: worstCycle.mins / 60,
             start: bounds.start,
             end: bounds.endInclusive,
         };
@@ -190,8 +198,8 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     let worstPeak: { winSize: number; hours: number; rate: number; start: string; end: string } | null = null;
     for (const winSize of [7, 14, 21]) {
         const w = worstWindow(winSize);
-        const limit = (winSize / 7) * weeklyLimit;
-        if (w.hours > limit) {
+        const limitMins = Math.round((winSize / 7) * weeklyLimit * 60);
+        if (w.mins > limitMins) {
             const rate = w.hours / (winSize / 7);
             if (!worstPeak || rate > worstPeak.rate) {
                 worstPeak = { winSize, hours: w.hours, rate, start: w.start, end: w.end };
@@ -225,7 +233,7 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     const contracted = employee.contracted_weekly_hours;
     if (contracted && contracted > 0 && contracted < weeklyLimit) {
         const w7 = worstWindow(7);
-        if (w7.hours > contracted) {
+        if (w7.mins > Math.round(contracted * 60)) {
             hits.push({
                 rule_id: 'V8_ORD_HOURS_CONTRACTED',
                 rule_name: 'Above Contracted Hours',

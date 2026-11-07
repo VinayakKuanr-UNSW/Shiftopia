@@ -18,8 +18,11 @@ export interface SwapParty {
      * V8_ORD_HOURS_AVG, which exempts CASUAL). When absent/null the engine
      * defaults to CASUAL so behaviour is unchanged for legacy callers.
      */
-    contract_type?:            'FT' | 'PT' | 'CASUAL' | null;
+    contract_type?:            'FT' | 'PT' | 'CASUAL' | 'FLEXI_PART_TIME' | null;
     contracted_weekly_hours?:  number;
+    /** Declared ordinary-hours work cycle (ICC EBA cl 35.x(a) / 12.2(b)). */
+    ordinary_hours_cycle_weeks?:  number;
+    ordinary_hours_cycle_anchor?: string;
     /** YYYY-MM-DD dates with APPROVED leave (audit F1 — V8_LEAVE_CONFLICT). */
     leave_days?:               string[];
     /** EBA Schedule 3 §3 — see V8Employee.is_security_role (audit H-5). */
@@ -54,8 +57,11 @@ export interface SwapPartyInput {
      * previously never populated by any caller, so every party was
      * silently evaluated as CASUAL regardless of their real contract).
      */
-    contract_type?:            'FT' | 'PT' | 'CASUAL' | null;
+    contract_type?:            'FT' | 'PT' | 'CASUAL' | 'FLEXI_PART_TIME' | null;
     contracted_weekly_hours?:  number;
+    /** Declared ordinary-hours work cycle (ICC EBA cl 35.x(a) / 12.2(b)). */
+    ordinary_hours_cycle_weeks?:  number;
+    ordinary_hours_cycle_anchor?: string;
     /** YYYY-MM-DD dates with APPROVED leave (audit F1 — V8_LEAVE_CONFLICT). */
     leave_days?:               string[];
     /** EBA Schedule 3 §3 — see V8Employee.is_security_role (audit H-5). */

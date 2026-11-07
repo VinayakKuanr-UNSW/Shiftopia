@@ -52,7 +52,7 @@ import { DatePicker } from '@/modules/core/ui/calendar/DatePicker';
 import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { AutoSchedulerInsights } from './AutoSchedulerInsights';
-import { sortEmployeeGroups, complianceRateOf, WINDOW_PRESET_LABELS } from './useAutoScheduler';
+import { sortEmployeeGroups, complianceRateOf, WINDOW_PRESET_LABELS, SCHEDULER_MODE_OPTIONS } from './useAutoScheduler';
 import type {
     EmployeeGroup,
     PipelinePhase,
@@ -65,6 +65,7 @@ import type {
     AutoSchedulerResult,
     CapacityCheck,
     OptimizerHealth,
+    SchedulerMode,
 } from '../types';
 
 interface AutoSchedulerMobileFlowProps {
@@ -83,6 +84,9 @@ interface AutoSchedulerMobileFlowProps {
     validationError: string | null;
     applyWindowPreset: (preset: WindowPreset) => void;
     activeWindowPreset: WindowPreset | null;
+
+    mode?: SchedulerMode;
+    setMode?: (mode: SchedulerMode) => void;
 
     isShiftsLoading: boolean;
     shiftsInScope: number;
@@ -418,6 +422,8 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
     validationError,
     applyWindowPreset,
     activeWindowPreset,
+    mode = 'ALL',
+    setMode,
     isShiftsLoading,
     shiftsInScope,
     staffCount,
@@ -600,6 +606,35 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
                                 )}
                             </Section>
                         </div>
+
+                        {setMode && (
+                            <Section title="Staff mode">
+                                <div className="grid grid-cols-2 gap-2">
+                                    {SCHEDULER_MODE_OPTIONS.map(opt => {
+                                        const active = mode === opt.value;
+                                        return (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => setMode(opt.value)}
+                                                aria-pressed={active}
+                                                className={cn(
+                                                    'min-h-[44px] rounded-xl border px-3 py-2 text-[13px] font-semibold transition-colors',
+                                                    active
+                                                        ? 'border-primary bg-primary/10 text-primary'
+                                                        : 'border-border bg-background text-muted-foreground',
+                                                )}
+                                            >
+                                                {opt.shortLabel}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-[12px] leading-relaxed text-muted-foreground">
+                                    {SCHEDULER_MODE_OPTIONS.find(o => o.value === mode)?.description}
+                                </p>
+                            </Section>
+                        )}
 
                         {health && !health.available && (
                             <StatusRow

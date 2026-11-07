@@ -59,8 +59,11 @@ interface AssignmentEvaluationInput {
      * engine treats the party as CASUAL so behaviour is unchanged.
      */
     employee_context?: {
-        contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+        contract_type?: 'FT' | 'PT' | 'CASUAL' | 'FLEXI_PART_TIME' | null;
         contracted_weekly_hours?: number;
+        /** Declared ordinary-hours work cycle (ICC EBA cl 35.x(a) / 12.2(b)). */
+        ordinary_hours_cycle_weeks?: number;
+        ordinary_hours_cycle_anchor?: string;
         /** YYYY-MM-DD dates with APPROVED leave (audit F1 — V8_LEAVE_CONFLICT). */
         leave_days?: string[];
         /** Raw per-contract employment statuses. Feeds V8_EMPLOYMENT_TARGET —
@@ -175,6 +178,8 @@ class AssignmentEvaluator {
             given_shift: DUMMY_SHIFT,               // Nothing is given up
             contract_type: input.employee_context?.contract_type ?? null,
             contracted_weekly_hours: input.employee_context?.contracted_weekly_hours,
+            ordinary_hours_cycle_weeks: input.employee_context?.ordinary_hours_cycle_weeks,
+            ordinary_hours_cycle_anchor: input.employee_context?.ordinary_hours_cycle_anchor,
             leave_days: input.employee_context?.leave_days,
             employment_statuses: input.employee_context?.employment_statuses,
             is_security_role: input.employee_context?.is_security_role,
