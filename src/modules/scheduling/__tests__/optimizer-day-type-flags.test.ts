@@ -62,9 +62,7 @@ vi.mock('@/modules/scheduling/data/roster-fetcher', async (importOriginal) => {
 // depend on it (it is explicitly skipped when no org is supplied).
 vi.mock('@/modules/rosters/services/fairnessLedger.service', () => ({
     fairnessLedgerService: {
-        getEmployeeDebts: vi.fn().mockResolvedValue([]),
-        updateAfterCommit: vi.fn().mockResolvedValue(undefined),
-        recomputeLedger: vi.fn().mockResolvedValue(undefined),
+        getStandingsWithStatus: vi.fn().mockResolvedValue({ standings: [], status: 'unavailable', windowEnd: null, ageDays: null }),
     },
 }));
 

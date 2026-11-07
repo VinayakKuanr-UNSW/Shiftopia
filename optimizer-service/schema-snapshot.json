@@ -60,6 +60,7 @@
     "end_time",
     "id",
     "is_public_holiday",
+    "is_public_holiday_next_day",
     "is_saturday",
     "is_sunday",
     "is_training",

@@ -54,6 +54,7 @@ const shiftBase = {
     deptName: null,
     subDeptName: null,
     unpaidBreakMinutes: 30,
+    targetEmploymentType: 'Casual',
 };
 
 const member = (over: Partial<TeamMember> & { profileId: string }): TeamMember => ({
@@ -489,29 +490,29 @@ describe('TeamAvailabilityGrid — metric granularity', () => {
     });
 
     // Fairness cells are the day's CONTRIBUTION, never a fairness score.
-    it('describes a fairness cell as what the day contributed', () => {
+    it('describes a fairness cell as what the day contributed, in weighted hours', () => {
         renderMode('fairness');
-        expect(screen.getByLabelText(/Priya Raman, Sat 15 Aug: Saturday, weight 1/)).toBeTruthy();
+        expect(screen.getByLabelText(/Priya Raman, Sat 15 Aug: Saturday, weight 7.5/)).toBeTruthy();
     });
 
-    it('marks an ordinary weekday as carrying no unsociable loading', () => {
+    it('marks a day with no casual contribution as such', () => {
         renderMode('fairness');
-        expect(screen.getByLabelText(/Mon 10 Aug: not rostered/)).toBeTruthy();
+        expect(screen.getByLabelText(/Mon 10 Aug: no casual shift/)).toBeTruthy();
     });
 
-    it('reports the fairness standing per person, over the ledger window', () => {
+    it('reports the fairness standing per person against their fair share', () => {
         renderMode('fairness', {
             fairnessStanding: new Map([[
                 'p1',
-                { debtByMetric: { sunday_shifts: 3 }, windowStart: '2026-05-14', windowEnd: '2026-08-13' },
+                { byMetric: { sunday_hours: { debtHours: 4, confidence: 1 } }, windowStart: '2026-11-07', windowEnd: '2026-12-10' },
             ]]),
         });
         expect(screen.getByText('Over share')).toBeTruthy();
-        expect(screen.getByText(/\+6 vs team over 91 days/)).toBeTruthy();
+        expect(screen.getByText(/\+8h vs fair share/)).toBeTruthy();
     });
 
-    it('says there is no ledger entry rather than implying perfect balance', () => {
+    it('says history is still building rather than implying perfect balance', () => {
         renderMode('fairness');
-        expect(screen.getByText('No ledger entry')).toBeTruthy();
+        expect(screen.getByText('Building history')).toBeTruthy();
     });
 });

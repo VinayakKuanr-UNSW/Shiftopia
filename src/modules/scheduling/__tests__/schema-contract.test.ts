@@ -64,7 +64,7 @@ const SHIFT_FIELDS = fieldSet<Required<OptimizerShift>>({
     role_id: 0, required_skill_ids: 0, required_license_ids: 0,
     priority: 0, demand_source: 0, target_employment_type: 0,
     target_requires_flexible: 0, level: 0,
-    is_sunday: 0, is_saturday: 0, is_public_holiday: 0, is_training: 0,
+    is_sunday: 0, is_saturday: 0, is_public_holiday: 0, is_public_holiday_next_day: 0, is_training: 0,
     unpaid_break_minutes: 0, paid_break_minutes: 0, shift_type: 0,
     // The job this shift belongs to — HC-5d matches declared availability
     // against it. Declared on the pydantic ShiftReq AND the ShiftInput

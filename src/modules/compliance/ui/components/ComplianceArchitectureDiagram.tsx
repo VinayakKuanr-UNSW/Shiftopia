@@ -51,7 +51,7 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
       badgeClass: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
       constraints: ['HC-1 (Coverage)', 'HC-6 (Capacity)', 'HC-7 (Min Contract)', 'SC-1..6 (Objective)'],
       description:
-        'Solves roster-wide combinatorial assignments using lexicographic objectives: Hard Legal Caps » Coverage » Soft Availability » Fatigue/Fairness » Cost.',
+        'Solves roster-wide combinatorial assignments using lexicographic objectives: Hard Legal Caps » Coverage » Soft Availability » Fatigue/Casual Fairness » Cost.',
     },
     {
       step: '03',
@@ -215,7 +215,7 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
               </span>
               <span className="text-muted-foreground">»</span>
               <span className="bg-amber-500/15 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 font-bold">
-                4. Fatigue & Fairness (SC-4)
+                4. Fatigue & Casual Fairness (SC-4)
               </span>
               <span className="text-muted-foreground">»</span>
               <span className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">

@@ -47,6 +47,8 @@ export interface ManagerBidShift {
   subDepartmentId?: string;
   groupType?: string | null;
   lifecycleStatus?: string;
+  /** Raw row column (the mapper spreads the row): 'Casual' | 'FT' | 'PT'. */
+  target_employment_type?: string;
 }
 
 // Real SSS breakdown (sourced from get_quarterly_performance_report + skill match).

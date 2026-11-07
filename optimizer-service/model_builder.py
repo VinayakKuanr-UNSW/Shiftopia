@@ -28,7 +28,7 @@ to the autoscheduler for final commitment.
 Soft Constraints (objective):
   SC-1  Preference matching   (-$5 discount per preferred slot)
   SC-3  Uncovered penalty     (+$10,000 x priority per uncovered shift)
-  SC-4  Fairness              (+$0.10 x workload imbalance minutes)
+  SC-4  Fairness              (casuals only: +$0.05 x minutes off opportunity-adjusted share)
   SC-5  Overtime penalty      (+150% rate for hours beyond contract)
   SC-6  Shift Continuity      (-$2.00 bonus for same employee on adjacent shifts)
 
@@ -40,6 +40,7 @@ Preprocessing pipeline:
 from __future__ import annotations
 import datetime
 import logging
+import math
 import time
 from dataclasses import dataclass, field, replace
 from typing import Optional
@@ -340,6 +341,9 @@ class ShiftInput:
     is_sunday: bool = False
     is_saturday: bool = False
     is_public_holiday: bool = False
+    # The day AFTER shift_date is a public holiday: fairness counts the minutes
+    # past midnight as PH work, exactly as the DB ledger does.
+    is_public_holiday_next_day: bool = False
     shift_type: str = 'NORMAL'  # 'NORMAL' or 'MULTI_HIRE'
     # WHICH JOB this shift belongs to — see `_slot_in_scope`. None is unscoped
     # and matches every slot, which is what every caller sent before scoping.
@@ -574,13 +578,12 @@ class EmployeeInput:
     #
     # None = not supplied (older client) -> fall back to the legacy conversion.
     initial_effective_minutes: Optional[float] = None
-    # F1 longitudinal fairness ledger: per-metric debt (rolling_value − team
-    # average) keyed by metric ('saturday_shifts'|'sunday_shifts'|
-    # 'night_shifts'|'public_holiday_shifts'|'overtime_minutes'|'total_hours'|
-    # 'denial_rate'). Positive = over-share (bias away); negative = owed (bias
-    # toward). Consumed by SC-11. MUST be a declared field — otherwise it is
-    # dropped at the Pydantic/dataclass wire boundary and SC-11 silently
-    # no-ops.
+    # Casual fairness ledger: confidence-weighted debt in HOURS (actual −
+    # opportunity-adjusted expected) keyed by FAIRNESS_METRICS. Positive =
+    # above expected share (bias away); negative = owed (bias toward). Read
+    # only for Casual employees (`_casual_debts`). Consumed by SC-11/SC-11b.
+    # MUST be a declared field — otherwise it is dropped at the
+    # Pydantic/dataclass wire boundary and SC-11 silently no-ops.
     fairness_debts: dict = field(default_factory=dict)
     # Pinned/already-committed shifts for this employee. The optimizer treats
     # these as immutable: it will not propose any shift that overlaps or
@@ -803,6 +806,107 @@ def minutes_on_day(s, day_abs_start: int) -> int:
     if overlap_start < overlap_end:
         return overlap_end - overlap_start
     return 0
+
+
+# =============================================================================
+# CASUAL FAIRNESS — shared with the DB engine (`fairness_category_minutes`)
+# =============================================================================
+
+FAIRNESS_METRICS = (
+    'total_hours', 'saturday_hours', 'sunday_hours',
+    'public_holiday_hours', 'night_hours', 'overtime_hours',
+)
+# SC-11, ¢ per (debt-hour × shift-hour): the old per-SHIFT coefficients (EBA
+# cl 41 Sat:Sun:PH = 1:2:6, night 300) divided by REFERENCE_SHIFT_HOURS², so an
+# 8h shift against an 8h debt costs what one shift against one shift did.
+REFERENCE_SHIFT_HOURS = 8
+SC11_COEFF_PER_HOUR2 = {
+    'saturday_hours': 200 / REFERENCE_SHIFT_HOURS ** 2,
+    'sunday_hours': 400 / REFERENCE_SHIFT_HOURS ** 2,
+    'public_holiday_hours': 1200 / REFERENCE_SHIFT_HOURS ** 2,
+    'night_hours': 300 / REFERENCE_SHIFT_HOURS ** 2,
+}
+_SC11_CATEGORY = {
+    'saturday_hours': 'saturday', 'sunday_hours': 'sunday',
+    'public_holiday_hours': 'public_holiday', 'night_hours': 'night',
+}
+SC11B_TOTAL_HOURS_COEFF = 2.0     # ¢ per (debt-hour × shift-hour)
+SC11B_OVERTIME_HOURS_COEFF = 3.0  # ¢ per (debt-hour × shift-hour) = old 0.05/min × 60
+
+
+def _category_minutes(shift) -> dict[str, float]:
+    """Net minutes of `shift` in each fairness category.
+
+    Wall-clock split of [start, end) (end <= start ⇒ next day) by local date;
+    night = 22:00–06:00. Every category is scaled by net/gross, net being
+    `duration_minutes` (the gross span the client sends) minus the unpaid break
+    — the same net hours the DB ledger bills. `undesirable` is the union of
+    Sat, Sun, PH and night, so an hour that is both Sunday and night counts once.
+    """
+    d0 = datetime.date.fromisoformat(shift.shift_date)
+
+    def _at(day: datetime.date, hhmm: str) -> datetime.datetime:
+        h, m = (int(x) for x in hhmm.split(':')[:2])
+        return datetime.datetime.combine(day, datetime.time(0, 0)) + datetime.timedelta(hours=h, minutes=m)
+
+    start = _at(d0, shift.start_time)
+    end = _at(d0, shift.end_time)
+    if end <= start:
+        end += datetime.timedelta(days=1)
+    gross = (end - start).total_seconds() / 60
+    zero = {k: 0.0 for k in ('total', 'saturday', 'sunday', 'public_holiday', 'night', 'undesirable')}
+    if gross <= 0:
+        return zero
+
+    def _clip(a: datetime.datetime, b: datetime.datetime):
+        lo, hi = max(a, start), min(b, end)
+        return (lo, hi) if lo < hi else None
+
+    by_cat: dict[str, list] = {'saturday': [], 'sunday': [], 'public_holiday': [], 'night': []}
+    for offset in (0, 1):
+        day = d0 + datetime.timedelta(days=offset)
+        span = _clip(_at(day, '00:00'), _at(day, '00:00') + datetime.timedelta(days=1))
+        if span is None:
+            continue
+        if day.weekday() == 5:
+            by_cat['saturday'].append(span)
+        elif day.weekday() == 6:
+            by_cat['sunday'].append(span)
+        if (shift.is_public_holiday if offset == 0
+                else getattr(shift, 'is_public_holiday_next_day', False)):
+            by_cat['public_holiday'].append(span)
+    for offset in (-1, 0, 1):
+        n0 = _at(d0 + datetime.timedelta(days=offset), '22:00')
+        span = _clip(n0, n0 + datetime.timedelta(hours=8))
+        if span is not None:
+            by_cat['night'].append(span)
+
+    def _minutes(spans) -> float:
+        return sum((b - a).total_seconds() / 60 for a, b in spans)
+
+    merged: list = []
+    for a, b in sorted(sp for spans in by_cat.values() for sp in spans):
+        if merged and a <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+        else:
+            merged.append((a, b))
+
+    net = max(0, shift.duration_minutes - (getattr(shift, 'unpaid_break_minutes', 0) or 0))
+    scale = net / gross
+    out = {cat: _minutes(spans) * scale for cat, spans in by_cat.items()}
+    out['undesirable'] = _minutes(merged) * scale
+    out['total'] = float(net)
+    return out
+
+
+def _casual_debts(emp) -> dict[str, float]:
+    """The employee's ledger debts, or {} unless they are Casual — fairness is
+    casual-only, so FT/PT debts are ignored even if a client sends them."""
+    if emp.employment_type != 'Casual':
+        return {}
+    debts = getattr(emp, 'fairness_debts', {}) or {}
+    return {k: float(debts[k]) for k in FAIRNESS_METRICS
+            if isinstance(debts.get(k), (int, float)) and math.isfinite(debts[k])}
 
 
 def shifts_overlap(a, b) -> bool:
@@ -1403,15 +1507,7 @@ class ScheduleModelBuilder:
         eligible = self._eligibility_map.get(shift.id, [])
         ranked = sorted(eligible, key=lambda e: self._assignment_cost_cents(e, shift))
         cost_rank = next((i + 1 for i, e in enumerate(ranked) if e.id == emp.id), None)
-        debts = getattr(emp, 'fairness_debts', {}) or {}
-        # `denial_rate` is excluded: it is a rate in [0,1] on a different scale
-        # from the shift COUNTS, so summing it into the headline figure would be
-        # meaningless. It also measures bidding outcomes rather than borne
-        # burden, which is what "why this person" is explaining.
-        fairness_debt = round(sum(
-            v for k, v in debts.items()
-            if k != 'denial_rate' and isinstance(v, (int, float))
-        ), 2)
+        fairness_debt = round(sum(_casual_debts(emp).values()), 2)
         qual_gap = (emp.level or 0) - (getattr(shift, 'level', 0) or 0)
         return {
             'cost_rank': cost_rank,
@@ -1436,14 +1532,17 @@ class ScheduleModelBuilder:
         mins_by_emp: dict[str, float] = {}
         for a in assignments:
             mins_by_emp[a.employee_id] = mins_by_emp.get(a.employee_id, 0) + dur.get(a.shift_id, 0)
-        loads = list(mins_by_emp.values())
-        used = len(loads)
+        casual_ids = {e.id for e in self.data.employees if e.employment_type == 'Casual'}
+        used = len(mins_by_emp)
+        loads = [m for e_id, m in mins_by_emp.items() if e_id in casual_ids]
+        casual_used = len(loads)
 
-        # Fairness = workload evenness across the people used. Coefficient of
-        # variation 0 (perfectly even) → 100; higher spread → lower score.
-        if loads and used > 1 and sum(loads) > 0:
-            mean = sum(loads) / used
-            sd = (sum((x - mean) ** 2 for x in loads) / used) ** 0.5
+        # Fairness = workload evenness across the CASUALS used (fairness is
+        # casual-only). Coefficient of variation 0 (perfectly even) → 100;
+        # higher spread → lower score.
+        if loads and casual_used > 1 and sum(loads) > 0:
+            mean = sum(loads) / casual_used
+            sd = (sum((x - mean) ** 2 for x in loads) / casual_used) ** 0.5
             cv = sd / mean if mean else 0.0
             fairness_score = max(0, round(100 * (1 - min(1.0, cv))))
             spread = round(max(loads) - min(loads))
@@ -1515,7 +1614,7 @@ class ScheduleModelBuilder:
             'coverage': {'score': coverage_score, 'covered': covered, 'total': total},
             'cost': {'total': total_cost, 'currency': 'AUD',
                      'avg_per_shift': round(total_cost / covered, 2) if covered else 0.0},
-            'fairness': {'score': fairness_score, 'employees_used': used,
+            'fairness': {'score': fairness_score, 'employees_used': casual_used,
                          'spread_minutes': spread,
                          'peak_minutes': round(max(loads)) if loads else 0},
             'fatigue': {
@@ -2714,24 +2813,6 @@ class ScheduleModelBuilder:
                     # Preference gives a small discount
                     discount = 500 if shift.id in pref else 0
 
-                    if discount > 0:
-                        debts = getattr(emp, 'fairness_debts', {})
-                        if 'denial_rate' in debts:
-                            debt = debts['denial_rate']
-                            # If debt > 0, this employee loses a LARGER SHARE of
-                            # the bids they place than the org average, so they
-                            # are owed a preference. Boost the discount.
-                            #
-                            # The metric is a smoothed RATE in [0,1], not a raw
-                            # denial COUNT (stakeholder decision Q5). The count
-                            # rewarded bidding volume, and this bonus is applied
-                            # one-sidedly (only positive debt boosts), so the
-                            # dominant strategy was to bid on everything. A rate
-                            # cannot be farmed that way. 2000 c/unit mirrors
-                            # DEFAULT_COEFFICIENTS.denial_rate.
-                            if debt > 0:
-                                discount += int(debt * 2000 * _strategy_mult(self.data.strategy.fairness_weight))
-
                     # SOFT Availability penalty — tracked separately so the
                     # availability category captures the soft-window portion.
                     availability_penalty = 0
@@ -2883,55 +2964,31 @@ class ScheduleModelBuilder:
         # applies at ALL demand levels, still scaled by `fairness_weight`.
         # Fairness Weight (symmetric: 0% -> 0.5x, 50% -> 1.0x, 100% -> 2.0x)
         fair_mult = _strategy_mult(self.data.strategy.fairness_weight)
-        peak_terms = []
-        for emp in self.data.employees:
-            w_var = self._emp_workload_vars.get(emp.id)
-            if w_var is None: continue
+        # Fairness is CASUAL-ONLY and OPPORTUNITY-ADJUSTED. A casual's expected
+        # share is Σ over the shifts they could take of duration / pool size,
+        # where the pool is every casual with a variable for that shift — the
+        # same equal-split-of-each-opportunity rule the DB ledger uses. Casuals
+        # have no contracted capacity, so no baseline or headcount split.
+        # Only Casual-target shifts are casual work — the DB ledger's definition.
+        casual_ids = {e.id for e in self.data.employees if e.employment_type == 'Casual'}
+        casual_shift_ids = {s.id for s in self.data.shifts if s.target_employment_type == 'Casual'}
+        casual_pairs: dict[str, list[str]] = {}
+        casual_pool_size: dict[str, int] = {}
+        for e_id, s_id in self._x:
+            if e_id in casual_ids and s_id in casual_shift_ids:
+                casual_pairs.setdefault(e_id, []).append(s_id)
+                casual_pool_size[s_id] = casual_pool_size.get(s_id, 0) + 1
+        cat_minutes = {s.id: _category_minutes(s) for s in self.data.shifts}
+        net_min = {s_id: int(round(cm['total'])) for s_id, cm in cat_minutes.items()}
 
-            baseline = emp.min_contract_minutes if emp.min_contract_minutes > 0 else emp.contract_weekly_minutes
-            if baseline <= 0: baseline = 2280
-            upper_ideal = int(1.05 * baseline)
-
-            # Over-utilization band: discourage piling work past the ideal.
-            #
-            # NOTE (integration fix): under-utilization is intentionally NOT
-            # penalised here. Penalising `max(0, ideal - w)` against a fixed
-            # contract baseline is mathematically backwards as a fairness term —
-            # with low total demand, Σ max(0, ideal - w_e) is *minimised* by
-            # giving one employee `ideal` and the rest 0 (concentration), the
-            # opposite of fairness. That perverse incentive (plus an infeasibly
-            # small slack domain) is why the old code gated this block behind a
-            # 40%-demand threshold. We instead achieve all-demand-level fairness
-            # via the peak-load (min-max) term below, and leave the FT/PT
-            # contract floor to HC-7 (_add_min_contract_hours).
-            high_v = self.model.NewIntVar(0, self._minute_ub, f'high_v_{emp.id[:6]}')
-            self.model.Add(w_var <= upper_ideal + high_v)
-            over_coeff = 20 if emp.employment_type in ('FT', 'PT') else 10
-            _t(int(over_coeff * fair_mult) * high_v, 'fairness')
-
-            peak_terms.append(w_var)
-
-        # DELIVERABLE 2 — min-max load balancing. Penalising the single highest
-        # workload across the pool genuinely SPREADS work at ALL demand levels
-        # (demand-independent, no perverse concentration incentive). Sized as a
-        # tie-breaker that sits below per-minute labour cost, so cost-first
-        # behaviour is preserved while equal-cost candidates get levelled.
-        if peak_terms:
-            peak_load = self.model.NewIntVar(0, self._minute_ub, 'peak_load')
-            self.model.AddMaxEquality(peak_load, peak_terms)
-            # B2 — CONVEX fairness guardrail. A gentle penalty on the busiest
-            # employee's load, PLUS a steeper second band once they pull well
-            # past the pool's fair share. The escalating marginal cost is what
-            # makes single-mode auto-spread work without a slider: each extra
-            # shift piled on the same person is progressively more expensive than
-            # giving it to someone lighter, so the solver levels the load itself.
-            _t(int(5 * fair_mult) * peak_load, 'fairness')
-            n_emp_fair = max(1, len(peak_terms))
-            fair_share = int(self._total_shift_minutes / n_emp_fair)
-            severe_threshold = int(1.25 * fair_share)
-            peak_severe = self.model.NewIntVar(0, self._minute_ub, 'peak_severe')
-            self.model.AddMaxEquality(peak_severe, [peak_load - severe_threshold, 0])
-            _t(int(20 * fair_mult) * peak_severe, 'fairness')
+        # Excess only: a two-sided term pushed work toward casuals and drowned out the ledger.
+        sc4_coeff = max(1, round(fair_mult))
+        for e_id, pairs in casual_pairs.items():
+            expected = int(round(sum(net_min[s_id] / casual_pool_size[s_id] for s_id in pairs)))
+            assigned = cp_model.LinearExpr.Sum([net_min[s_id] * self._x[e_id, s_id] for s_id in pairs])
+            over = self.model.NewIntVar(0, sum(net_min[s_id] for s_id in pairs), f'fair_over_{e_id[:6]}')
+            self.model.Add(over >= assigned - expected)
+            _t(sc4_coeff * over, 'fairness')
 
         # -- SC-Alignment: Skill Hierarchy & Employment Isolation --------------
         # Pre-build dict lookups so we don't do `next(e for e in ...)` for
@@ -3110,199 +3167,51 @@ class ScheduleModelBuilder:
                         self.model.Add(both == 0).OnlyEnforceIf(v2.Not())
                         _t(-continuity_bonus * both, 'continuity')
 
-        # -- SC-10: DELIVERABLE 4 — NIGHT/WEEKEND FAIRNESS --------------------
-        # Balances "undesirable" shifts across employees so no single person
-        # absorbs all Sunday, public-holiday, and night-window (00:00–06:00)
-        # shifts.  An undesirable shift is one where:
-        #   - shift.is_sunday or shift.is_public_holiday, OR
-        #   - the shift's time window overlaps the night zone 00:00–06:00
-        #     (absolute minutes 0-360 within the shift's day).
-        #
-        # For each employee we compute `undsr[e]` = count of undesirable
-        # shifts assigned to them.  We then penalise deviation above the
-        # team average using a slack variable `undsr_high[e]` = max(0,
-        # undsr[e] - avg).  Since avg is fractional we use the integer
-        # floor and add `undsr_high[e]` directly — the solver minimises
-        # the sum of positive deviations (L1 balance).
-        #
-        # Scaled by `fairness_weight` via `_strategy_mult` so operators can
-        # turn it off (weight=0 → ~0.5x ≈ negligible) or amplify it.
-        #
-        # Undesirable count bound: at most len(shifts) undesirable shifts
-        # per employee (conservative).
+        # -- SC-10: NIGHT/WEEKEND/PH BALANCE (casual-only, opportunity-adjusted)
+        # Undesirable minutes = the part of a shift falling on a Saturday,
+        # Sunday, public holiday or in the 22:00–06:00 night (counted once).
+        # Each casual is expected Σ und(s) / pool(s) over the shifts they could
+        # take; only the EXCESS above that is penalised. Measured in quarter-
+        # hours; the integer coefficient quantises to 1/2/3 at fairness weight
+        # 0/50/100 (≈32/64/96¢ per 8h undesirable shift over share).
+        und_q = {s_id: int(round(cm['undesirable'] / 15)) for s_id, cm in cat_minutes.items()}
+        undsr_coeff = max(1, round(50 * fair_mult / 32))
+        for e_id, all_pairs in casual_pairs.items():
+            pairs = [s_id for s_id in all_pairs if und_q[s_id] > 0]
+            if not pairs:
+                continue
+            expected_q = int(round(sum(und_q[s_id] / casual_pool_size[s_id] for s_id in pairs)))
+            u_q = cp_model.LinearExpr.Sum([und_q[s_id] * self._x[e_id, s_id] for s_id in pairs])
+            high_v = self.model.NewIntVar(0, sum(und_q[s_id] for s_id in pairs), f'undsr_hi_{e_id[:6]}')
+            self.model.Add(high_v >= u_q - expected_q)
+            _t(undsr_coeff * high_v, 'undesirable_balance')
 
-        # Classify shifts as undesirable
-        def _is_night(s: ShiftInput) -> bool:
-            """True if the shift window overlaps 00:00–06:00 (360m into the day)."""
-            s_start, s_end = shift_window(s)
-            day_base = (s_start // 1440) * 1440
-            night_start = day_base           # 00:00
-            night_end   = day_base + 360     # 06:00
-            # Also cover next-day night for overnight shifts
-            next_night_start = day_base + 1440
-            next_night_end   = day_base + 1440 + 360
-            return (
-                (s_start < night_end   and s_end > night_start) or
-                (s_start < next_night_end and s_end > next_night_start)
-            )
-
-        # Saturday is included (audit F-01): the TS domain classifier
-        # (`fairness-ledger.isWeekendShift`) has always counted Sat+Sun as
-        # "weekend", and SC-11 below derives `is_weekend` the same way — but this
-        # gate only admitted Sunday, so a Saturday day shift never entered the
-        # loop and the Saturday half of every weekend debt was unreachable.
-        undesirable_shift_ids: set[str] = {
-            s.id for s in self.data.shifts
-            if s.is_sunday or s.is_saturday or s.is_public_holiday or _is_night(s)
-        }
-
-        if undesirable_shift_ids and self.data.employees:
-            n_undsr_shifts = len(undesirable_shift_ids)
-            undsr_counts: list = []  # IntVar per employee
-
-            for emp in self.data.employees:
-                u_terms = [
-                    self._x[emp.id, s_id]
-                    for s_id in undesirable_shift_ids
-                    if (emp.id, s_id) in self._x
-                ]
-                undsr_var = self.model.NewIntVar(
-                    0, n_undsr_shifts, f'undsr_{emp.id[:6]}'
+        # -- SC-11 / SC-11b: LONGITUDINAL FAIRNESS (casual ledger) -------------
+        # Debts are confidence-weighted HOURS (actual − opportunity-adjusted
+        # expected). Positive debt → penalise assigning; negative → bonus.
+        # SC-11 prices the shift's Sat/Sun/PH/night hours against the matching
+        # debt; SC-11b prices every shift's hours against total/overtime debt.
+        # Coefficients mirror src/modules/rosters/domain/fairness-ledger.ts.
+        for emp in self.data.employees:
+            debts = _casual_debts(emp)
+            if not debts:
+                continue
+            th_debt = debts.get('total_hours', 0.0)
+            ot_debt = debts.get('overtime_hours', 0.0)
+            for s_id in casual_pairs.get(emp.id, ()):
+                cm = cat_minutes[s_id]
+                sc11 = int(fair_mult * sum(
+                    SC11_COEFF_PER_HOUR2[k] * debts.get(k, 0.0) * cm[cat] / 60
+                    for k, cat in _SC11_CATEGORY.items()
+                ))
+                if sc11 != 0:
+                    _t(sc11 * self._x[emp.id, s_id], 'longitudinal_fairness')
+                sc11b = int(
+                    (th_debt * SC11B_TOTAL_HOURS_COEFF + ot_debt * SC11B_OVERTIME_HOURS_COEFF)
+                    * (cm['total'] / 60) * fair_mult
                 )
-                self.model.Add(undsr_var == cp_model.LinearExpr.Sum(u_terms))
-                undsr_counts.append((emp, undsr_var))
-
-            if undsr_counts:
-                # Total undesirable assignments across all employees
-                total_undsr = self.model.NewIntVar(
-                    0, n_undsr_shifts * len(undsr_counts), 'undsr_total'
-                )
-                self.model.Add(
-                    total_undsr == cp_model.LinearExpr.Sum(
-                        [v for _, v in undsr_counts]
-                    )
-                )
-                # Average = total / N_employees. We use integer arithmetic:
-                # avg_floor = total // N (rounds down, acceptable for penalty).
-                # To avoid division we compare each employee's count to
-                # total // N by penalising any `undsr_var > avg_floor`.
-                # We express avg_floor via: N * avg_floor <= total < N * (avg_floor+1)
-                # which is exactly what AddDivisionEquality does.
-                n_emp = len(undsr_counts)
-                avg_var = self.model.NewIntVar(0, n_undsr_shifts, 'undsr_avg')
-                self.model.AddDivisionEquality(avg_var, total_undsr, n_emp)
-
-                fair_mult = _strategy_mult(self.data.strategy.fairness_weight)
-                # Penalty coefficient: 50 cents per undesirable shift above average.
-                # Low enough to not override coverage/fatigue but high enough to
-                # spread work across a full roster.
-                undsr_coeff = int(50 * fair_mult)
-
-                for emp, undsr_var in undsr_counts:
-                    high_v = self.model.NewIntVar(0, n_undsr_shifts, f'undsr_hi_{emp.id[:6]}')
-                    self.model.AddMaxEquality(high_v, [undsr_var - avg_var, 0])
-                    _t(undsr_coeff * high_v, 'undesirable_balance')
-
-        # -- SC-11: LONGITUDINAL FAIRNESS (F1 Ledger) -------------------------
-        # Uses pre-computed debt from the fairness_ledger to bias assignments
-        # toward employees who are "owed" undesirable shifts and away from
-        # employees who have absorbed more than their share historically.
-        if undesirable_shift_ids and self.data.employees:
-            for emp in self.data.employees:
-                debts = getattr(emp, 'fairness_debts', {})
-                if not debts:
-                    continue
-
-                for s_id in undesirable_shift_ids:
-                    if (emp.id, s_id) not in self._x:
-                        continue
-
-                    # Classify the shift the same way the TS domain module does
-                    # (`fairness-ledger.classifyShift`): weekend = Sat OR Sun,
-                    # night = overlaps 00:00–06:00, PH = calendar lookup.
-                    #
-                    # `is_saturday` / `is_sunday` are now derived in
-                    # ShiftInput.__post_init__, so this reads them directly
-                    # instead of re-parsing shift_date per (employee, shift) —
-                    # which also removes a bare `except:` that swallowed every
-                    # error. `shift_by_id` replaces an O(S) `next(...)` scan that
-                    # made this block O(E·S²); see the dict-lookup note above.
-                    s = shift_by_id[s_id]
-
-                    # Coefficients mirror `DEFAULT_COEFFICIENTS` in
-                    # src/modules/rosters/domain/fairness-ledger.ts. Positive
-                    # debt → penalise assigning; negative debt → bonus.
-                    #
-                    # Saturday and Sunday are now separate metrics weighted
-                    # 1:2:6 with public holidays, from EBA cl 41 (+25% / +50% /
-                    # +150%) — see the TS table for the derivation. Collapsing
-                    # them into one `weekend_shifts` term priced a Sunday and a
-                    # Saturday identically, which the agreement says they are
-                    # not.
-                    penalty_sum = 0
-                    if s.is_saturday and 'saturday_shifts' in debts:
-                        debt = debts['saturday_shifts']
-                        penalty_sum += int(debt * 200 * fair_mult)
-
-                    if s.is_sunday and 'sunday_shifts' in debts:
-                        debt = debts['sunday_shifts']
-                        penalty_sum += int(debt * 400 * fair_mult)
-
-                    if _is_night(s) and 'night_shifts' in debts:
-                        debt = debts['night_shifts']
-                        penalty_sum += int(debt * 300 * fair_mult)
-
-                    if s.is_public_holiday and 'public_holiday_shifts' in debts:
-                        debt = debts['public_holiday_shifts']
-                        penalty_sum += int(debt * 1200 * fair_mult)
-
-                    if penalty_sum != 0:
-                        _t(penalty_sum * self._x[emp.id, s_id], 'longitudinal_fairness')
-
-        # -- SC-11b: HOURS-FAIRNESS (total_hours / overtime_minutes debts) -----
-        # The block above only fires for "undesirable" (weekend/night/PH) shifts.
-        # Hours-fairness is orthogonal: an employee who has worked more total
-        # hours — or more overtime past contract — than the team average over the
-        # rolling window should be biased away from picking up *any* additional
-        # shift, since every shift adds hours. Someone below average is nudged
-        # toward more work. Hence this applies to ALL (emp, shift) pairs, not
-        # just the undesirable ones.
-        #
-        # The marginal unfairness of assigning shift s to employee e is
-        # proportional to (how far e is from the team average) × (how many hours
-        # s adds), so the per-assignment penalty is scaled by the shift's hours.
-        # Coefficients are deliberately small so hours-fairness nudges rather
-        # than overrides coverage/cost (cf. SC-1 ~$25/shift):
-        #   total_hours debt:      2.0¢  per (debt-hour   × shift-hour)
-        #   overtime_minutes debt: 0.05¢ per (debt-minute × shift-hour)
-        # Positive debt → positive penalty (bias away); negative debt → bonus
-        # (bias toward). Backward-compatible: an empty ledger means every
-        # `fairness_debts` is {}, so no terms are added and the solve is unchanged.
-        if self.data.employees:
-            hours_fair_mult = _strategy_mult(self.data.strategy.fairness_weight)
-            TOTAL_HOURS_COEFF = 2.0   # cents per debt-hour per shift-hour
-            OVERTIME_COEFF = 0.05     # cents per debt-minute per shift-hour
-            for emp in self.data.employees:
-                debts = getattr(emp, 'fairness_debts', {})
-                if not debts:
-                    continue
-                th_debt = debts.get('total_hours', 0) or 0
-                ot_debt = debts.get('overtime_minutes', 0) or 0
-                if th_debt == 0 and ot_debt == 0:
-                    continue
-                for s in self.data.shifts:
-                    if (emp.id, s.id) not in self._x:
-                        continue
-                    s_start, s_end = shift_window(s)
-                    shift_hours = max(0.0, (s_end - s_start) / 60.0)
-                    if shift_hours == 0:
-                        continue
-                    penalty = int(
-                        (th_debt * TOTAL_HOURS_COEFF + ot_debt * OVERTIME_COEFF)
-                        * shift_hours * hours_fair_mult
-                    )
-                    if penalty != 0:
-                        _t(penalty * self._x[emp.id, s.id], 'longitudinal_fairness')
+                if sc11b != 0:
+                    _t(sc11b * self._x[emp.id, s_id], 'longitudinal_fairness')
 
         # -- SC-8: Workload Slack Penalties --------------------------------
         # Slack vars collected during constraint construction; without this

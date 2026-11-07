@@ -260,7 +260,7 @@ const TeamAvailabilityPage: React.FC = () => {
         staleTime: 5 * 60_000,
     });
 
-    // The ledger is recomputed by cron over a fixed 91-day window, so it does
+    // The casual ledger is recomputed nightly over its own window, so it does
     // NOT move with the dates on screen — only fetched when it is being shown.
     const { data: fairnessStanding } = useQuery({
         queryKey: ['team-fairness-standing', scope?.org_ids?.join(','), pagedIds] as const,

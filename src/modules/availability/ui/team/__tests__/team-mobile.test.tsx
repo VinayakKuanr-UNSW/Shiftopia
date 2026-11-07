@@ -36,7 +36,7 @@ const member = (over: Partial<TeamMember> & { profileId: string }): TeamMember =
     ...over,
 });
 
-const shiftBase = { netMinutes: 480, isDraft: false, deptName: null, subDeptName: null, unpaidBreakMinutes: 30 };
+const shiftBase = { netMinutes: 480, isDraft: false, deptName: null, subDeptName: null, unpaidBreakMinutes: 30, targetEmploymentType: 'Casual' };
 
 const shift = (over: Partial<RawTeamShift> & { shiftDate: string }): RawTeamShift => ({
     id: `s-${over.shiftDate}-${over.assignedEmployeeId ?? 'x'}`,

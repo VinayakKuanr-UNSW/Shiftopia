@@ -274,6 +274,8 @@ export interface RawTeamShift {
      * how much of the span was actually on the tools.
      */
     unpaidBreakMinutes: number;
+    /** `shifts.target_employment_type` (FT | PT | Casual): fairness counts Casual shifts only. */
+    targetEmploymentType: string | null;
 }
 
 export interface RawLeaveDay {

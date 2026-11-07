@@ -17,7 +17,9 @@ from model_builder import (
     AvailabilitySlotInput,
     ExistingShiftInput,
     OptimizerConstraints,
+    ShiftInput,
     StrategyInput,
+    _category_minutes,
 )
 
 
@@ -433,26 +435,15 @@ def test_fairness_always_active_distributes_shifts():
     to capacity (the old gate `total_demand >= 0.4 * capacity` would have
     disabled fairness here).
 
-    Setup: 2 non-overlapping shifts on different days, 4 identical employees
-    whose ideal upper_ideal window is NARROW (set via a tiny contract_weekly_minutes
-    of 120m = exactly one shift).  With fairness active:
-      - Assigning both shifts to ONE employee costs `high_v * 20` (one shift
-        above the 1.05x upper ideal of 126m) = 20 * (240-126) = 2280.
-      - Spreading to TWO employees costs 0 high_v (each gets 120m <= 126m).
-    So fairness must prefer spreading.  Without fairness (old gate behaviour),
-    both choices cost the same and the solver may stack arbitrarily.
+    Setup: 2 non-overlapping 120m shifts, 4 identical casuals. Each is in every
+    pool, so each is expected 2*120/4 = 60m. Stacking both on one person
+    deviates 180 + 3*60 = 360m; spreading deviates 2*60 + 2*60 = 240m.
     """
     shifts = [
-        make_shift("s1", "2026-05-15", "09:00", "11:00"),  # 120m
-        make_shift("s2", "2026-05-16", "09:00", "11:00"),  # 120m, different day
+        make_shift("s1", "2026-05-15", "09:00", "11:00", target_employment_type="Casual"),  # 120m
+        make_shift("s2", "2026-05-16", "09:00", "11:00", target_employment_type="Casual"),  # 120m, different day
     ]
-    # contract_weekly_minutes = 120 so upper_ideal = 1.05 * 120 = 126m.
-    # Assigning two shifts (240m) to one employee incurs high_v penalty.
-    employees = []
-    for i in range(1, 5):
-        e = make_employee(f"e{i}")
-        e.contract_weekly_minutes = 120
-        employees.append(e)
+    employees = [make_employee(f"e{i}", employment_type="Casual") for i in range(1, 5)]
 
     out = solve(shifts, employees, max_time_seconds=5.0)
     assert out.status in ("OPTIMAL", "FEASIBLE")
@@ -522,32 +513,22 @@ def test_multihire_pair_480_599m_gap_allowed():
 # ---------------------------------------------------------------------------
 
 def test_night_weekend_fairness_balances_undesirable_shifts():
-    """DELIVERABLE 4: With 2 night shifts and 2 Sunday shifts plus 4 employees
+    """DELIVERABLE 4: With 2 night shifts and 2 Sunday shifts plus 4 casuals
     (all equally eligible), the solver must distribute the undesirable shifts
-    rather than stacking them all on one employee.  We assert that no single
-    employee receives all 4 undesirable shifts.
+    rather than stacking them all on one employee.
     """
-    # Sunday shifts
-    s1 = make_shift("s1", "2026-05-17", "09:00", "17:00")  # Sunday
-    s1.is_sunday = True
-    s2 = make_shift("s2", "2026-05-17", "17:00", "22:00")  # Sunday
-    s2.is_sunday = True
-    # Night shifts (overlap 00:00-06:00)
-    s3 = make_shift("s3", "2026-05-18", "22:00", "06:00")  # overnight
-    s3.duration_minutes = 480
-    s4 = make_shift("s4", "2026-05-19", "02:00", "10:00")  # night start
-    # 4 identical employees
-    employees = [make_employee(f"e{i}") for i in range(1, 5)]
+    s1 = make_shift("s1", "2026-05-17", "09:00", "17:00", target_employment_type="Casual")  # Sunday
+    s2 = make_shift("s2", "2026-05-17", "17:00", "22:00", target_employment_type="Casual")  # Sunday
+    s3 = make_shift("s3", "2026-05-18", "22:00", "06:00", target_employment_type="Casual")  # overnight
+    s4 = make_shift("s4", "2026-05-19", "02:00", "10:00", target_employment_type="Casual")  # night start
+    employees = [make_employee(f"e{i}", employment_type="Casual") for i in range(1, 5)]
 
     out = solve([s1, s2, s3, s4], employees, max_time_seconds=5.0)
     assert out.status in ("OPTIMAL", "FEASIBLE")
-    # Count undesirable shifts per employee
     from collections import Counter
     undsr_by_emp: Counter = Counter()
     for a in out.assignments:
-        if a.shift_id in {"s1", "s2", "s3", "s4"}:
-            undsr_by_emp[a.employee_id] += 1
-    # No single employee should hold all 4 undesirable shifts if there are >= 2 covered
+        undsr_by_emp[a.employee_id] += 1
     covered_undsr = sum(undsr_by_emp.values())
     if covered_undsr >= 2:
         max_per_emp = max(undsr_by_emp.values(), default=0)
@@ -555,96 +536,277 @@ def test_night_weekend_fairness_balances_undesirable_shifts():
             f"All {covered_undsr} undesirable shifts went to one employee. "
             f"undesirable_balance objective term is not working."
         )
-    # Also assert the objective_breakdown includes 'undesirable_balance'
-    assert out.objective_breakdown is not None
-    assert 'undesirable_balance' in out.objective_breakdown or covered_undsr == 0, (
-        "objective_breakdown must include 'undesirable_balance' category."
-    )
+    assert 'undesirable_balance' in (out.objective_breakdown or {})
 
 
 # ---------------------------------------------------------------------------
-# SC-11 — Longitudinal fairness ledger (F1). debt = rolling_value − team_avg;
-# positive = over-share (bias away), negative = owed (bias toward).
+# Per-shift fairness categories: wall-clock split, 22:00–06:00 night, scaled to
+# the shift's NET minutes (the solver's duration_minutes).
+# ---------------------------------------------------------------------------
+
+def test_category_minutes_cross_midnight_saturday_shift_with_unpaid_break():
+    """Sat 20:00 → Sun 04:00 is 480 wall-clock minutes. duration_minutes is the
+    GROSS span (what the TS producer sends); a 60m unpaid break makes it 420
+    net, so every category is scaled by 420/480."""
+    s = make_shift("s1", "2026-05-16", "20:00", "04:00",
+                   unpaid_break_minutes=60)   # 2026-05-16 is a Saturday
+    cm = _category_minutes(s)
+    assert cm["total"] == pytest.approx(420)
+    assert cm["saturday"] == pytest.approx(240 * 420 / 480)   # 20:00–24:00
+    assert cm["sunday"] == pytest.approx(240 * 420 / 480)     # 00:00–04:00
+    assert cm["night"] == pytest.approx(360 * 420 / 480)      # 22:00–04:00
+    assert cm["public_holiday"] == 0
+    assert cm["undesirable"] == pytest.approx(420)            # union, no double count
+
+
+def test_category_minutes_public_holiday_counts_shift_date_only():
+    s = make_shift("s1", "2026-05-16", "20:00", "04:00")       # Sat → Sun, 480 net
+    s.is_public_holiday = True
+    assert _category_minutes(s)["public_holiday"] == pytest.approx(240)
+
+
+def test_category_minutes_night_is_2200_to_0600():
+    """A 20:00–23:00 weekday shift has one night hour. The old 00:00–06:00
+    definition said zero."""
+    cm = _category_minutes(make_shift("s1", "2026-05-13", "20:00", "23:00"))  # Wed
+    assert cm["night"] == pytest.approx(60)
+    assert cm["saturday"] == cm["sunday"] == 0
+    assert cm["undesirable"] == pytest.approx(60)
+
+
+@pytest.mark.parametrize("label,date,start,end,unpaid,ph,ph_next,expected", [
+    # Same cases, same numbers as supabase/tests/casual_fairness_engine.sql §1
+    # and src/modules/rosters/domain/__tests__/fairness-ledger.test.ts.
+    ("Sunday day",                   "2026-12-06", "09:00", "17:00", 0,  False, False, dict(total=480, saturday=0,   sunday=480, public_holiday=0,   night=0)),
+    ("Sat→Sun overnight, 30m break", "2026-12-05", "20:00", "04:00", 30, False, False, dict(total=450, saturday=225, sunday=225, public_holiday=0,   night=337.5)),
+    ("Christmas (Fri)",              "2026-12-25", "10:00", "14:00", 0,  True,  True,  dict(total=240, saturday=0,   sunday=0,   public_holiday=240, night=0)),
+    ("Boxing Day is a Saturday",     "2026-12-26", "10:00", "14:00", 0,  True,  False, dict(total=240, saturday=240, sunday=0,   public_holiday=240, night=0)),
+    ("evening reaches 22:00",        "2026-12-07", "20:00", "23:00", 0,  False, False, dict(total=180, saturday=0,   sunday=0,   public_holiday=0,   night=60)),
+    ("early morning before 06:00",   "2026-12-07", "05:00", "07:00", 0,  False, False, dict(total=120, saturday=0,   sunday=0,   public_holiday=0,   night=60)),
+    ("Christmas Eve night into PH",  "2026-12-24", "22:00", "06:00", 0,  False, True,  dict(total=480, saturday=0,   sunday=0,   public_holiday=360, night=480)),
+])
+def test_category_minutes_matches_sql_and_ts(label, date, start, end, unpaid, ph, ph_next, expected):
+    s = make_shift("s1", date, start, end, unpaid_break_minutes=unpaid)
+    s.is_public_holiday = ph
+    s.is_public_holiday_next_day = ph_next
+    cm = _category_minutes(s)
+    assert {k: cm[k] for k in expected} == pytest.approx(expected), label
+
+
+def test_public_holiday_next_day_crosses_the_wire():
+    """Both drop points must declare it, or the next-day PH split is silently
+    lost between pydantic and the dataclass."""
+    from ortools_runner import ShiftReq
+    assert "is_public_holiday_next_day" in ShiftReq.model_fields
+    assert "is_public_holiday_next_day" in ShiftInput.__dataclass_fields__
+
+
+def test_non_finite_debts_are_ignored_not_fatal():
+    """A NaN or infinite debt (a corrupt ledger row) must not crash int() in
+    SC-11/11b; it is dropped and the solve proceeds."""
+    sunday = make_shift("s1", "2026-05-17", "09:00", "17:00", target_employment_type="Casual")
+    e = make_employee("e1", employment_type="Casual")
+    e.fairness_debts = {"sunday_hours": float("nan"), "total_hours": float("inf"),
+                        "night_hours": float("-inf")}
+    out = solve([sunday], [e])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 1
+
+
+# ---------------------------------------------------------------------------
+# SC-4 — opportunity-adjusted in-run balance (casuals only). Each casual's
+# expected minutes = Σ over shifts they could take of duration / pool size.
+# ---------------------------------------------------------------------------
+
+def test_sc4_expected_share_follows_opportunity_not_headcount():
+    """A can take s1, s2 and s3; B only s1 and s2. Expected: A = 240+240+480 =
+    960m, B = 240+240 = 480m. So B gets exactly ONE shift.
+
+    Equal division (1440/2 = 720 each) ties "B gets one" with "B gets both",
+    and B is cheaper, so a headcount-based balance lets cost hand B both."""
+    on = OptimizerConstraints(min_rest_minutes=600, enforce_role_match=True,
+                              enforce_skill_match=False, allow_partial=True,
+                              relax_constraints=False)
+    shifts = [
+        make_shift("s1", "2026-05-11", "09:00", "17:00", role_id="X", target_employment_type="Casual"),  # Mon
+        make_shift("s2", "2026-05-13", "09:00", "17:00", role_id="X", target_employment_type="Casual"),  # Wed
+        make_shift("s3", "2026-05-15", "09:00", "17:00", role_id="Y", target_employment_type="Casual"),  # Fri
+    ]
+    a = make_employee("A", employment_type="Casual", hourly_rate=40.0,
+                      contracted_role_ids=["X", "Y"])
+    b = make_employee("B", employment_type="Casual", hourly_rate=20.0,
+                      contracted_role_ids=["X"])
+
+    out = solve(shifts, [a, b], constraints=on)
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 3
+    by_emp = _counts_by_employee(out.assignments)
+    assert by_emp == {"A": 2, "B": 1}, by_emp
+
+
+def _counts_by_employee(assignments):
+    from collections import Counter
+    return dict(Counter(a.employee_id for a in assignments))
+
+
+def test_sc4_penalises_only_the_excess_above_share():
+    """One 8h casual shift, two casuals: each is expected 240m. Whoever takes it
+    is 240m over; the other is 240m under, which is NOT penalised (a two-sided
+    term pushed work toward casuals and drowned out the ledger). At fairness
+    weight 50 the coefficient is 1¢/min → exactly 240."""
+    s = make_shift("s1", "2026-05-13", "09:00", "17:00", target_employment_type="Casual")
+    out = solve([s], [make_employee("a", employment_type="Casual"),
+                      make_employee("b", employment_type="Casual")])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert (out.objective_breakdown or {}).get("fairness") == 240
+
+
+def test_fairness_counts_only_casual_target_shifts():
+    """A shift with no Casual target is not casual work: no in-run fairness
+    term may steer it, so the cheaper FT takes it on cost. (With the old
+    two-sided SC-4 over every shift, the casual's 'under share' won it.)"""
+    sunday = make_shift("s1", "2026-05-17", "09:00", "17:00")   # no target
+    ft = make_employee("ft", hourly_rate=20.0)
+    casual = make_employee("casual", employment_type="Casual", hourly_rate=40.0)
+    out = solve([sunday], [ft, casual])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert out.assignments[0].employee_id == "ft"
+    breakdown = out.objective_breakdown or {}
+    assert "fairness" not in breakdown and "undesirable_balance" not in breakdown
+
+
+@pytest.mark.parametrize("debt,expected", [
+    # A full shift's worth of Sunday debt at full confidence (±8h → ±400¢ per
+    # 8h Sunday) outweighs one shift of in-run excess (480¢ + SC-10's 64¢):
+    #   owed gets both: 480 + 64 − 2·400 = −256  <  split: −400 + 400 = 0
+    (8.0, {"owed": 2}),
+    # A quarter of that does not: in-run balance wins and the Sundays split.
+    #   owed gets both: 480 + 64 − 2·100 = 344  >  split: 0
+    (2.0, {"owed": 1, "over": 1}),
+])
+def test_ledger_vs_in_run_balance_precedence(debt, expected):
+    """Two 8h Sundays a week apart that two equally priced casuals could each
+    take. In-run balance (SC-4/SC-10) wants one each; the ledger (SC-11) wants
+    the owed casual to take both. Which wins depends on the size of the debt —
+    this pins the calibration.
+
+    A third casual takes two weekday shifts only they can work, so taking both
+    Sundays stays under the soft anti-hogging cap (65% of a run's minutes),
+    which outranks the whole guardrail tier and would otherwise decide alone."""
+    on = OptimizerConstraints(min_rest_minutes=600, enforce_role_match=True,
+                              enforce_skill_match=False, allow_partial=True,
+                              relax_constraints=False)
+    casual = dict(target_employment_type="Casual")
+    shifts = [make_shift("s1", "2026-05-17", "09:00", "17:00", role_id="S", **casual),
+              make_shift("s2", "2026-05-24", "09:00", "17:00", role_id="S", **casual),
+              make_shift("w1", "2026-05-19", "09:00", "17:00", role_id="W", **casual),
+              make_shift("w2", "2026-05-21", "09:00", "17:00", role_id="W", **casual)]
+    owed = make_employee("owed", employment_type="Casual", contracted_role_ids=["S"])
+    owed.fairness_debts = {"sunday_hours": -debt}
+    over = make_employee("over", employment_type="Casual", contracted_role_ids=["S"])
+    over.fairness_debts = {"sunday_hours": debt}
+    weekday = make_employee("weekday", employment_type="Casual", contracted_role_ids=["W"])
+    out = solve(shifts, [owed, over, weekday], constraints=on)
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    sundays = [a for a in out.assignments if a.shift_id in ("s1", "s2")]
+    assert _counts_by_employee(sundays) == expected
+
+
+def test_non_casual_employees_get_no_fairness_terms():
+    """Fairness is casual-only. Two FT employees: the pricier one carries a huge
+    'owed' debt, the cheap one a huge over-share debt. Neither may move the
+    solve — the cheap one wins on cost, and no fairness category is built."""
+    sunday = make_shift("s1", "2026-05-17", "09:00", "17:00")
+    owed = make_employee("owed", hourly_rate=40.0)              # FT by default
+    owed.fairness_debts = {"sunday_hours": -100.0, "total_hours": -100.0}
+    over = make_employee("over", hourly_rate=20.0)
+    over.fairness_debts = {"sunday_hours": 100.0, "total_hours": 100.0}
+
+    out = solve([sunday], [owed, over])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert out.assignments[0].employee_id == "over"
+    breakdown = out.objective_breakdown or {}
+    for cat in ("fairness", "undesirable_balance", "longitudinal_fairness"):
+        assert cat not in breakdown, f"{cat} must not be built for FT/PT"
+    assert out.assignments[0].rationale["fairness_debt"] == 0
+
+
+# ---------------------------------------------------------------------------
+# SC-11 — Longitudinal fairness ledger. Debts are confidence-weighted HOURS;
+# positive = above expected share (bias away), negative = owed (bias toward).
 # ---------------------------------------------------------------------------
 
 def test_sc11_biases_undesirable_shift_toward_owed_employee():
-    """With two equally-eligible employees competing for one undesirable (Sunday)
-    shift, SC-11 must hand it to the employee the ledger says is OWED (negative
-    weekend debt) over the one who has already done MORE than their share
-    (positive debt). Also guards the wire-boundary: fairness_debts must reach
-    EmployeeInput, else the term silently no-ops."""
-    sunday = make_shift("s1", "2026-05-17", "09:00", "17:00")  # 2026-05-17 is a Sunday
-    sunday.is_sunday = True
+    """Two casuals compete for one Sunday shift: the ledger says one is OWED
+    Sunday hours and the other has done more than their share. Also guards the
+    wire boundary: fairness_debts must reach EmployeeInput."""
+    sunday = make_shift("s1", "2026-05-17", "09:00", "17:00", target_employment_type="Casual")  # 2026-05-17 is a Sunday
 
-    owed = make_employee("owed")
-    owed.fairness_debts = {"sunday_shifts": -3.0}           # done fewer → should win
-    overworked = make_employee("overworked")
-    overworked.fairness_debts = {"sunday_shifts": 3.0}      # done more → avoid
+    owed = make_employee("owed", employment_type="Casual")
+    owed.fairness_debts = {"sunday_hours": -24.0}
+    overworked = make_employee("overworked", employment_type="Casual")
+    overworked.fairness_debts = {"sunday_hours": 24.0}
 
     out = solve([sunday], [owed, overworked])
     assert out.status in ("OPTIMAL", "FEASIBLE")
     assert len(out.assignments) == 1
-    assert out.assignments[0].employee_id == "owed", (
-        "SC-11 should bias the undesirable shift toward the owed (negative-debt) "
-        "employee. If this fails, fairness_debts was dropped at the wire boundary "
-        "or the SC-11 term regressed."
-    )
+    assert out.assignments[0].employee_id == "owed"
     assert "longitudinal_fairness" in (out.objective_breakdown or {})
 
 
 def test_sc11_no_effect_on_non_undesirable_shifts():
-    """SC-11 only touches undesirable (weekend/night/PH) shifts. A plain weekday
-    day shift must still solve and assign regardless of weekend debt (and the
-    'longitudinal_fairness' term should not fire)."""
-    weekday = make_shift("s1", "2026-05-13", "09:00", "17:00")  # 2026-05-13 is a Wednesday
-    e = make_employee("e1")
-    e.fairness_debts = {"sunday_shifts": 5.0}
+    """A plain weekday day shift has zero Sunday hours, so Sunday debt adds no
+    term and the solve still assigns."""
+    weekday = make_shift("s1", "2026-05-13", "09:00", "17:00", target_employment_type="Casual")  # Wednesday
+    e = make_employee("e1", employment_type="Casual")
+    e.fairness_debts = {"sunday_hours": 40.0}
     out = solve([weekday], [e])
     assert out.status in ("OPTIMAL", "FEASIBLE")
     assert len(out.assignments) == 1
+    assert "longitudinal_fairness" not in (out.objective_breakdown or {})
+
+
+def test_sc11_night_debt_applies_to_evening_shift_before_midnight():
+    """20:00–23:00 has one night hour under 22:00–06:00. Night debt must bias
+    it toward the owed casual even though they cost more."""
+    evening = make_shift("s1", "2026-05-13", "20:00", "23:00", target_employment_type="Casual")  # Wednesday
+    owed = make_employee("owed", employment_type="Casual", hourly_rate=30.0)
+    owed.fairness_debts = {"night_hours": -200.0}
+    over = make_employee("over", employment_type="Casual", hourly_rate=29.0)
+    over.fairness_debts = {"night_hours": 200.0}
+
+    out = solve([evening], [owed, over])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert out.assignments[0].employee_id == "owed"
 
 
 # ---------------------------------------------------------------------------
-# SC-11b — Hours-fairness (total_hours / overtime_minutes debts). Unlike the
-# weekend/night/PH block, this biases *every* shift (any shift adds hours) so an
-# over-worked employee is nudged off ordinary weekday work too.
+# SC-11b — Hours fairness (total_hours / overtime_hours debts) applies to every
+# shift, since any shift adds hours.
 # ---------------------------------------------------------------------------
 
 def test_sc11b_hours_fairness_biases_weekday_shift_toward_under_worked():
-    """With two equally-eligible employees competing for one PLAIN WEEKDAY shift
-    (which the weekend/night/PH block ignores entirely), the total_hours debt
-    must still bias the assignment toward the under-worked (negative-debt)
-    employee and away from the over-worked (positive-debt) one. Guards both the
-    new SC-11b term and the wire boundary for the total_hours debt."""
-    weekday = make_shift("s1", "2026-05-13", "09:00", "17:00")  # 2026-05-13 is a Wednesday
+    weekday = make_shift("s1", "2026-05-13", "09:00", "17:00", target_employment_type="Casual")  # Wednesday
 
-    under = make_employee("under")
-    under.fairness_debts = {"total_hours": -40.0}   # worked fewer hours → should win
-    over = make_employee("over")
-    over.fairness_debts = {"total_hours": 40.0}     # worked more hours → avoid
+    under = make_employee("under", employment_type="Casual")
+    under.fairness_debts = {"total_hours": -40.0}
+    over = make_employee("over", employment_type="Casual")
+    over.fairness_debts = {"total_hours": 40.0}
 
     out = solve([weekday], [under, over])
     assert out.status in ("OPTIMAL", "FEASIBLE")
     assert len(out.assignments) == 1
-    assert out.assignments[0].employee_id == "under", (
-        "SC-11b hours-fairness should bias a plain weekday shift toward the "
-        "under-worked (negative total_hours debt) employee. If this fails, "
-        "fairness_debts.total_hours was dropped at the wire boundary or the "
-        "SC-11b term regressed."
-    )
+    assert out.assignments[0].employee_id == "under"
     assert "longitudinal_fairness" in (out.objective_breakdown or {})
 
 
 def test_sc11b_overtime_debt_also_biases_assignment():
-    """The overtime_minutes debt feeds the same hours-fairness term. An employee
-    deep in positive overtime debt should be avoided in favour of one with
-    negative overtime debt, even on an ordinary weekday shift."""
-    weekday = make_shift("s1", "2026-05-13", "09:00", "17:00")  # Wednesday
+    weekday = make_shift("s1", "2026-05-13", "09:00", "17:00", target_employment_type="Casual")  # Wednesday
 
-    under = make_employee("under")
-    under.fairness_debts = {"overtime_minutes": -1200.0}   # well under → should win
-    over = make_employee("over")
-    over.fairness_debts = {"overtime_minutes": 1200.0}     # well over → avoid
+    under = make_employee("under", employment_type="Casual")
+    under.fairness_debts = {"overtime_hours": -20.0}
+    over = make_employee("over", employment_type="Casual")
+    over.fairness_debts = {"overtime_hours": 20.0}
 
     out = solve([weekday], [under, over])
     assert out.status in ("OPTIMAL", "FEASIBLE")
@@ -654,15 +816,15 @@ def test_sc11b_overtime_debt_also_biases_assignment():
 
 
 def test_sc11b_no_terms_when_no_hours_debt():
-    """Backward-compatibility: an employee with only weekend debt (no
-    total_hours/overtime) must not trigger the SC-11b hours term on a plain
-    weekday shift — the solve is unchanged and still assigns."""
-    weekday = make_shift("s1", "2026-05-13", "09:00", "17:00")  # Wednesday
-    e = make_employee("e1")
-    e.fairness_debts = {"sunday_shifts": 5.0}    # not an hours metric
+    """Only Sunday debt on a plain weekday shift: neither SC-11 nor SC-11b
+    fires, and the solve still assigns."""
+    weekday = make_shift("s1", "2026-05-13", "09:00", "17:00", target_employment_type="Casual")  # Wednesday
+    e = make_employee("e1", employment_type="Casual")
+    e.fairness_debts = {"sunday_hours": 5.0}
     out = solve([weekday], [e])
     assert out.status in ("OPTIMAL", "FEASIBLE")
     assert len(out.assignments) == 1
+    assert "longitudinal_fairness" not in (out.objective_breakdown or {})
 
 
 # ---------------------------------------------------------------------------
@@ -679,11 +841,11 @@ def test_lexicographic_guardrail_outranks_cost():
     cheap and an expensive employee: a cost-first solver hands both to the cheap
     one; the lexicographic guardrail tier must split them one each."""
     shifts = [
-        make_shift("s1", "2026-05-11", "09:00", "17:00"),  # Mon
-        make_shift("s2", "2026-05-14", "09:00", "17:00"),  # Thu — days apart, no rest conflict
+        make_shift("s1", "2026-05-11", "09:00", "17:00", target_employment_type="Casual"),  # Mon
+        make_shift("s2", "2026-05-14", "09:00", "17:00", target_employment_type="Casual"),  # Thu — days apart, no rest conflict
     ]
-    cheap = make_employee("cheap", hourly_rate=20.0)
-    expensive = make_employee("expensive", hourly_rate=40.0)
+    cheap = make_employee("cheap", employment_type="Casual", hourly_rate=20.0)
+    expensive = make_employee("expensive", employment_type="Casual", hourly_rate=40.0)
 
     out = solve(shifts, [cheap, expensive])
     assert out.status in ("OPTIMAL", "FEASIBLE")
@@ -713,9 +875,10 @@ def test_lexicographic_coverage_outranks_everything():
 
 def test_b5_pillars_reported_on_solve():
     """Every solve returns a four-pillar scorecard derived from the solution."""
-    shifts = [make_shift("s1", "2026-05-11", "09:00", "17:00"),
-              make_shift("s2", "2026-05-14", "09:00", "17:00")]
-    out = solve(shifts, [make_employee("a"), make_employee("b")])
+    shifts = [make_shift("s1", "2026-05-11", "09:00", "17:00", target_employment_type="Casual"),
+              make_shift("s2", "2026-05-14", "09:00", "17:00", target_employment_type="Casual")]
+    out = solve(shifts, [make_employee("a", employment_type="Casual"),
+                         make_employee("b", employment_type="Casual")])
     assert out.pillars is not None
     p = out.pillars
     assert p["coverage"]["score"] == 100.0
@@ -1435,12 +1598,12 @@ def test_sc11_saturday_debt_applies_to_saturday_day_shift():
     Saturday, so a Saturday DAY shift (not night, not PH) never reached SC-11
     and the Saturday half of every weekend debt was unreachable — even though
     the block right below it derived `is_weekend` as Sat OR Sun."""
-    saturday = make_shift("s1", "2026-05-16", "09:00", "17:00")   # Sat, not night
+    saturday = make_shift("s1", "2026-05-16", "09:00", "17:00", target_employment_type="Casual")   # Sat, not night
 
-    owed = make_employee("owed")
-    owed.fairness_debts = {"saturday_shifts": -3.0}         # done fewer → should win
-    overworked = make_employee("overworked")
-    overworked.fairness_debts = {"saturday_shifts": 3.0}    # done more → avoid
+    owed = make_employee("owed", employment_type="Casual")
+    owed.fairness_debts = {"saturday_hours": -24.0}         # done fewer → should win
+    overworked = make_employee("overworked", employment_type="Casual")
+    overworked.fairness_debts = {"saturday_hours": 24.0}    # done more → avoid
 
     out = solve([saturday], [owed, overworked])
     assert out.status in ("OPTIMAL", "FEASIBLE")
@@ -1456,15 +1619,15 @@ def test_sc11_saturday_and_sunday_debts_do_not_cross_over():
     """Decision Q6: Saturday and Sunday are separately weighted (EBA cl 41),
     so Saturday debt must not steer a Sunday assignment or vice versa. Under
     the old single `weekend_shifts` metric this distinction did not exist."""
-    sunday = make_shift("s1", "2026-05-17", "09:00", "17:00")   # Sunday
+    sunday = make_shift("s1", "2026-05-17", "09:00", "17:00", target_employment_type="Casual")   # Sunday
     sunday.is_sunday = True
 
     # Both carry the SAME magnitude of debt, but on the wrong axis for this
     # shift — so neither should be biased and the solve must not crash.
-    a = make_employee("a")
-    a.fairness_debts = {"saturday_shifts": -5.0}
-    b = make_employee("b")
-    b.fairness_debts = {"saturday_shifts": 5.0}
+    a = make_employee("a", employment_type="Casual")
+    a.fairness_debts = {"saturday_hours": -40.0}
+    b = make_employee("b", employment_type="Casual")
+    b.fairness_debts = {"saturday_hours": 40.0}
 
     out = solve([sunday], [a, b])
     assert out.status in ("OPTIMAL", "FEASIBLE")
@@ -1479,13 +1642,13 @@ def test_sc11_public_holiday_debt_biases_assignment():
     never execute, because reaching it required `is_public_holiday` — which no
     producer set — to ALSO be what put the shift in `undesirable_shift_ids`.
     The highest-weighted metric in the ledger (500c/unit) had never fired."""
-    ph = make_shift("s1", "2026-05-13", "09:00", "17:00")   # a Wednesday
+    ph = make_shift("s1", "2026-05-13", "09:00", "17:00", target_employment_type="Casual")   # a Wednesday
     ph.is_public_holiday = True
 
-    owed = make_employee("owed")
-    owed.fairness_debts = {"public_holiday_shifts": -2.0}
-    overworked = make_employee("overworked")
-    overworked.fairness_debts = {"public_holiday_shifts": 2.0}
+    owed = make_employee("owed", employment_type="Casual")
+    owed.fairness_debts = {"public_holiday_hours": -16.0}
+    overworked = make_employee("overworked", employment_type="Casual")
+    overworked.fairness_debts = {"public_holiday_hours": 16.0}
 
     out = solve([ph], [owed, overworked])
     assert out.status in ("OPTIMAL", "FEASIBLE")
