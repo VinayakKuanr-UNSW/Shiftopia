@@ -15,7 +15,6 @@
 --   clk   clock X in on shift 1 (on X's behalf unless the caller is X)
 --   bids  which open (on_bidding) shifts are visible: 2 = S2, 5 = S1
 --   pt    pay terms of shift 1 (S1, X's contract) come back non-null
---   fair  recompute the organization's fairness ledger (Admin suite)
 --   grp   role in a broadcast group placed in S3: a = admin, m = member by contract, . = none
 \set QUIET on
 BEGIN;
@@ -177,17 +176,6 @@ BEGIN
                                      THEN 'y' ELSE '.' END;
         EXCEPTION WHEN OTHERS THEN r := r || ' pt=!';
         END;
-
-        -- fairness recompute
-        BEGIN
-            PERFORM public.request_fairness_ledger_recompute(o);
-            res := 'y';
-            RAISE EXCEPTION USING ERRCODE = 'P0099';
-        EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
-                  WHEN insufficient_privilege THEN res := 'F';
-                  WHEN OTHERS THEN res := '!';
-        END;
-        r := r || ' fair=' || res;
 
         -- broadcast group membership by contract (every contract, not one)
         r := r || ' grp=' || CASE public.get_broadcast_group_role('6b000000-0000-4000-8000-000000000003')

@@ -43,11 +43,10 @@ The list is empty. Migration `20261013120936_close_anon_surface` closed the five
 
 ## Not yet covered
 
-The older SQL harnesses in `supabase/tests/` don't run against the real schema, so they're not part of this suite. Porting each means rewriting its setup against today's schema; `fairness_ledger_parity.sql`, for example, also inserts shifts without columns now required, references employees that don't exist, and deletes every bid in the database.
+The older SQL harnesses in `supabase/tests/` don't run against the real schema, so they're not part of this suite. Porting each means rewriting its setup against today's schema.
 
 | Harness | Fails with | Why |
 |---|---|---|
 | `availability_exceptions.sql` | `relation "profiles" already exists` | Builds its own stub schema. |
 | `contract_ordinary_hours_envelope.sql` | `type "employment_status" already exists` | Builds its own stub schema. |
 | `availability_subdepartment_scope.sql` | `"employee_leave_days" is not a table` | Stale: that table is now a view. |
-| `fairness_ledger_parity.sql` | `target_employment_type is required` | Stale: its shift inserts predate that rule. |

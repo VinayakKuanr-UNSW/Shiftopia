@@ -2416,48 +2416,6 @@ export type Database = {
         }
         Relationships: []
       }
-      fairness_ledger: {
-        Row: {
-          debt: number
-          employee_id: string
-          id: string
-          last_updated_at: string
-          metric: string
-          organization_id: string
-          rolling_value: number
-          team_average: number
-          updated_by_run: string | null
-          window_end: string
-          window_start: string
-        }
-        Insert: {
-          debt?: number
-          employee_id: string
-          id?: string
-          last_updated_at?: string
-          metric: string
-          organization_id: string
-          rolling_value?: number
-          team_average?: number
-          updated_by_run?: string | null
-          window_end: string
-          window_start: string
-        }
-        Update: {
-          debt?: number
-          employee_id?: string
-          id?: string
-          last_updated_at?: string
-          metric?: string
-          organization_id?: string
-          rolling_value?: number
-          team_average?: number
-          updated_by_run?: string | null
-          window_end?: string
-          window_start?: string
-        }
-        Relationships: []
-      }
       first_aid_appointments: {
         Row: {
           appointed_by: string | null
@@ -6804,18 +6762,6 @@ export type Database = {
           user_contract_id: string
         }[]
       }
-      get_fairness_debts_latest: {
-        Args: { p_as_of?: string; p_employee_ids?: string[]; p_org_id: string }
-        Returns: {
-          debt: number
-          employee_id: string
-          metric: string
-          rolling_value: number
-          team_average: number
-          window_end: string
-          window_start: string
-        }[]
-      }
       get_insights_summary: {
         Args: {
           p_dept_ids?: string[]
@@ -7243,10 +7189,6 @@ export type Database = {
           operation: string
         }[]
       }
-      prune_fairness_ledger: {
-        Args: { p_retain_days?: number }
-        Returns: number
-      }
       public_holiday_calendar_horizon: {
         Args: { p_jurisdiction?: string }
         Returns: string
@@ -7254,17 +7196,6 @@ export type Database = {
       quarter_date_range: {
         Args: { p_quarter: number; p_year: number }
         Returns: Record<string, unknown>
-      }
-      recompute_all_fairness_ledgers: { Args: never; Returns: number }
-      recompute_fairness_ledger: {
-        Args: {
-          p_as_of?: string
-          p_department_id?: string
-          p_jurisdiction?: string
-          p_org_id: string
-          p_window_days?: number
-        }
-        Returns: number
       }
       register_push_token: {
         Args: { p_platform?: string; p_token: string }
@@ -7283,10 +7214,6 @@ export type Database = {
           p_sub_dept_id: string
         }
         Returns: Json
-      }
-      request_fairness_ledger_recompute: {
-        Args: { p_as_of?: string; p_org_id: string }
-        Returns: number
       }
       resolve_user_permissions: { Args: never; Returns: Json }
       save_template_full: {
