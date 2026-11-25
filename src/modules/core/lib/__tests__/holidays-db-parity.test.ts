@@ -41,13 +41,18 @@ describe('database public_holidays agrees with the client holiday table', () => 
         expect(rows.length).toBeGreaterThan(100);
     });
 
-    it('holds NSW only, the one jurisdiction the client table covers', () => {
-        expect([...new Set(rows.map((r) => r.jurisdiction))]).toEqual(['AU-NSW']);
+    // AU-QLD (BCEC, 2026-11-26) is in the database but not yet in the client table,
+    // which still answers for NSW alone. Teaching the client per-jurisdiction
+    // holidays is tracked in docs/architecture/multi-organization.md; until then a
+    // jurisdiction outside this list fails here rather than slipping past.
+    it('holds the known jurisdictions only', () => {
+        expect([...new Set(rows.map((r) => r.jurisdiction))].sort()).toEqual(['AU-NSW', 'AU-QLD']);
     });
 
-    it('marks the same days as public holidays, in both directions', () => {
-        const seeded = new Set(rows.map((r) => r.date));
-        const years = rows.map((r) => Number(r.date.slice(0, 4)));
+    it('marks the same NSW days as public holidays, in both directions', () => {
+        const nsw = rows.filter((r) => r.jurisdiction === 'AU-NSW');
+        const seeded = new Set(nsw.map((r) => r.date));
+        const years = nsw.map((r) => Number(r.date.slice(0, 4)));
         const mismatches: string[] = [];
 
         for (let year = Math.min(...years); year <= Math.max(...years); year++) {
