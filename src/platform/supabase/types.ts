@@ -3736,13 +3736,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "shift_bids_profile_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "shift_bids_reviewed_by_fkey"
             columns: ["reviewed_by"]
             isOneToOne: false

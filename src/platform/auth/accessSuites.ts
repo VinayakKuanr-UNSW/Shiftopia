@@ -90,7 +90,7 @@ export function managerialMode(h: AccessHolding): ManagerialMode {
  *
  * Mirrors the database matrix for shift.publish / shift.create / shift.assign /
  * roster.edit (rbac_permissions, read 2026-10-18): gamma at SUB_DEPT scope,
- * zeta everywhere (user_has_action_in_scope treats zeta as a global bypass).
+ * zeta anywhere in its own organisation (ORG scope).
  * SUB_DEPT matches organisation + sub-department; like SQL, a missing
  * sub-department matches nothing. Delta and epsilon are view-only.
  *
@@ -104,7 +104,7 @@ export function allowsShiftWriteAt(
 ): boolean {
     return (certificates ?? []).some((c) => {
         if (c.isActive === false) return false;
-        if (c.accessLevel === 'zeta') return true;
+        if (c.accessLevel === 'zeta') return !!place.organizationId && c.organizationId === place.organizationId;
         return c.accessLevel === 'gamma'
             && !!place.organizationId && c.organizationId === place.organizationId
             && !!place.subDepartmentId && c.subDepartmentId === place.subDepartmentId;

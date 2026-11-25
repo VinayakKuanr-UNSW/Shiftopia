@@ -2,7 +2,7 @@
  * `allowsShiftWriteAt` — the place-aware write check.
  *
  * Mirrors rbac_permissions for shift.publish / create / assign / roster.edit
- * (gamma: SUB_DEPT, zeta: global). If the database matrix changes, this file
+ * (gamma: SUB_DEPT, zeta: ORG). If the database matrix changes, this file
  * changes with it. The case that motivated it: gamma in one sub-department and
  * delta in another — the page enabled Publish for both, and the server refused
  * the whole batch.
@@ -52,9 +52,15 @@ describe('allowsShiftWriteAt', () => {
         }
     });
 
-    it('zeta writes anywhere, even in another organisation', () => {
-        const certs = [cert('zeta')];
-        expect(allowsShiftWriteAt(certs, { organizationId: 'other-org', subDepartmentId: SUB_B })).toBe(true);
+    it('zeta writes anywhere in its own organisation', () => {
+        const certs = [cert('zeta', { departmentId: null })];
+        expect(allowsShiftWriteAt(certs, { organizationId: ORG, subDepartmentId: SUB_B })).toBe(true);
+        expect(allowsShiftWriteAt(certs, { organizationId: ORG, subDepartmentId: null })).toBe(true);
+    });
+
+    it('zeta does not write in another organisation', () => {
+        const certs = [cert('zeta', { departmentId: null })];
+        expect(allowsShiftWriteAt(certs, { organizationId: 'other-org', subDepartmentId: SUB_B })).toBe(false);
     });
 
     it('gamma cannot write a shift with no sub-department (SQL NULL matches nothing)', () => {
