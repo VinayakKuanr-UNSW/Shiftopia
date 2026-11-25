@@ -22,8 +22,7 @@ WITH spec(ord, sch, rel, blank) AS (VALUES
     -- first: CHECK organizations_jurisdiction_known calls jurisdiction_is_known(),
     -- which looks the jurisdiction up in public_holidays
     ( 0, 'public', 'public_holidays',          '{}'::text[]),
-    -- org structure (hr.* is canonical; the public.* copies are still read)
-    ( 1, 'hr',     'organizations',            '{}'),
+    -- org structure (public.* is canonical; hr.departments / hr.subdepartments still mirror it)
     ( 2, 'public', 'organizations',            '{email,phone}'),
     ( 3, 'hr',     'departments',              '{}'),
     ( 4, 'public', 'departments',              '{}'),
