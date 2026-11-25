@@ -13,6 +13,9 @@ const authMocks = vi.hoisted(() => ({
   logout: vi.fn(),
   hasPermission: vi.fn().mockReturnValue(true),
   activeCertificate: null,
+  organizations: [] as Array<{ id: string; name: string }>,
+  accessScope: null as { organizationId: string; organizationName: string } | null,
+  selectOrganization: vi.fn(),
 }));
 
 const personaMocks = vi.hoisted(() => ({
@@ -52,6 +55,9 @@ vi.mock('@/platform/auth/useAuth', () => ({
     logout: authMocks.logout,
     hasPermission: authMocks.hasPermission,
     activeCertificate: authMocks.activeCertificate,
+    organizations: authMocks.organizations,
+    accessScope: authMocks.accessScope,
+    selectOrganization: authMocks.selectOrganization,
   }),
 }));
 
@@ -85,6 +91,9 @@ describe('SidebarUser', () => {
     personaMocks.displayLevel = 'alpha';
     personaMocks.setPersona.mockReset();
     authMocks.logout.mockReset();
+    authMocks.organizations = [];
+    authMocks.accessScope = null;
+    authMocks.selectOrganization.mockReset();
     themeMocks.toggleTheme.mockReset();
   });
 
@@ -192,6 +201,32 @@ describe('SidebarUser', () => {
 
     const modeBtn = screen.getByRole('button', { name: /current mode: employee/i });
     expect(modeBtn).toBeDisabled();
+  });
+
+  it('offers no organization choice to someone in one organization', () => {
+    authMocks.organizations = [{ id: 'org-icc', name: 'ICC Sydney' }];
+    authMocks.accessScope = { organizationId: 'org-icc', organizationName: 'ICC Sydney' };
+    renderSidebarUser();
+    openAccountMenu();
+    expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
+  });
+
+  it('lets someone in two organizations switch between them, the current one checked', () => {
+    authMocks.organizations = [
+      { id: 'org-icc', name: 'ICC Sydney' },
+      { id: 'org-bcec', name: 'Brisbane Convention & Exhibition Centre' },
+    ];
+    authMocks.accessScope = { organizationId: 'org-icc', organizationName: 'ICC Sydney' };
+    renderSidebarUser();
+    openAccountMenu();
+
+    const icc = screen.getByRole('menuitemradio', { name: 'ICC Sydney' });
+    const bcec = screen.getByRole('menuitemradio', { name: 'Brisbane Convention & Exhibition Centre' });
+    expect(icc).toHaveAttribute('aria-checked', 'true');
+    expect(bcec).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(bcec);
+    expect(authMocks.selectOrganization).toHaveBeenCalledWith('org-bcec');
   });
 
   it('calls logout from the account menu', () => {

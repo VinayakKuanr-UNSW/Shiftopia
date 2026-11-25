@@ -122,9 +122,9 @@ wages. Names and behaviour are ours.
 | ID | Statement | Tag |
 |---|---|---|
 | S1 | Nothing lets a person with access in two organizations choose between them: `setActiveCertificateId` has no caller, so the app uses whichever highest-level certificate comes first. | Verified 2026-11-26 |
-| S2 | An organization switcher appears only when a person's certificates span more than one organization. Choosing one makes their highest certificate in that organization active. | Assumed |
-| S3 | The choice is remembered per browser; a first visit opens the organization of the oldest highest-level contract (ICC Sydney for the current Administrator). | Assumed |
-| S4 | Every view must key its data on the selected organization. RLS now admits the Administrator to both organizations, so a view that does not filter by organization would mix them. To check view by view while building the switcher. | Open — verify |
+| S2 | An "Organization" choice appears in the account menu (sidebar) only when a person's certificates span more than one organization. Choosing one makes their highest certificate in that organization active. | Assumed — built (`organizationChoice.ts`, `SidebarUser.tsx`) |
+| S3 | The choice is remembered per browser (`localStorage`, per person); a first visit opens the organization of the oldest highest-level certificate (ICC Sydney for the current Administrator). Certificates are now fetched oldest first so this is deterministic. | Assumed — built |
+| S4 | The switcher sets `accessScope`, which three things read: the Settings page (which organization it edits), branding, and `OrgSelectionContext` (My Roster, Labour Demand, Manager Swaps — its department choice now resets on a switch). Pages on `GlobalScopeFilter` have their own organization picker built from the scope tree ("All Venues" or one venue) and do not follow the switcher. Not yet checked: pages that list data without either (e.g. the Users page reads every contract RLS admits, so an Administrator of two organizations sees both). | Verified 2026-11-26 — partial; rest Open |
 
 ## 7. Order of work
 

@@ -141,6 +141,13 @@ export const OrgSelectionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         staleTime: 5 * 60 * 1000,
     });
 
+    // A department chosen in one organization means nothing in another: clear
+    // both levels when the user switches organization.
+    useEffect(() => {
+        setSelectedDeptId(null);
+        setSelectedSubDeptId(null);
+    }, [accessScope?.organizationId]);
+
     // Reset subdept selection when dept changes (for epsilon users)
     useEffect(() => {
         if (canSelectDept) {

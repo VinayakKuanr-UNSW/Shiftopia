@@ -172,7 +172,10 @@ export const authService = {
                     sub_departments (name)
                 `)
                 .eq('user_id', userId)
-                .eq('is_active', true);
+                .eq('is_active', true)
+                // Oldest first: the default organization and tie-breaks depend on it
+                // (organizationChoice.ts).
+                .order('created_at', { ascending: true });
 
             if (certsErr) {
                 console.error('[AuthService] Certificates fetch error:', certsErr);
