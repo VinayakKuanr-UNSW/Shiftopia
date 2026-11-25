@@ -14,7 +14,7 @@ Checks what each access level can see and do, against a **local** database only.
 | DD | delta | O / D2 |
 | E, E2 | epsilon | O |
 | F | epsilon | other org |
-| Z | zeta | global |
+| Z | zeta | O (its contract's organization) |
 | X | none; employee with a contract in S1 | O / D1 / S1 |
 
 Shifts: 1 = S1 (assigned X), 2 = S2 (same department), 3 = D2 / S3 (assigned X), 4 = other org.

@@ -89,8 +89,9 @@ describe('scope trees come from contracts', () => {
         expect(trees.F!.managerial.orgs).toEqual([OTHER_ORG]);
     });
 
-    it('zeta reaches every organization; personally only where contracted (Z)', () => {
-        expect(trees.Z!.managerial.orgs).toEqual(expect.arrayContaining([ORG, OTHER_ORG]));
+    it('zeta reaches its own organization, not another; personally only where contracted (Z)', () => {
+        expect(trees.Z!.managerial.orgs).toEqual([ORG]);
+        expect(trees.Z!.managerial.depts).toEqual(expect.arrayContaining([D1, D2]));
         expect(trees.Z!.personal).toEqual({ orgs: [ORG], depts: [D1], subs: [S1] });
     });
 });
