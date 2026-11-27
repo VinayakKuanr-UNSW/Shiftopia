@@ -16,6 +16,8 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
@@ -52,7 +54,10 @@ interface SidebarUserProps {
 export const SidebarUser: React.FC<SidebarUserProps> = ({ isCollapsed = false }) => {
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logout, activeCertificate, hasPermission } = useAuth();
+    const { user, logout, activeCertificate, hasPermission, organizations, accessScope, selectOrganization } = useAuth();
+    // Someone with access in several organizations chooses which one the app
+    // shows (docs/architecture/multi-organization.md §6).
+    const canSwitchOrganization = (organizations?.length ?? 0) > 1;
     const { persona, setPersona, canSwitch, availablePersonas, displayLevel } = usePersona();
     const { toggleTheme, isDark } = useTheme();
 
@@ -142,6 +147,28 @@ export const SidebarUser: React.FC<SidebarUserProps> = ({ isCollapsed = false })
                     <span className="truncate text-[13px] text-muted-foreground">{certificateLabel}</span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {canSwitchOrganization && (
+                    <>
+                        <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Organization
+                        </DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                            value={accessScope?.organizationId ?? ''}
+                            onValueChange={selectOrganization}
+                        >
+                            {organizations.map((organization) => (
+                                <DropdownMenuRadioItem
+                                    key={organization.id}
+                                    value={organization.id}
+                                    className="min-h-[44px] text-[13px]"
+                                >
+                                    <span className="truncate">{organization.name}</span>
+                                </DropdownMenuRadioItem>
+                            ))}
+                        </DropdownMenuRadioGroup>
+                        <DropdownMenuSeparator />
+                    </>
+                )}
                 <DropdownMenuItem asChild className="min-h-[44px] gap-3 text-[13px]">
                     <NavLink to="/profile">
                         <User className="h-4 w-4" aria-hidden="true" /> Profile

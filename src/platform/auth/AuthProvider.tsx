@@ -5,6 +5,13 @@ import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/platform/supabase/client';
 import { User, AccessLevel, UserContract, AccessCertificate, PermissionObject } from './types';
 import { authService, AuthSessionError, isRejectedCredential } from './auth.service';
+import {
+  organizationsOf,
+  pickActiveCertificate,
+  readPreferredOrganization,
+  writePreferredOrganization,
+  type OrganizationOption,
+} from './organizationChoice';
 import { setSentryUser } from '@/platform/observability/sentry';
 
 // Re-export types for backward compatibility with existing imports
@@ -47,6 +54,10 @@ interface AuthContextType {
   setActiveCertificateId: (id: string | null) => void;
   /** Derived access scope from the certificate - use this for data filtering */
   accessScope: AccessScope | null;
+  /** Organizations the user holds active access in (more than one ⇒ they can switch) */
+  organizations: OrganizationOption[];
+  /** Make the user's highest certificate in this organization active; remembered per browser */
+  selectOrganization: (organizationId: string) => void;
   /** Full permission object from resolve_user_permissions RPC */
   permissionObject: PermissionObject | null;
   /** Whether permissions are still loading */
@@ -108,6 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [activeContractId, setActiveContractId] = useState<string | null>(null);
   const [activeCertificateId, setActiveCertificateId] = useState<string | null>(null);
+  const [preferredOrganizationId, setPreferredOrganizationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [permissionObject, setPermissionObject] = useState<PermissionObject | null>(null);
@@ -374,35 +386,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (selected) return selected;
     }
 
-    // 2. Fallback to highest access level certificate
-    const levels: AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
+    // 2. Otherwise the highest certificate in the chosen organization (or overall)
+    return pickActiveCertificate(user.certificates, preferredOrganizationId);
+  }, [user, activeCertificateId, preferredOrganizationId]);
 
-    let highest: AccessCertificate | null = null;
-    let highestIdx = -1;
+  // Organizations the user can act in; more than one shows the switcher
+  const organizations = React.useMemo(() => organizationsOf(user?.certificates), [user]);
 
-    user.certificates.forEach(cert => {
-      const idx = levels.indexOf(cert.accessLevel);
-      if (idx > highestIdx) {
-        highestIdx = idx;
-        highest = cert;
-      }
-    });
+  // The browser remembers each person's last organization
+  useEffect(() => {
+    setPreferredOrganizationId(user ? readPreferredOrganization(user.id) : null);
+  }, [user?.id]);
 
-    return highest;
-  }, [user, activeCertificateId]);
+  const selectOrganization = useCallback((organizationId: string) => {
+    if (!user) return;
+    writePreferredOrganization(user.id, organizationId);
+    setPreferredOrganizationId(organizationId);
+    setActiveCertificateId(null);
+  }, [user]);
 
   // Derive access scope from the certificate or fallback to allowed_scope_tree
   const accessScope: AccessScope | null = React.useMemo(() => {
-    // 1. Primary source: Active Certificate
+    // 1. Primary source: Active Certificate. Every certificate names its
+    // organization (zeta included, since 20261125192142).
     if (activeCertificate) {
-      // A zeta certificate carries no organization (it spans them all). Resolve
-      // it to the organization in the user's scope tree — the app serves one
-      // organization, ICC Sydney — so pickers keyed on an org still load.
-      const treeOrg = permissionObject?.allowed_scope_tree?.organizations?.[0];
-      const globalCert = activeCertificate.organizationId === null && !!treeOrg;
       return {
-        organizationId: globalCert ? treeOrg.id : activeCertificate.organizationId,
-        organizationName: globalCert ? treeOrg.name : (activeCertificate.organizationName || 'Organization'),
+        organizationId: activeCertificate.organizationId,
+        organizationName: activeCertificate.organizationName || 'Organization',
         departmentId: activeCertificate.departmentId,
         departmentName: activeCertificate.departmentName || null,
         subDepartmentId: activeCertificate.subDepartmentId,
@@ -452,6 +462,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         activeCertificateId,
         setActiveCertificateId,
         accessScope,
+        organizations,
+        selectOrganization,
         permissionObject,
         isPermissionsLoading,
         refreshPermissions,
