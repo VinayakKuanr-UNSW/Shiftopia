@@ -1,6 +1,6 @@
 # Global Expansion — Scope
 
-**Status:** Scoping, 2026-11-28. Nothing here is built yet.
+**Status:** Scoping, 2026-11-28. **This run builds Australia only** (decision G0 in [multi-organization.md](multi-organization.md) §9); North America and Europe stay scoped here, not built.
 **Question:** what does it take to run venues in North America and Europe (and
 Brisbane) — different timezones, countries, labour law, currencies and
 languages — on a platform built for one venue in Sydney?
