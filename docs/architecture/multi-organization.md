@@ -136,3 +136,21 @@ database then client. Each lands as its own PR through CI.
 
 - Apply the `hr.organizations` drop (`supabase/pending/`) now that the PR #65 frontend is deployed.
 - Retire the `hr.departments / hr.subdepartments` mirrors (Wave 2 review).
+
+## 9. Global expansion (scoped 2026-11-28)
+
+Venues in North America and Europe are being considered. The scope, with evidence and
+the order of work, is [global-expansion-scope.md](global-expansion-scope.md).
+
+| ID | Statement | Tag |
+|---|---|---|
+| B5 | BCEC's timezone is `Australia/Brisbane` (no daylight saving). `shifts.timezone` defaults to `Australia/Sydney` and organizations have no timezone, so a BCEC shift would be an hour wrong from October to April. No BCEC shift exists yet. | Verified 2026-11-28 — fix with §3.1 of the scope |
+| J4 | Fix 2 (jurisdictions table, Ekka) is built but **not applied**, and is paused: jurisdiction codes must follow ISO 3166-2 (digits allowed, e.g. `PT-13`) with country-level parents (`AU`, `US`, `GB`, …) before it goes in. | Assumed |
+| P2 | Revisit: per-agreement code paths do not scale to dozens of collective agreements; a rule-set catalogue (values per agreement) is proposed. | Open — see G5 |
+| G1 | Which venue types are in scope (rostering vs hospitality/commercial partnerships). | Open |
+| G2 | Tenancy: venue = organization only, or an operator/group level above venues. | Open |
+| G3 | Hosting: one database, or regional deployments (APAC / US / EU). | Open |
+| G4 | Languages: English first, or translated staff screens from the start. | Open |
+| G5 | Labour rules: rule-set catalogue vs per-agreement code. | Open |
+| G6 | Cross-venue money: per-venue currency only, or converted totals. | Open |
+| G7 | First non-Australian pilot venue. | Open |
