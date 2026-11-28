@@ -7,10 +7,11 @@
  *   - Base Rates: enhanced searchable table with detail drawer
  *   - Allowances: card-based allowance display
  *   - Apprentices & Trainees: visual cards + reference matrices
- *   - CPI & Versions: multi-step CPI wizard + timeline
+ *   - Versions: one rate card per period, as a timeline
  *   - Settings: date resolver + architecture note (original features)
  *
- * Still READ-ONLY (Phase 2) — the CPI wizard emits SQL + TS but never writes.
+ * READ-ONLY. A new period's card is made through the rate-card API
+ * (roll_rate_card_forward → publish_rate_card), not on this screen.
  */
 
 import { PageState } from '@/modules/core/ui/components/PageState';
@@ -34,7 +35,6 @@ import BaseRatesSection from './components/BaseRatesSection';
 import AllowancesSection from './components/AllowancesSection';
 import ApprenticeCards from './components/ApprenticeCards';
 import { ScheduleReferenceTables } from './ScheduleReferenceTables';
-import CpiWizardPanel from './components/CpiWizardPanel';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const today = () => new Date().toISOString().split('T')[0];
@@ -46,7 +46,7 @@ const SUB_TABS = [
   { id: 'base-rates', label: 'Base Rates' },
   { id: 'allowances', label: 'Allowances' },
   { id: 'apprentices', label: 'Apprentices & Trainees' },
-  { id: 'cpi', label: 'CPI & Versions' },
+  { id: 'versions', label: 'Versions' },
   { id: 'settings', label: 'Settings' },
 ] as const;
 
@@ -187,13 +187,8 @@ export const PayRatesSettings: React.FC = () => {
           </div>
         </TabsContent>
 
-        {/* ── CPI & Versions ────────────────────────────────────────────── */}
-        <TabsContent value="cpi" className="mt-8 space-y-8">
-          <CpiWizardPanel
-            schedule={schedule}
-            traineeSchedule={traineeSchedule.length ? traineeSchedule : [traineeInForce]}
-          />
-
+        {/* ── Versions ──────────────────────────────────────────────────── */}
+        <TabsContent value="versions" className="mt-8 space-y-8">
           <VersionTimeline
             schedule={schedule}
             inForceFrom={inForceToday?.effectiveFrom ?? null}
@@ -211,10 +206,11 @@ export const PayRatesSettings: React.FC = () => {
           >
             <Info className="h-5 w-5 mt-0.5 flex-shrink-0 text-primary" aria-hidden="true" />
             <p className="text-[13px] text-muted-foreground leading-relaxed">
-              These are the durable, effective-dated ICC Sydney EA 2025 wage &amp; allowance rates
-              (<span className="font-semibold text-foreground">eba_rate</span> / <span className="font-semibold text-foreground">eba_allowance</span>).
-              The roster cost engine reads an embedded copy of them, so this screen is read-only — use the CPI
-              preview to generate the changes an engineer applies to both the database and the engine.
+              These are your organization's published pay rate cards — one per period
+              (<span className="font-semibold text-foreground">pay_rate_cards</span>, with their
+              <span className="font-semibold text-foreground"> eba_rate</span> / <span className="font-semibold text-foreground">eba_allowance</span> lines).
+              This screen is read-only: an Administrator rolls a card forward into a draft and publishes it
+              through the rate-card API.
             </p>
           </div>
 

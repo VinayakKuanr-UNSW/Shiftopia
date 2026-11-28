@@ -1,0 +1,19 @@
+view-only (epsilon) rolls forward: refused (42501)
+another organization rolls forward: refused (42501)
+multiplier 3: refused (22023)
+starting on its source's date: refused (22023)
+Administrator rolls forward: draft 1 (ICC-EA-2026-27 × 1.042)
+every line scaled and rounded to cents: t
+trainee money scaled, Cert IV uplift % kept: t
+employee sees the draft: 0 card(s), 0 rate(s)
+Administrator sees the draft: 1 card(s), 20 rate(s)
+a draft prices nothing: t
+published by the Administrator: t; the predecessor now ends 2027-07-04
+a 2 August 2027 shift is priced from it: t (x1.042)
+employee sees ICC's cards: 3, rates on the new one: 20
+another organization sees ICC's cards: 0, rates on the new one: 0
+publish twice: refused (55000)
+discard a published card: refused (55000)
+overlapping card: refused (23P01)
+discard a draft: gone t
+anonymous callers: cannot call
