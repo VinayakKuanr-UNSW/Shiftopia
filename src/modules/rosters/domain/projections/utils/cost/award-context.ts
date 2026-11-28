@@ -12,6 +12,7 @@
  */
 
 import { isPublicHolidayISO } from './constants';
+import type { RateCardLoadings } from './loadings';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,8 @@ interface DateFacts {
 export interface AwardContext {
   /** Map from YYYY-MM-DD → pre-computed date facts */
   dateFacts: Map<string, DateFacts>;
+  /** Optional rate-card loadings shared by every shift in this projection run. */
+  loadings?: RateCardLoadings;
 }
 
 // ── Builder ──────────────────────────────────────────────────────────────────
@@ -86,7 +89,10 @@ function toDateString(d: string | Date): string {
  * @param shiftDates - array of shift_date values (strings or Dates)
  *                     Duplicates are de-duped automatically.
  */
-export function buildAwardContext(shiftDates: (string | Date)[]): AwardContext {
+export function buildAwardContext(
+  shiftDates: (string | Date)[],
+  loadings?: RateCardLoadings,
+): AwardContext {
   const dateFacts = new Map<string, DateFacts>();
 
   for (const raw of shiftDates) {
@@ -107,7 +113,7 @@ export function buildAwardContext(shiftDates: (string | Date)[]): AwardContext {
     });
   }
 
-  return { dateFacts };
+  return loadings ? { dateFacts, loadings } : { dateFacts };
 }
 
 /**

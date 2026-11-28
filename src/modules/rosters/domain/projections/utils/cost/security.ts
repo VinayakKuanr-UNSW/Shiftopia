@@ -1,8 +1,7 @@
 import {
-  isPublicHolidayISO, SATURDAY, SUNDAY, CASUAL_LOADING, TIME_AND_HALF_MULTIPLIER,
-  TIME_AND_HALF_HOURS_CAP, DOUBLE_TIME_MULTIPLIER, DOUBLE_TIME_AND_HALF_MULTIPLIER,
-  ANNUAL_LEAVE_LOADING, ZERO_COST_BREAKDOWN,
+  isPublicHolidayISO, SATURDAY, SUNDAY, ZERO_COST_BREAKDOWN,
 } from './constants';
+import { ICC_SYDNEY_EA_LOADINGS, type RateCardLoadings } from './loadings';
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
 import { resolveRateSet, type RateSet, type WageRateTable } from './rate-schedule';
 import { resolvePaymentMinEngagementMinutes } from './min-engagement-floor';
@@ -31,37 +30,30 @@ import { getDateFacts, parseTimeToMinutes, fastNightMinutes } from './award-cont
  * arithmetic; no allocations beyond the ≤2 day segments.
  */
 
-const ORDINARY_HOURS_CAP_SECURITY = 12.0;
-
 function isSecurityAnnualised(rate: number, annualisedHourly: Record<string, number>): boolean {
   return Object.values(annualisedHourly).includes(rate);
 }
 
-function toOrdinaryRate(casualRate: number): number {
-  return Math.round((casualRate / CASUAL_LOADING) * 100) / 100;
+function toOrdinaryRate(casualRate: number, casualLoading: number): number {
+  return Math.round((casualRate / (1 + casualLoading)) * 100) / 100;
 }
 
 // cl 41 / Sch 3 §6.2 penalty loading over the ordinary-time rate (excluding the
 // casual loading, which the paid base rate already carries).
-function penaltyLoading(day: number, isHoliday: boolean): number {
-  if (isHoliday) return 1.5;         // PH: 250% permanent / 275% casual
-  if (day === SATURDAY) return 0.25; // 125% / 150%
-  if (day === SUNDAY) return 0.5;    // 150% / 175%
+function penaltyLoading(day: number, isHoliday: boolean, l: RateCardLoadings): number {
+  if (isHoliday) return l.publicHolidayLoading;
+  if (day === SATURDAY) return l.saturdayLoading;
+  if (day === SUNDAY) return l.sundayLoading;
   return 0;
 }
 
-// cl 43 night-shift allowance, keyed off the shift's CONCLUSION day. Casual
-// rates include the 25% casual loading (the caller subtracts it before adding
-// on top of the loaded base).
-function nightAllowanceMultiplier(conclusionDay: number, isCasual: boolean): number {
-  if (isCasual) {
-    if (conclusionDay >= 1 && conclusionDay <= 4) return 0.45;
-    if (conclusionDay === 5) return 0.50;
-    return 0.75;
-  }
-  if (conclusionDay >= 1 && conclusionDay <= 4) return 0.20;
-  if (conclusionDay === 5) return 0.25;
-  return 0.50;
+// cl 43 night-shift allowance over the ordinary-time rate, keyed off the
+// shift's CONCLUSION day. The EA's casual rates equal these plus the casual
+// loading, which the casual base already carries.
+function nightLoadingOverBase(conclusionDay: number, l: RateCardLoadings): number {
+  if (conclusionDay >= 1 && conclusionDay <= 4) return l.nightLoadingMonThu;
+  if (conclusionDay === 5) return l.nightLoadingFri;
+  return l.nightLoadingSatSun;
 }
 
 /** Next calendar day as YYYY-MM-DD from LOCAL parts (mirrors standard.ts). */
@@ -142,6 +134,7 @@ export function estimateDetailedShiftCost(
     }
   }
 
+  const loadings = options.loadings ?? ctx?.loadings ?? ICC_SYDNEY_EA_LOADINGS;
   const isAnnualised = isSecurityAnnualised(effectiveRate, rateSet.security.annualisedHourly);
   const isCasual = !isAnnualised && isCasualType;
 
@@ -149,7 +142,7 @@ export function estimateDetailedShiftCost(
   if (isAnnualised) {
     ordinaryRate = rateSet.security.ordinaryFromAnnualised[effectiveRate] ?? effectiveRate;
   } else if (isCasual) {
-    ordinaryRate = toOrdinaryRate(effectiveRate);
+    ordinaryRate = toOrdinaryRate(effectiveRate, loadings.casualLoading);
   }
   if (isNaN(ordinaryRate)) ordinaryRate = effectiveRate;
 
@@ -185,7 +178,7 @@ export function estimateDetailedShiftCost(
   // FULL clock span (paid meal breaks), so span-vs-scheduled comparisons would
   // misfire whenever the two inputs disagree; FT security rosters are even-time
   // 12h shifts, so the cap and the roster coincide in practice.
-  const overtimeHours = Math.max(0, netHours - ORDINARY_HOURS_CAP_SECURITY);
+  const overtimeHours = Math.max(0, netHours - loadings.securityOrdinaryCapHours);
   const ordinaryHours = Math.max(0, netHours - overtimeHours);
 
   // ── Per-day ordinary segments (penalty + night, §6.2 / cl 41 / cl 43) ─────
@@ -210,13 +203,12 @@ export function estimateDetailedShiftCost(
         { fromMins: 1440, toMins: ordinaryEndMins, day: nextDay, isHoliday: nextIsHoliday },
       ];
 
-  const startPenaltyLoad = penaltyLoading(shiftDay, isHoliday);
+  const startPenaltyLoad = penaltyLoading(shiftDay, isHoliday, loadings);
 
-  // cl 43 conclusion day + casual-loading-included handling (see standard.ts).
+  // cl 43 conclusion day (see standard.ts).
   const concludesNextDay = ordinaryEndMins > 1440 || otEndMins > 1440;
   const conclusionDay = concludesNextDay ? nextDay : shiftDay;
-  const nightLoadOverBase =
-    nightAllowanceMultiplier(conclusionDay, isCasual) - (isCasual ? 0.25 : 0);
+  const nightLoadOverBase = nightLoadingOverBase(conclusionDay, loadings);
   const hasTimes = startMins != null;
 
   let penaltyCost = 0;
@@ -228,7 +220,7 @@ export function estimateDetailedShiftCost(
   if (!isAnnualised) {
     for (const seg of segments) {
       const segHours = Math.max(0, (seg.toMins - seg.fromMins) / 60);
-      const segLoad = penaltyLoading(seg.day, seg.isHoliday);
+      const segLoad = penaltyLoading(seg.day, seg.isHoliday, loadings);
       const segPenaltyCost = segHours * ordinaryRate * segLoad;
       penaltyCost += segPenaltyCost;
 
@@ -267,7 +259,7 @@ export function estimateDetailedShiftCost(
     const leaveTotal = options.isFdvLeave
       ? ordinaryCost + nightAllowanceCost
       : options.isAnnualLeave
-        ? Math.max(leaveBase * (1 + ANNUAL_LEAVE_LOADING), leaveBase + penaltyCost + nightAllowanceCost)
+        ? Math.max(leaveBase * (1 + loadings.annualLeaveLoading), leaveBase + penaltyCost + nightAllowanceCost)
         : leaveBase;
     const r2 = (x: number) => Math.round(x * 100) / 100;
     return {
@@ -319,6 +311,7 @@ export function estimateDetailedShiftCost(
       isTraining: options.is_training_shift,
       isSunday: shiftDay === SUNDAY,
       isPublicHoliday: isHoliday,
+      loadings,
     });
     if (floorMinutes != null) {
       const floorHours = floorMinutes / 60;
@@ -332,18 +325,17 @@ export function estimateDetailedShiftCost(
   }
 
   // ── Higher-duties minimum (cl 29.1(a)) — parity with the Standard engine ──
-  // Under 4h of uplifted work pays a 4-hour minimum at the higher rate.
-  if (higherDutiesApplied && netHours > 0 && paidOrdinaryHours < 4) {
-    const topUp = 4 - paidOrdinaryHours;
+  // Under the card's minimum (4h) of uplifted work pays that minimum at the higher rate.
+  if (higherDutiesApplied && netHours > 0 && paidOrdinaryHours < loadings.higherDutiesMinHours) {
+    const topUp = loadings.higherDutiesMinHours - paidOrdinaryHours;
     ordinaryCost += topUp * finalEffectiveRate;
     addTopUpLoading(topUp);
-    paidOrdinaryHours = 4;
+    paidOrdinaryHours = loadings.higherDutiesMinHours;
   }
 
-  // ── Overtime (§4.2 / §6.3) — 150% first THREE hours, 200% after ───────────
+  // ── Overtime (§4.2 / §6.3) — first tier then second tier ──────────────────
   // Casual loading absorbed (§6.3(c)) ⇒ multipliers apply to the ordinary rate.
-  // PH overtime floors at 250% per hour actually ON the PH day (parity with the
-  // Standard engine's cl 42 day-split).
+  // PH overtime floors at the card's PH multiplier per hour actually ON the PH day.
   let overtimeCost = 0;
   if (overtimeHours > 0) {
     interface OtSeg { hours: number; isHoliday: boolean; }
@@ -360,11 +352,12 @@ export function estimateDetailedShiftCost(
     }
 
     let cum = 0;
+    const cap = loadings.overtimeFirstHours;
     for (const seg of otSegs) {
-      const th = Math.max(0, Math.min(cum + seg.hours, TIME_AND_HALF_HOURS_CAP) - Math.min(cum, TIME_AND_HALF_HOURS_CAP));
-      const dt = Math.max(0, (cum + seg.hours) - Math.max(cum, TIME_AND_HALF_HOURS_CAP));
-      const tieredCostHours = th * TIME_AND_HALF_MULTIPLIER + dt * DOUBLE_TIME_MULTIPLIER;
-      const phCostHours = seg.hours * DOUBLE_TIME_AND_HALF_MULTIPLIER;
+      const th = Math.max(0, Math.min(cum + seg.hours, cap) - Math.min(cum, cap));
+      const dt = Math.max(0, (cum + seg.hours) - Math.max(cum, cap));
+      const tieredCostHours = th * loadings.overtimeFirstMultiplier + dt * loadings.overtimeAfterMultiplier;
+      const phCostHours = seg.hours * loadings.overtimePublicHolidayMultiplier;
       overtimeCost += (seg.isHoliday ? Math.max(tieredCostHours, phCostHours) : tieredCostHours) * ordinaryRate;
       cum += seg.hours;
     }

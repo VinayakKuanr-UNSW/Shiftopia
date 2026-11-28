@@ -1,0 +1,26 @@
+both ICC cards carry loadings: t
+roll-forward copies loadings unchanged: t
+employee sees draft loadings: 0
+Administrator sees draft loadings: 1
+view-only (epsilon) edits draft loadings: refused (42501)
+another organization edits draft loadings: refused (42501)
+edit published loadings: refused (55000)
+unknown loading key: refused (22023)
+read-only key: refused (22023)
+non-object payload: refused (22023)
+out-of-range loading: refused (23514)
+inverted OT tiers: refused (23514)
+discard removes loadings too: t
+partial update keeps untouched fields: t
+Saturday casual 7h: ICC=290.98 custom=320.07
+Night FT 7.5h: ICC=291.51 custom=315.80
+Min engagement 1h casual: ICC=103.92 custom=138.56
+Higher duties 3h casual: ICC=172.48 custom=215.60
+OT FT 8h+3h (1.5x/2x vs 1.75x/2.25x): ICC=419.18 custom=459.66
+PH OT FT 8h+1.5h + meal trigger: ICC=769.26 custom=807.86
+Annualised security 12h (cap 12h vs 10h): ICC=436.68 custom=469.81
+card without loadings prices as NULL: t
+publish card without loadings: refused (55000)
+another organization sees published loadings: 0
+old helper signatures dropped: t
+anonymous callers: cannot call

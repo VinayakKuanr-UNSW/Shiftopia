@@ -181,5 +181,12 @@ export interface CostCalculatorOptions {
   // as before (safe-by-default). Casual weekly OT is ambiguous under the EA, so
   // it is deliberately not applied even when a value is supplied for a casual.
   priorOrdinaryHoursThisWeek?: number;
+
+  /**
+   * Optional numeric loadings from the shift's rate card
+   * (`public.pay_rate_card_loadings`). Overrides `ctx.loadings`; omitted ⇒
+   * falls back to `ICC_SYDNEY_EA_LOADINGS`.
+   */
+  loadings?: import('./loadings').RateCardLoadings;
 }
 
