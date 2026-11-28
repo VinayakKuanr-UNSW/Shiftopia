@@ -1,6 +1,8 @@
 
 
 export interface ShiftCostBreakdown {
+  /** True when a rate-card schedule was given and no card covers the shift date (NO_RATE_CARD). */
+  unpriced?: true;
   totalCost: number;
   ordinaryCost: number;
   overtimeCost: number;
@@ -188,5 +190,14 @@ export interface CostCalculatorOptions {
    * falls back to `ICC_SYDNEY_EA_LOADINGS`.
    */
   loadings?: import('./loadings').RateCardLoadings;
+
+  /**
+   * The organization's PUBLISHED rate cards (rate-card-resolver.ts). Given, the
+   * shift is priced from the card covering its date — rates, allowances,
+   * loadings, trainee schedule — and is `unpriced` when none covers it.
+   * Omitted ⇒ the embedded RATE_SCHEDULE (callers not yet wired). Overrides
+   * `ctx.rateCards`.
+   */
+  rateCards?: import('./rate-card-resolver').RateCardSchedule;
 }
 

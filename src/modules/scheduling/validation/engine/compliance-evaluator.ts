@@ -25,6 +25,7 @@
 
 import { assignmentEvaluator } from '@/modules/compliance';
 import type { ConstraintViolation, RosterShift } from '@/modules/compliance';
+import type { SolverConfig } from '@/modules/compliance/v8/swap-engine/types';
 import type { CandidateShift, EmployeeInfo, ShiftViolation, SimulatedRoster } from '../types';
 
 /**
@@ -81,6 +82,7 @@ class ComplianceEvaluator {
         candidate: CandidateShift,
         employee: EmployeeInfo,
         roster: SimulatedRoster,
+        solverConfig?: SolverConfig,
     ): ShiftViolation[] {
         // Combine existing + already-proposed assignments as the "current" schedule
         const currentShifts: RosterShift[] = [
@@ -96,9 +98,12 @@ class ComplianceEvaluator {
             current_shifts: currentShifts,
             candidate_shift: candidateToRosterShift(candidate),
             action_type: 'assign',
+            ...(solverConfig ? { config: solverConfig } : {}),
             employee_context: {
                 contract_type: employee.contract_type,
                 contracted_weekly_hours: employee.contracted_weekly_hours,
+                ordinary_hours_cycle_weeks: employee.ordinary_hours_cycle_weeks,
+                ordinary_hours_cycle_anchor: employee.ordinary_hours_cycle_anchor,
                 // audit F1 — approved-leave dates drive V8_LEAVE_CONFLICT.
                 leave_days: employee.leave_days,
                 // Raw contract statuses drive V8_EMPLOYMENT_TARGET. The rule

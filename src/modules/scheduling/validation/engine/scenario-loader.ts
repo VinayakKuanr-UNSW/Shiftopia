@@ -232,6 +232,8 @@ class ScenarioLoader {
             // ctx.contracted_weekly_hours is currently 0 (not yet sourced); leave
             // undefined so the engine falls back to its 38h default rather than 0.
             contracted_weekly_hours: ctx.contracted_weekly_hours || undefined,
+            ordinary_hours_cycle_weeks: ctx.ordinary_hours_cycle_weeks,
+            ordinary_hours_cycle_anchor: ctx.ordinary_hours_cycle_anchor,
             // contracts → source of truth for R10 role/hierarchy match
             contracts:           ctx.contracts,
             // Raw per-contract statuses for V8_EMPLOYMENT_TARGET. fetchV8EmployeeContext

@@ -37,21 +37,22 @@ const zeta = (organizationId = 'org-1') => ({
 const epsilon = { ...zeta(), accessLevel: 'epsilon' };
 
 const card = (o: Partial<RateCard>): RateCard => ({
-  id: 'id', code: 'CODE', name: 'Name', validFrom: '2025-01-01', validTo: null, status: 'published',
-  derivation: null, publishedAt: null, rates: [], allowances: [], loadings: null, ...o,
+  id: 'id', organizationId: 'org-1', code: 'CODE', name: 'Name', currency: 'AUD', ruleSet: 'icc_sydney_ea',
+  validFrom: '2025-01-01', validTo: null, status: 'published', derivation: null, publishedAt: null,
+  notes: null, awardFloorCheckedAt: null, rates: [], allowances: [], loadings: null, trainee: null, ...o,
 });
 const C2025 = card({ id: 'a', code: 'ICC-EA-2025', name: 'ICC Sydney EA 2025', validFrom: '2025-01-01', validTo: '2026-07-05' });
 const C2026 = card({
   id: 'b', code: 'ICC-EA-2026-27', name: 'ICC Sydney EA 2026–27', validFrom: '2026-07-06',
-  rates: [{ classification: 'LEVEL_2', employmentBasis: 'casual', ordinaryHourlyRate: 30, paidHourlyRate: 37.5 }],
-  allowances: [{ code: 'meal', amount: 20, unit: 'per_occasion' }],
+  rates: [{ classification: 'LEVEL_2', employmentBasis: 'casual', ordinaryHourlyRate: 30, paidHourlyRate: 37.5, isManualOverride: false, notes: null }],
+  allowances: [{ code: 'meal', amount: 20, unit: 'per_occasion', notes: null }],
   loadings: { ...ICC_SYDNEY_EA_LOADINGS },
 });
 const DRAFT = card({
   id: 'd', code: 'ICC-EA-2027-28', name: 'ICC Sydney EA 2027–28', validFrom: '2099-07-05', status: 'draft',
   derivation: 'ICC-EA-2026-27 × 1.042',
-  rates: [{ classification: 'LEVEL_2', employmentBasis: 'casual', ordinaryHourlyRate: 31.26, paidHourlyRate: 39.08 }],
-  allowances: [{ code: 'meal', amount: 20.84, unit: 'per_occasion' }],
+  rates: [{ classification: 'LEVEL_2', employmentBasis: 'casual', ordinaryHourlyRate: 31.26, paidHourlyRate: 39.08, isManualOverride: false, notes: null }],
+  allowances: [{ code: 'meal', amount: 20.84, unit: 'per_occasion', notes: null }],
   loadings: { ...ICC_SYDNEY_EA_LOADINGS },
 });
 
@@ -205,7 +206,7 @@ describe('draft review', () => {
     const { user } = renderTab();
     await user.click(await screen.findByRole('button', { name: 'Review' }));
     expect(screen.queryByRole('table', { name: 'Loading changes' })).toBeNull();
-    expect(screen.getByText(/All 20 loadings and rules are unchanged/)).toBeInTheDocument();
+    expect(screen.getByText(/All 21 loadings and rules are unchanged/)).toBeInTheDocument();
   });
 
   it('a draft without loadings says it cannot be published', async () => {

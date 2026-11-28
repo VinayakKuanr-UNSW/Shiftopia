@@ -225,6 +225,32 @@ describe('AutoSchedulerMobileFlow', () => {
 
             expect(screen.getByText(/fill as many open shifts as possible/i)).toBeInTheDocument();
         });
+
+        it('switches between All staff, FT Standard, FT Security, Part-Time, Flexi PT, and Casual modes when setMode is supplied', () => {
+            const setMode = vi.fn();
+            renderFlow({ mode: 'ALL', setMode });
+
+            const ftBtn = screen.getByRole('button', { name: 'FT Standard' });
+            const secBtn = screen.getByRole('button', { name: 'FT Security' });
+            const ptBtn = screen.getByRole('button', { name: 'Part-Time' });
+            const fptBtn = screen.getByRole('button', { name: 'Flexi PT' });
+            const casBtn = screen.getByRole('button', { name: 'Casual' });
+            expect(ftBtn).toHaveAttribute('aria-pressed', 'false');
+            expect(secBtn).toHaveAttribute('aria-pressed', 'false');
+            expect(ptBtn).toHaveAttribute('aria-pressed', 'false');
+            expect(fptBtn).toHaveAttribute('aria-pressed', 'false');
+            expect(casBtn).toHaveAttribute('aria-pressed', 'false');
+            fireEvent.click(ftBtn);
+            expect(setMode).toHaveBeenCalledWith('FT_STANDARD');
+            fireEvent.click(secBtn);
+            expect(setMode).toHaveBeenCalledWith('FT_SECURITY');
+            fireEvent.click(ptBtn);
+            expect(setMode).toHaveBeenCalledWith('PT');
+            fireEvent.click(fptBtn);
+            expect(setMode).toHaveBeenCalledWith('FPT');
+            fireEvent.click(casBtn);
+            expect(setMode).toHaveBeenCalledWith('CASUAL');
+        });
     });
 
     describe('optimising phase', () => {
@@ -343,6 +369,25 @@ describe('AutoSchedulerMobileFlow', () => {
             const names = screen.getAllByRole('button', { expanded: false })
                 .map(b => within(b).getByText(/Ada|Grace/).textContent);
             expect(names).toEqual(['Grace', 'Ada']);
+        });
+
+        it('relabels Fairness to Workload Balance on FT_STANDARD runs', () => {
+            renderFlow({
+                phase: 'reviewing',
+                result: result({
+                    mode: 'FT_STANDARD',
+                    pillars: {
+                        coverage: { score: 100, covered: 5, total: 5 },
+                        fatigue: { score: 92, critical: 0, amber: 0 },
+                        fairness: { score: 96, employees_used: 2, spread_minutes: 0 },
+                        cost: { total_cents: 120000 },
+                    } as any,
+                }),
+                employeeGroups: [group({ employmentType: 'FT', contractedHours: 38 })],
+            });
+
+            expect(screen.getByText('Workload Balance')).toBeInTheDocument();
+            expect(screen.queryByText('Fairness')).not.toBeInTheDocument();
         });
     });
 

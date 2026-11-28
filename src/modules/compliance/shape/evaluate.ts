@@ -10,6 +10,7 @@
  */
 
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import type { RateCardLoadings } from '@/modules/rosters/domain/projections/utils/cost/loadings';
 import { shiftDurationMinutes, parseTimeToMinutes } from '../v8/utils/time';
 import {
     DEFAULT_SHAPE_CONFIG,
@@ -19,6 +20,28 @@ import {
     ShapeInput,
     ShapeResult,
 } from './types';
+
+/** Map a rate card's operational thresholds onto ShapeConfig (lockstep with Python PricingPolicy). */
+export function shapeConfigFromLoadings(
+    loadings: Pick<
+        RateCardLoadings,
+        | 'ordinaryDailyCapHours'
+        | 'securityOrdinaryCapHours'
+        | 'minEngagementMinutes'
+        | 'minEngagementSundayMinutes'
+        | 'minEngagementPublicHolidayMinutes'
+        | 'minEngagementTrainingMinutes'
+    >,
+): Partial<ShapeConfig> {
+    return {
+        max_shift_minutes: Math.round(loadings.ordinaryDailyCapHours * 60),
+        security_max_shift_minutes: Math.round(loadings.securityOrdinaryCapHours * 60),
+        min_engagement_minutes: loadings.minEngagementMinutes,
+        min_engagement_sunday_minutes: loadings.minEngagementSundayMinutes,
+        public_holiday_min_engagement_minutes: loadings.minEngagementPublicHolidayMinutes,
+        min_engagement_training_minutes: loadings.minEngagementTrainingMinutes,
+    };
+}
 
 /**
  * The EBA minimum-engagement tier table.
@@ -45,30 +68,44 @@ import {
  * Precedence within the table: training beats the Sunday uplift, so a flexible
  * or casual training shift is two hours whichever day it falls on.
  */
-export function requiredMinEngagementMinutes(input: {
-    /** Omit for the legacy universal reading. Pass it to get the correct tiers. */
-    target?: ShapeEmploymentTarget;
-    /** Narrows a `'PT'` target to flexible part-time. */
-    isFlexible?: boolean;
-    isTraining?: boolean;
-    isSunday?: boolean;
-    isPublicHoliday?: boolean;
-}): { requiredMins: number; reason: string } {
-    // Plain part-time: flat 3h, no concessions (cl 12.3(e), cl 35.2(e)).
+export function requiredMinEngagementMinutes(
+    input: {
+        /** Omit for the legacy universal reading. Pass it to get the correct tiers. */
+        target?: ShapeEmploymentTarget;
+        /** Narrows a `'PT'` target to flexible part-time. */
+        isFlexible?: boolean;
+        isTraining?: boolean;
+        isSunday?: boolean;
+        isPublicHoliday?: boolean;
+    },
+    configOverride?: Partial<Pick<
+        ShapeConfig,
+        | 'min_engagement_minutes'
+        | 'min_engagement_sunday_minutes'
+        | 'public_holiday_min_engagement_minutes'
+        | 'min_engagement_training_minutes'
+    >>,
+): { requiredMins: number; reason: string } {
+    const stdMins = configOverride?.min_engagement_minutes ?? DEFAULT_SHAPE_CONFIG.min_engagement_minutes;
+    const sunMins = configOverride?.min_engagement_sunday_minutes ?? DEFAULT_SHAPE_CONFIG.min_engagement_sunday_minutes;
+    const phMins  = configOverride?.public_holiday_min_engagement_minutes ?? DEFAULT_SHAPE_CONFIG.public_holiday_min_engagement_minutes;
+    const trMins  = configOverride?.min_engagement_training_minutes ?? DEFAULT_SHAPE_CONFIG.min_engagement_training_minutes;
+
+    // Plain part-time: flat minimum, no Sunday/training concessions (cl 12.3(e), cl 35.2(e)).
     if (input.target === 'PT' && !input.isFlexible) {
-        return { requiredMins: 180, reason: 'part-time engagements (no exceptions apply)' };
+        return { requiredMins: stdMins, reason: 'part-time engagements (no exceptions apply)' };
     }
     if (input.isTraining) {
-        return { requiredMins: 120, reason: 'training on a non-event day' };
+        return { requiredMins: trMins, reason: 'training on a non-event day' };
     }
     if (input.isSunday) {
-        return { requiredMins: 240, reason: 'Sundays' };
+        return { requiredMins: sunMins, reason: 'Sundays' };
     }
     // cl 56.2 handles public holidays for every type, via its own rule.
     if (input.isPublicHoliday) {
-        return { requiredMins: 240, reason: 'public holidays' };
+        return { requiredMins: phMins, reason: 'public holidays' };
     }
-    return { requiredMins: 180, reason: 'standard days' };
+    return { requiredMins: stdMins, reason: 'standard days' };
 }
 
 const hours = (mins: number) => Math.round((mins / 60) * 100) / 100;
@@ -404,24 +441,27 @@ export function evaluateShiftShape(
     }
 
     // ── SHAPE_MAX_DURATION ───────────────────────────────────────────────────
-    if (netMinutes > config.max_shift_minutes) {
+    const maxShiftMinutes = isSecurity
+        ? (config.security_max_shift_minutes ?? config.max_shift_minutes)
+        : config.max_shift_minutes;
+    if (netMinutes > maxShiftMinutes) {
         hits.push({
             rule_id:   'SHAPE_MAX_DURATION',
             rule_name: 'Maximum Shift Duration',
             status:    'BLOCKING',
-            summary:   `Shift is ${hours(netMinutes)}h — over the ${hours(config.max_shift_minutes)}h maximum`,
-            details:   `This shift is ${hours(netMinutes)}h of net working time, exceeding the ${hours(config.max_shift_minutes)}h maximum for a single engagement.`,
+            summary:   `Shift is ${hours(netMinutes)}h — over the ${hours(maxShiftMinutes)}h maximum`,
+            details:   `This shift is ${hours(netMinutes)}h of net working time, exceeding the ${hours(maxShiftMinutes)}h maximum for a single engagement.`,
             blocking:  true,
             field:     'end_time',
             fix: {
                 field: 'end_time',
-                value: minutesToTime(startMinutes + config.max_shift_minutes + unpaidBreak),
-                label: `Trim to ${minutesToTime(startMinutes + config.max_shift_minutes + unpaidBreak)}`,
+                value: minutesToTime(startMinutes + maxShiftMinutes + (isSecurity ? 0 : unpaidBreak)),
+                label: `Trim to ${minutesToTime(startMinutes + maxShiftMinutes + (isSecurity ? 0 : unpaidBreak))}`,
             },
             calculation: {
                 net_minutes: netMinutes,
-                limit_minutes: config.max_shift_minutes,
-                excess_minutes: netMinutes - config.max_shift_minutes,
+                limit_minutes: maxShiftMinutes,
+                excess_minutes: netMinutes - maxShiftMinutes,
             },
         });
     }
@@ -523,7 +563,7 @@ export function evaluateShiftShape(
             isTraining,
             isSunday,
             isPublicHoliday: isPH,
-        });
+        }, config);
 
         if (netMinutes < requiredMins) {
             const hit: ShapeHit = {

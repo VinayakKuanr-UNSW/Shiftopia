@@ -13,6 +13,7 @@
 
 import type { CostCalculatorOptions } from './types';
 import type { RateSet } from './rate-schedule';
+import { ICC_SYDNEY_EA_LOADINGS } from './loadings';
 
 /** Percentage (as a 0–1 multiplier) of the Level 4 base rate, per Schedule 4. */
 export const APPRENTICE_MATRIX = {
@@ -111,6 +112,6 @@ export function getAdultApprenticeEffectivePct(
  * hours input the floor is a documented no-op (the roster pipeline does not yet
  * compute per-member weekly SWS hours — the remaining connection point).
  */
-export const SWS_MIN_WEEKLY = 90;
+export const SWS_MIN_WEEKLY = ICC_SYDNEY_EA_LOADINGS.swsMinWeekly;
 /** Assessed-capacity → % of relevant minimum wage (identity map, §1.4.1). */
 export const SWS_CAPACITY_STEPS = [10, 20, 30, 40, 50, 60, 70, 80, 90] as const;

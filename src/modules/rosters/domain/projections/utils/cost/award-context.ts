@@ -41,6 +41,8 @@ export interface AwardContext {
   dateFacts: Map<string, DateFacts>;
   /** Optional rate-card loadings shared by every shift in this projection run. */
   loadings?: RateCardLoadings;
+  /** Optional published rate cards for this run (see CostCalculatorOptions.rateCards). */
+  rateCards?: import('./rate-card-resolver').RateCardSchedule;
 }
 
 // ── Builder ──────────────────────────────────────────────────────────────────

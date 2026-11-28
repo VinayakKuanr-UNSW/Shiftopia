@@ -120,6 +120,8 @@ const CellView: React.FC<{ cell: LedgerCell; unverified?: boolean }> = ({ cell, 
       return <span className="text-sky-700 dark:text-sky-400">In progress</span>;
     case 'no_clock':
       return <span className="font-medium text-amber-700 dark:text-amber-400">Missing clock</span>;
+    case 'no_rate_card':
+      return <span className="font-medium text-rose-700 dark:text-rose-400" title="No published pay rate card covers this date. Publish one in Payroll → Pay Rates.">No rate card</span>;
     case 'no_show':
       return <span className="font-medium text-rose-700 dark:text-rose-400">No show</span>;
   }

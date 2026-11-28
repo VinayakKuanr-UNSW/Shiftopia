@@ -8,7 +8,9 @@
 import { RATE_CARD_LOADINGS_SELECT } from '../../rosters/domain/projections/utils/cost/loadings';
 
 export const RATE_CARD_SELECT =
-  'id, code, name, valid_from, valid_to, status, derivation, published_at, '
-  + 'eba_rate(classification, employment_basis, ordinary_hourly_rate, paid_hourly_rate), '
-  + 'eba_allowance(code, amount, unit), '
+  'id, organization_id, code, name, currency, rule_set, valid_from, valid_to, status, derivation, published_at, '
+  + 'notes, award_floor_checked_at, '
+  + 'eba_rate(classification, employment_basis, ordinary_hourly_rate, paid_hourly_rate, is_manual_override, notes), '
+  + 'eba_allowance(code, amount, unit, notes), '
+  + 'eba_trainee_schedule(label, source, matrix), '
   + `pay_rate_card_loadings(${RATE_CARD_LOADINGS_SELECT})`;

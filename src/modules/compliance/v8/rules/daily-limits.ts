@@ -14,21 +14,26 @@ import { shiftDurationMinutes } from '../utils/time';
  * breach the other.
  */
 export const maxDailyHoursRule: V8RuleEvaluator = (ctx) => {
-    const { shifts, config } = ctx;
+    const { employee, shifts, config } = ctx;
 
     const dailyMinutes = new Map<string, number>();
 
     for (const s of shifts) {
         const date = s.date || s.shift_date || '';
+        // Sch 3 §3.2(a) / §5.3(a): Security meal breaks are PAID on the clock.
+        const breakMins = employee.is_security_role ? 0 : (s.unpaid_break_minutes || 0);
         const totalMins = Math.max(
             0,
-            shiftDurationMinutes(s.start_time, s.end_time) - (s.unpaid_break_minutes || 0),
+            shiftDurationMinutes(s.start_time, s.end_time) - breakMins,
         );
         dailyMinutes.set(date, (dailyMinutes.get(date) || 0) + totalMins);
     }
     
     const violations: V8Hit[] = [];
-    const limitMins = config.max_daily_hours * 60;
+    const limitHours = employee.is_security_role
+        ? (config.security_max_daily_hours ?? config.max_daily_hours)
+        : config.max_daily_hours;
+    const limitMins = limitHours * 60;
     
     for (const [date, mins] of dailyMinutes.entries()) {
         if (mins > limitMins) {
@@ -36,8 +41,8 @@ export const maxDailyHoursRule: V8RuleEvaluator = (ctx) => {
                 rule_id: 'V8_MAX_DAILY_HOURS',
                 rule_name: 'Maximum Daily Hours',
                 status: 'BLOCKING',
-                summary: `Exceeds ${config.max_daily_hours}h daily limit`,
-                details: `Employee worked ${(mins / 60).toFixed(1)}h on ${date}, exceeding the ${config.max_daily_hours}h cap.`,
+                summary: `Exceeds ${limitHours}h daily limit`,
+                details: `Employee worked ${(mins / 60).toFixed(1)}h on ${date}, exceeding the ${limitHours}h cap.`,
                 affected_shifts: shifts.filter(s => (s.date || s.shift_date) === date).map(s => s.id),
                 blocking: true,
                 calculation: {

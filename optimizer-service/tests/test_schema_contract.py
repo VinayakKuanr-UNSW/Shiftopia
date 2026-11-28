@@ -35,6 +35,7 @@ from model_builder import (
     EmployeeInput,
     ExistingShiftInput,
     OptimizerConstraints as OptimizerConstraintsDC,
+    PricingPolicy as PricingPolicyDC,
     ShiftInput,
     SolverParameters as SolverParametersDC,
     StrategyInput as StrategyInputDC,
@@ -44,6 +45,7 @@ from ortools_runner import (
     ConstraintsReq,
     EmployeeReq,
     ExistingShiftReq,
+    PricingPolicyReq,
     ShiftReq,
     SolverParamsReq,
     StrategyReq,
@@ -72,6 +74,7 @@ PAIRS: list[tuple[type[BaseModel], type, str]] = [
     (ExistingShiftReq, ExistingShiftInput, "ExistingShift"),
     (AvailabilitySlotReq, AvailabilitySlotInput, "AvailabilitySlot"),
     (ConstraintsReq, OptimizerConstraintsDC, "Constraints"),
+    (PricingPolicyReq, PricingPolicyDC, "PricingPolicy"),
     (StrategyReq, StrategyInputDC, "Strategy"),
     (SolverParamsReq, SolverParametersDC, "SolverParameters"),
 ]

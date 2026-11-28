@@ -11,7 +11,7 @@ import { cn } from '@/modules/core/lib/utils';
 import {
   APPRENTICE_MATRIX, SWS_CAPACITY_STEPS, SWS_MIN_WEEKLY, getAdultApprenticeEffectivePct,
 } from '@/modules/rosters/domain/projections/utils/cost/apprentice_matrix';
-import { resolveRateSet } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
+import type { RateSet } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -72,7 +72,8 @@ const ApprenticeCard: React.FC<ApprenticeCardProps> = ({ title, subtitle, years,
   </div>
 );
 
-const ApprenticeCards: React.FC = () => {
+/** `rateSet`: the organization's card in force today; null when it has none. */
+const ApprenticeCards: React.FC<{ rateSet: RateSet | null }> = ({ rateSet }) => {
   const standard = APPRENTICE_MATRIX.standard;
   const schoolBased = APPRENTICE_MATRIX.school_based;
   // cl 1.3 (years 2-4): the adult apprentice floor is "greater of Level 1 or
@@ -81,7 +82,8 @@ const ApprenticeCards: React.FC = () => {
   // is used for the comparison; with the current published rate tables it
   // makes no numeric difference (Level 1 wins years 2-3 either way, and the
   // year-4 junior % is identical for both branches).
-  const todayRateSet = resolveRateSet(new Date().toISOString().slice(0, 10));
+  // The organization's own card (no card ⇒ no adult figures, never ICC's).
+  const todayRateSet = rateSet;
 
   const cards: ApprenticeCardProps[] = [
     {
@@ -105,7 +107,7 @@ const ApprenticeCards: React.FC = () => {
       subtitle: 'All apprentices aged 21+ — years 2-4 shown are the greater of Level 1 or the junior rate, as of today',
       years: [1, 2, 3, 4].map((y) => ({
         year: y,
-        value: getAdultApprenticeEffectivePct(todayRateSet, y as 1 | 2 | 3 | 4, false),
+        value: todayRateSet ? getAdultApprenticeEffectivePct(todayRateSet, y as 1 | 2 | 3 | 4, false) : null,
       })),
     },
     {

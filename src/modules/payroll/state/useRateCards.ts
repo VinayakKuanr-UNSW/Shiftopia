@@ -7,11 +7,12 @@
  * (`eba-rate-schedule`, `eba-trainee-schedule`, see useEbaRates).
  */
 
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/platform/auth/useAuth';
 import { allowsPayrollManageIn } from '@/platform/auth/accessSuites';
 import {
-  discardRateCard, listRateCards, publishRateCard, rollRateCardForward,
+  discardRateCard, listRateCards, publishRateCard, rateCardErrorMessage, rollRateCardForward,
   type RateCard, type RollForwardInput,
 } from '../data/rateCards.api';
 
@@ -50,8 +51,37 @@ export function useRateCards() {
     error: query.error,
     refetch: query.refetch,
     canManage: allowsPayrollManageIn(user?.certificates, organizationId),
+    organizationId,
     rollForward,
     publish,
     discard,
   };
+}
+
+/**
+ * One authoring call at a time (create, copy, edit a draft): runs it, refreshes
+ * the card list on success, and keeps the server's refusal in plain words.
+ * Resolves true on success so the caller can close a form or clear its edits.
+ */
+export function useDraftAction() {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (call: () => Promise<unknown>): Promise<boolean> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await call();
+      await queryClient.invalidateQueries({ queryKey: [RATE_CARDS_KEY] });
+      return true;
+    } catch (err) {
+      setError(rateCardErrorMessage(err));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return { run, busy, error, clearError: () => setError(null) };
 }
