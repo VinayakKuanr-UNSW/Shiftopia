@@ -28,6 +28,13 @@ describe('rate cards', () => {
         expect(actual).toEqual(expected);
     });
 
+    it('04_rate_card_authoring.sql reproduces expected_rate_card_authoring.txt', () => {
+        const actual = sqlFileNotices(stack().dbContainer, 'supabase/tests/pay/04_rate_card_authoring.sql').map((l) => l.trimEnd());
+        const expected = readFileSync(resolve(REPO_ROOT, 'supabase/tests/pay/expected_rate_card_authoring.txt'), 'utf8')
+            .split('\n').map((l) => l.trimEnd()).filter(Boolean);
+        expect(actual).toEqual(expected);
+    });
+
     it('03_rate_card_lock.sql reproduces expected_rate_card_lock.txt', () => {
         const actual = sqlFileNotices(stack().dbContainer, 'supabase/tests/pay/03_rate_card_lock.sql').map((l) => l.trimEnd());
         const expected = readFileSync(resolve(REPO_ROOT, 'supabase/tests/pay/expected_rate_card_lock.txt'), 'utf8')

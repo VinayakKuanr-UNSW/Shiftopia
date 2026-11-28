@@ -148,6 +148,7 @@ describe('compareLoadings (pay_rate_card_loadings, draft vs source)', () => {
     ['multiplier', 1.5, '×1.5'],
     ['hours', 12, '12 h'],
     ['minutes', 180, '180 min'],
+    ['dollars', 90, '$90.00'],
   ] as const)('formats %s %s as %s', (unit, value, expected) => {
     expect(formatLoading(unit, value)).toBe(expected);
   });

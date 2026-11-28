@@ -119,7 +119,7 @@ export function compareAllowances(draft: RateCard, source: RateCard | null): Lin
   });
 }
 
-export type LoadingUnit = 'percent' | 'multiplier' | 'hours' | 'minutes';
+export type LoadingUnit = 'percent' | 'multiplier' | 'hours' | 'minutes' | 'dollars';
 
 /** Every pay_rate_card_loadings value, in the order the review lists them, with its clause. */
 export const LOADING_FIELDS: ReadonlyArray<{ key: keyof RateCardLoadings; label: string; unit: LoadingUnit }> = [
@@ -143,15 +143,17 @@ export const LOADING_FIELDS: ReadonlyArray<{ key: keyof RateCardLoadings; label:
   { key: 'minEngagementTrainingMinutes', label: 'Minimum engagement, training', unit: 'minutes' },
   { key: 'higherDutiesMinHours', label: 'Higher duties, minimum paid hours (cl 29.1(a))', unit: 'hours' },
   { key: 'mealAllowanceTriggerHours', label: 'Meal allowance, hours past rostered finish (cl 28.1)', unit: 'hours' },
+  { key: 'swsMinWeekly', label: 'Supported wage, minimum weekly payment (Sch 6 §1.4.2)', unit: 'dollars' },
 ];
 
-/** 0.25 → "25%", 1.5 → "×1.5", 12 → "12 h", 180 → "180 min". */
+/** 0.25 → "25%", 1.5 → "×1.5", 12 → "12 h", 180 → "180 min", 90 → "$90.00". */
 export function formatLoading(unit: LoadingUnit, value: number): string {
   switch (unit) {
     case 'percent': return `${Number((value * 100).toFixed(4))}%`;
     case 'multiplier': return `×${value}`;
     case 'hours': return `${value} h`;
     case 'minutes': return `${value} min`;
+    case 'dollars': return `$${value.toFixed(2)}`;
   }
 }
 

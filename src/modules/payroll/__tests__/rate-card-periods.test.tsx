@@ -205,7 +205,7 @@ describe('draft review', () => {
     const { user } = renderTab();
     await user.click(await screen.findByRole('button', { name: 'Review' }));
     expect(screen.queryByRole('table', { name: 'Loading changes' })).toBeNull();
-    expect(screen.getByText(/All 20 loadings and rules are unchanged/)).toBeInTheDocument();
+    expect(screen.getByText(/All 21 loadings and rules are unchanged/)).toBeInTheDocument();
   });
 
   it('a draft without loadings says it cannot be published', async () => {
