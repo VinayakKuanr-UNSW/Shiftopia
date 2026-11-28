@@ -94,6 +94,13 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
         </p>
       </div>
 
+      {!isLoading && !error && sorted.some((p) => p.unpricedShiftCount) && (
+        <div role="alert" className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-[13px] text-rose-700 dark:text-rose-300">
+          {sorted.reduce((n, p) => n + (p.unpricedShiftCount ?? 0), 0)} shift(s) are not priced: no published pay rate card
+          covers their dates, so their pay shows as $0. Publish a card in Payroll → Pay Rates.
+        </div>
+      )}
+
       {isLoading ? (
         <PageState state="loading" title="Loading gross pay" />
       ) : error ? (

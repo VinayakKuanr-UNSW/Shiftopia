@@ -67,3 +67,8 @@ export const ZERO_COST_BREAKDOWN: import('./types').ShiftCostBreakdown = Object.
     isCasual: false,
   }),
 });
+
+/** No published rate card covers the shift's date: nothing can be priced (and nothing falls back to ICC). */
+export const UNPRICED_COST_BREAKDOWN: import('./types').ShiftCostBreakdown = Object.freeze({
+  ...ZERO_COST_BREAKDOWN, unpriced: true as const,
+});

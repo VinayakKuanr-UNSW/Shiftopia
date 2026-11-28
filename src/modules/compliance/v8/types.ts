@@ -221,7 +221,9 @@ export interface V8Config {
     security_ord_avg_weekly_limit: number; // default 42 (38 ordinary + 4 reasonable additional)
 
     /** Daily Limits */
-    max_daily_hours:        number;   // default 12
+    max_daily_hours:          number;   // default 12 (pay_rate_card_loadings.ordinary_daily_cap_hours)
+    /** Schedule 3 daily ordinary cap for Security roles; defaults to max_daily_hours when omitted. */
+    security_max_daily_hours?: number;  // default 12 (pay_rate_card_loadings.security_ordinary_cap_hours)
     
     /** Rest & Recovery */
     min_rest_gap_minutes:   number;   // default 600 (10h)
@@ -253,6 +255,7 @@ export const DEFAULT_V8_CONFIG: V8Config = {
     security_ord_avg_cycle_weeks:  8,
     security_ord_avg_weekly_limit: 42,
     max_daily_hours:        12,
+    security_max_daily_hours: 12,
     min_rest_gap_minutes:   600,
     student_visa_fortnightly_limit: 48,
     enforce_ft_days_off:      false,

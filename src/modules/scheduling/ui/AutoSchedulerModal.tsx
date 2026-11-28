@@ -34,8 +34,9 @@ import { cn } from '@/modules/core/lib/utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { AutoSchedulerInsights } from './AutoSchedulerInsights';
 import { AutoSchedulerMobileFlow } from './AutoSchedulerMobileFlow';
-import { useAutoScheduler, sortEmployeeGroups, complianceRateOf } from './useAutoScheduler';
+import { useAutoScheduler, sortEmployeeGroups, complianceRateOf, SCHEDULER_MODE_OPTIONS } from './useAutoScheduler';
 import type { SortField, SortDirection } from './useAutoScheduler';
+import { BLOCKER_LABELS } from '@/modules/scheduling/audit/auditor';
 import type { ShiftMeta, EmployeeMeta } from '@/modules/scheduling';
 import { type ShiftFilters } from '@/modules/rosters/state/useRosterShifts';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -122,8 +123,11 @@ export function AutoSchedulerModal({
         validationError,
         applyWindowPreset,
         activeWindowPreset,
+        mode,
+        setMode,
         isShiftsLoading,
         filteredShifts,
+        scopedEmployees,
         scopeBreakdown,
         preRunCapacity,
         canRun,
@@ -188,9 +192,11 @@ export function AutoSchedulerModal({
                         validationError={validationError}
                         applyWindowPreset={applyWindowPreset}
                         activeWindowPreset={activeWindowPreset}
+                        mode={mode}
+                        setMode={setMode}
                         isShiftsLoading={isShiftsLoading}
                         shiftsInScope={filteredShifts.length}
-                        staffCount={employees.length}
+                        staffCount={scopedEmployees.length}
                         scopeBreakdown={scopeBreakdown}
                         preRunCapacity={preRunCapacity}
                         canRun={canRun}
@@ -276,6 +282,38 @@ export function AutoSchedulerModal({
                         ))}
                     </div>
 
+                    <div className="space-y-6 mb-6">
+                        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Staff Mode</div>
+                        <div className="space-y-2">
+                            <div className="grid grid-cols-1 gap-1.5">
+                                {SCHEDULER_MODE_OPTIONS.map(opt => {
+                                    const active = mode === opt.value;
+                                    return (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            disabled={phase === 'optimizing' || phase === 'validating'}
+                                            aria-pressed={active}
+                                            onClick={() => setMode(opt.value)}
+                                            className={cn(
+                                                'flex items-center justify-between rounded-xl border px-3 py-2 text-left text-[11px] font-bold transition-all disabled:opacity-50',
+                                                active
+                                                    ? 'border-primary/40 bg-primary/10 text-primary shadow-sm'
+                                                    : 'border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-muted/40',
+                                            )}
+                                        >
+                                            <span>{opt.label}</span>
+                                            {active && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-[11px] leading-snug text-muted-foreground/70 px-0.5">
+                                {SCHEDULER_MODE_OPTIONS.find(o => o.value === mode)?.description}
+                            </p>
+                        </div>
+                    </div>
+
                     <div className="space-y-6">
                         <div className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Active Window</div>
                         <div className="space-y-3">
@@ -356,7 +394,9 @@ export function AutoSchedulerModal({
                             <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-between">
                                 <div className="flex flex-col">
                                     <span className="text-[11px] font-black text-primary/60 uppercase">
-                                        {result.pillars ? 'Fairness' : 'Avg Utilization'}
+                                        {result.pillars
+                                            ? (result.mode === 'FT_STANDARD' || result.mode === 'FT_SECURITY' || result.mode === 'PT' || result.mode === 'FPT' ? 'Workload Balance' : 'Fairness')
+                                            : 'Avg Utilization'}
                                     </span>
                                     {result.pillars ? (
                                         <span className="text-[15px] font-black text-primary">
@@ -382,9 +422,34 @@ export function AutoSchedulerModal({
                             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted border border-border">
                                 <Calendar className="h-3 w-3 text-muted-foreground/60" />
                                 <span className="text-[11px] font-bold text-muted-foreground tracking-tight">
-                                    {isShiftsLoading ? 'Loading shifts...' : `${filteredShifts.length} Shifts`} · {employees.length} Staff
+                                    {isShiftsLoading ? 'Loading shifts...' : `${filteredShifts.length} Shifts`} · {scopedEmployees.length} Staff
                                 </span>
                             </div>
+                            {mode === 'FT_STANDARD' && (
+                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
+                                    FT Standard · cl 35.1
+                                </Badge>
+                            )}
+                            {mode === 'FT_SECURITY' && (
+                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
+                                    FT Security · Sch 3
+                                </Badge>
+                            )}
+                            {mode === 'PT' && (
+                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
+                                    Part-Time · cl 35.2
+                                </Badge>
+                            )}
+                            {mode === 'FPT' && (
+                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
+                                    Flexible Part-Time · cl 35.3
+                                </Badge>
+                            )}
+                            {mode === 'CASUAL' && (
+                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
+                                    Casual · cl 35.4
+                                </Badge>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -527,6 +592,7 @@ export function AutoSchedulerModal({
                                                     case 'legal_hard': return 'bg-red-500';
                                                     case 'undesirable_balance': return 'bg-fuchsia-500';
                                                     case 'longitudinal_fairness': return 'bg-violet-500';
+                                                    case 'ft_days_off': return 'bg-teal-500';
                                                     default: return 'bg-muted-foreground/40';
                                                 }
                                             };
@@ -534,6 +600,7 @@ export function AutoSchedulerModal({
                                             const labelOf = (cat: string): string => {
                                                 if (cat === 'other') return 'Soft Limits (Hours/Contract)';
                                                 if (cat === 'legal_hard') return 'Hard Legal Limits';
+                                                if (cat === 'ft_days_off') return 'Paired Days Off (cl 35.1(e))';
                                                 return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
                                             };
 
@@ -547,6 +614,8 @@ export function AutoSchedulerModal({
                                                         return 'Penalty points from hard legal constraints (e.g. 12-hour daily spread). These are Tier-1 priority: the solver never auto-generates illegal shifts; unavoidable breaches are left uncovered.';
                                                     case 'fatigue':
                                                         return 'Fatigue penalty points used to balance staff fatigue. Part of Tier-4 (Wellbeing) to distribute hours and prevent burnout.';
+                                                    case 'ft_days_off':
+                                                        return 'Guardrail penalty when a Full-Time employee does not receive at least 2 consecutive rostered days off in a 7-day week (ICC EBA cl 35.1(e)).';
                                                     case 'fairness':
                                                     case 'longitudinal_fairness':
                                                         return 'Casual fairness penalty points. Each casual is measured against their fair share of the shifts they were eligible and available for (billed hours − fair share), across this roster and the last 13 weeks of approved work.';
@@ -901,9 +970,13 @@ export function AutoSchedulerModal({
                                                                                         </div>
                                                                                     </TooltipTrigger>
                                                                                     <TooltipContent className="bg-popover border-border p-3 max-w-xs shadow-2xl">
-                                                                                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">{reason}</p>
+                                                                                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">
+                                                                                            {BLOCKER_LABELS[reason]?.label ?? reason}
+                                                                                        </p>
                                                                                         <p className="text-[11px] text-popover-foreground leading-relaxed">
-                                                                                            {reason === 'CAPACITY_CONFLICT' 
+                                                                                            {BLOCKER_LABELS[reason]?.fix
+                                                                                                ? BLOCKER_LABELS[reason].fix
+                                                                                                : reason === 'CAPACITY_CONFLICT'
                                                                                                 ? "The optimizer assigned this staff member to a different shift at the same time to maximize overall roster efficiency."
                                                                                                 : reason === 'OPTIMIZER_TRADEOFF'
                                                                                                 ? "The solver prioritized other shifts to satisfy complex labor rules or cost targets."

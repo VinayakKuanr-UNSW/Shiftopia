@@ -44,6 +44,8 @@ export interface AwardContext {
   loadings?: RateCardLoadings;
   /** Public-holiday jurisdiction the dateFacts were pre-computed for. */
   jurisdiction?: string;
+  /** Optional published rate cards for this run (see CostCalculatorOptions.rateCards). */
+  rateCards?: import('./rate-card-resolver').RateCardSchedule;
 }
 
 // ── Builder ──────────────────────────────────────────────────────────────────

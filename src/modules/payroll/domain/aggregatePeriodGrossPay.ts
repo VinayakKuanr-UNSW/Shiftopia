@@ -210,6 +210,8 @@ export function aggregatePeriodGrossPay(
     grossPay,
     paidHours,
     shiftCount: inPeriod.length,
+    // NO_RATE_CARD shifts priced at $0: the period is incomplete, not settled.
+    ...(inPeriod.some((s) => s.unpriced) ? { unpricedShiftCount: inPeriod.filter((s) => s.unpriced).length } : {}),
     salariedHours: contractSalary ? totalSalariedWorkedHours : undefined,
     timeInLieuHours: toil?.accruedHours != null
       ? round2(toil.accruedHours)

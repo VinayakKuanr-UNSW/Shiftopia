@@ -55,6 +55,8 @@ import type {
 } from './types';
 import { getLeaveGrossPayInputs } from './leaveGrossPay';
 import { getToilPeriodFacts } from './toilGrossPay';
+import { createRateCardScheduleCache, type RateCardScheduleCache } from './ebaRates.read.api';
+import { resolveCardOn, type RateCardSchedule } from '../../rosters/domain/projections/utils/cost/rate-card-resolver';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import {
   classificationForLevel,
@@ -112,6 +114,8 @@ interface GrossPayFetchOptions {
    * per-employee rollup. Set false to price shifts only.
    */
   includeLeave?: boolean;
+  /** Shares the organizations' rate cards across a pay run's reads (fetched once). */
+  rateCardCache?: RateCardScheduleCache;
 }
 
 // ── enum constants (verified against the supabase baseline) ────────────────
@@ -215,6 +219,7 @@ function resolveRowEmploymentType(row: GrossPayShiftRow): EngineEmploymentType |
 export function mapShiftRowToGrossPayInput(
   row: GrossPayShiftRow,
   window?: PricingWindow,
+  rateCards?: RateCardSchedule,
 ): GrossPayShiftInput | null {
   const employeeId = row.assigned_employee_id;
   if (!employeeId) return null; // unassigned shift — nobody to pay.
@@ -361,8 +366,9 @@ export function mapShiftRowToGrossPayInput(
   // window, independent of this floor. A salaried shift is outside the EA, so
   // it gets no floor — its hours are the hours worked (time in lieu).
   const orgEmbed = firstEmbed(row.organizations);
+  const card = rateCards ? resolveCardOn(rateCards, row.shift_date) : null;
   const jurisdiction = resolveJurisdiction({
-    jurisdiction: row._jurisdiction ?? orgEmbed?.jurisdiction,
+    jurisdiction: row._jurisdiction ?? orgEmbed?.jurisdiction ?? card?.jurisdiction,
     organizationId: row.organization_id,
   });
   const { isSunday, isPublicHoliday } = getShiftDayType(row.shift_date, jurisdiction);
@@ -371,6 +377,8 @@ export function mapShiftRowToGrossPayInput(
     : isSalaried
       ? rawNetMinutes
       : applyMinEngagementFloor(rawNetMinutes, {
+        // The floor's lengths are the card's (cl 12 / 56.2).
+        loadings: card?.loadings,
         isTraining: row.is_training === true,
         isSunday,
         isPublicHoliday,
@@ -436,6 +444,8 @@ export function mapShiftRowToGrossPayInput(
     classificationLevel,
     isSecurityRole,
     isTrainingShift: row.is_training === true,
+    organizationId: row.organization_id ?? undefined,
+    rateCards,
 
     employeeName,
     roleName,
@@ -857,10 +867,14 @@ async function getGrossPayInputsWithProvenance(
 ): Promise<GrossPayInputWithProvenance[]> {
   const approvedOnly = opts.approvedOnly ?? true;
   const rows = await fetchHydratedShiftRows(bounds);
+  // Each shift is priced from its OWN organization's published cards; a shift
+  // with no organization, or one with no card, is unpriced (schedule []).
+  const schedules = await (opts.rateCardCache ?? createRateCardScheduleCache())
+    .get(rows.map((r) => r.organization_id ?? '').filter(Boolean));
   const out: GrossPayInputWithProvenance[] = [];
   for (const row of rows) {
     if (!passesApprovalGate(row, approvedOnly)) continue;
-    const input = mapShiftRowToGrossPayInput(row);
+    const input = mapShiftRowToGrossPayInput(row, undefined, schedules.get(row.organization_id ?? '') ?? []);
     if (!input) continue; // unassigned — skip.
     out.push({ input, provenance: provenanceFor(row) });
   }
@@ -876,6 +890,9 @@ export async function getPeriodGrossPay(
   bounds: GrossPayPeriodBounds,
   opts: GrossPayFetchOptions = {},
 ): Promise<PeriodGrossPay[]> {
+  // One fetch of each organization's cards for the whole run.
+  const rateCardCache = opts.rateCardCache ?? createRateCardScheduleCache();
+  opts = { ...opts, rateCardCache };
   const shiftInputs = await getGrossPayInputsForPeriod(bounds, opts);
 
   // Audit H-7: when the window's start falls mid-ISO-week (any custom report
@@ -897,7 +914,7 @@ export async function getPeriodGrossPay(
   // Approved leave is an ABSENCE, not a shift, so it is synthesised separately
   // and merged in. A leave day is dropped when the same employee already has a
   // shift on that date (a worked shift takes precedence over leave).
-  const leaveInputs =
+  const rawLeaveInputs =
     opts.includeLeave === false
       ? []
       : await getLeaveGrossPayInputs({ 
@@ -906,7 +923,9 @@ export async function getPeriodGrossPay(
           orgIds: bounds.orgIds,
           deptIds: bounds.deptIds,
           subDeptIds: bounds.subDeptIds,
-        });
+        }, rateCardCache);
+  const leaveSchedules = await rateCardCache.get(rawLeaveInputs.map((i) => i.organizationId ?? ''));
+  const leaveInputs = rawLeaveInputs.map((i) => ({ ...i, rateCards: leaveSchedules.get(i.organizationId ?? '') ?? [] }));
   // Collision rule per employee+date: a shift priced from REAL attendance
   // (manager-edited or actual times) beats leave; a rostered-but-unworked
   // shift (`scheduled_fallback` hours) YIELDS to approved leave — the member
@@ -933,7 +952,7 @@ export async function getPeriodGrossPay(
         orgIds: bounds.orgIds,
         deptIds: bounds.deptIds,
         subDeptIds: bounds.subDeptIds,
-      });
+      }, rateCardCache);
 
   const byEmployee = new Map<string, GrossPayShiftInput[]>();
   for (const input of [...keptShifts, ...mergedLeave, ...toil.payoutInputs, ...leadInInputs]) {

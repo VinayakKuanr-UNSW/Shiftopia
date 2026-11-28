@@ -1,10 +1,11 @@
 import { DEFAULT_JURISDICTION } from '@/modules/core/lib/holidays';
 import {
-  isPublicHolidayISO, SATURDAY, SUNDAY, ZERO_COST_BREAKDOWN,
+  isPublicHolidayISO, SATURDAY, SUNDAY, ZERO_COST_BREAKDOWN, UNPRICED_COST_BREAKDOWN,
 } from './constants';
-import { ICC_SYDNEY_EA_LOADINGS, type RateCardLoadings } from './loadings';
+import { type RateCardLoadings } from './loadings';
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
-import { resolveRateSet, type RateSet, type WageRateTable } from './rate-schedule';
+import { type RateSet, type WageRateTable } from './rate-schedule';
+import { resolvePricing } from './rate-card-resolver';
 import { resolvePaymentMinEngagementMinutes } from './min-engagement-floor';
 import type { AwardContext } from './award-context';
 import { getDateFacts, parseTimeToMinutes, fastNightMinutes } from './award-context';
@@ -112,7 +113,9 @@ export function estimateDetailedShiftCost(
   if (isLeave && isCasualType && !options.isFdvLeave) return ZERO_COST_BREAKDOWN;
 
   // audit Phase 2: security annualised/ordinary rates are effective-dated.
-  const rateSet = resolveRateSet(shift_date);
+  const pricing = resolvePricing(shift_date, options.rateCards ?? ctx?.rateCards, options.loadings, ctx?.loadings);
+  if (!pricing) return UNPRICED_COST_BREAKDOWN;
+  const rateSet = pricing.rateSet;
 
   let effectiveRate = rate ?? NaN;
   if (!Number.isFinite(effectiveRate) || effectiveRate <= 0) {
@@ -122,6 +125,8 @@ export function estimateDetailedShiftCost(
       resolveSecurityRate(rateSet, options.classificationLevel, isFullTimeType, isCasualType)
       ?? rateSet.defaultRate;
   }
+  // On a card, a rate the card cannot supply is unpriced — not a priced $0.
+  if (pricing.cardCode && !Number.isFinite(effectiveRate)) return UNPRICED_COST_BREAKDOWN;
 
   // ── Higher duties (cl 29) — same MAX semantics as the Standard engine ─────
   // The nominated higher grade resolves through the SAME security rate path
@@ -135,7 +140,7 @@ export function estimateDetailedShiftCost(
     }
   }
 
-  const loadings = options.loadings ?? ctx?.loadings ?? ICC_SYDNEY_EA_LOADINGS;
+  const loadings = pricing.loadings;
   const isAnnualised = isSecurityAnnualised(effectiveRate, rateSet.security.annualisedHourly);
   const isCasual = !isAnnualised && isCasualType;
 
@@ -150,8 +155,9 @@ export function estimateDetailedShiftCost(
   const finalEffectiveRate = (previousWage != null && previousWage > effectiveRate) ? previousWage : effectiveRate;
 
   // ── Date facts (Phase 3) ───────────────────────────────────────────────
-  const jurisdiction = options.jurisdiction ?? ctx?.jurisdiction ?? DEFAULT_JURISDICTION;
-  const canUseCtx = !!ctx && (!options.jurisdiction || options.jurisdiction === (ctx.jurisdiction ?? DEFAULT_JURISDICTION));
+  // The card's organization types its own public holidays (e.g. Brisbane's Ekka).
+  const jurisdiction = pricing.jurisdiction ?? options.jurisdiction ?? ctx?.jurisdiction ?? DEFAULT_JURISDICTION;
+  const canUseCtx = !!ctx && jurisdiction === (ctx.jurisdiction ?? DEFAULT_JURISDICTION);
   let isHoliday: boolean;
   let shiftDay: number;
   if (canUseCtx) {

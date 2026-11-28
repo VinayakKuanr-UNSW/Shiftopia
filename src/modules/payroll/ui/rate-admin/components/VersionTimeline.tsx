@@ -101,14 +101,6 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
               </div>
             );
           })}
-
-          {/* Add new version placeholder */}
-          <div className="relative flex items-center gap-4 -ml-3 p-3 opacity-65" role="listitem">
-            <div className="absolute left-[-15px] top-[18px] h-3.5 w-3.5 rounded-full border-2 border-dashed border-muted-foreground flex-shrink-0 z-10" aria-hidden="true" />
-            <span className="text-[13px] text-muted-foreground italic font-medium">
-              + New version via CPI preview
-            </span>
-          </div>
         </div>
       </div>
     </div>

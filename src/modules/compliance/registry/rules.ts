@@ -562,7 +562,7 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         category: 'TIME',
         employment: ['FT'],
         authority: eba('cl 35.1(e)'),
-        engines: { shape: false, v8: true, solver: null },
+        engines: { shape: false, v8: true, solver: 'SC-13' },
         description:
             'A full-timer should average two consecutive days off each week of the work cycle.',
         knownGap:

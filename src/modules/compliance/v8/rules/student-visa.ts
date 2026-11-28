@@ -22,27 +22,28 @@ export const studentVisaRule: V8RuleEvaluator = (ctx) => {
     const limitHours = config.student_visa_fortnightly_limit;
     const windowDays = 14;
     
-    // 1. Build Daily Hours Map
-    const dailyHours = new Map<string, number>();
+    // 1. Build Daily Minutes Map (integer minutes avoid IEEE-754 float drift vs CP-SAT)
+    const dailyMinutes = new Map<string, number>();
     for (const s of shifts) {
         const date = s.date || s.shift_date || '';
         // CRITICAL: Skip shifts with missing scheduling info to prevent crashes
         if (!date || !s.start_time || !s.end_time) continue;
 
-        const netHours = Math.max(0, (shiftDurationMinutes(s.start_time, s.end_time) - (s.unpaid_break_minutes || 0)) / 60);
-        dailyHours.set(date, (dailyHours.get(date) || 0) + netHours);
+        const breakMins = employee.is_security_role ? 0 : (s.unpaid_break_minutes || 0);
+        const netMins = Math.max(0, shiftDurationMinutes(s.start_time, s.end_time) - breakMins);
+        dailyMinutes.set(date, (dailyMinutes.get(date) || 0) + netMins);
     }
     
-    const sortedDates = Array.from(dailyHours.keys()).sort();
+    const sortedDates = Array.from(dailyMinutes.keys()).sort();
     if (sortedDates.length === 0) return [];
     
     // 2. Scan 14-Day Rolling Windows
     const prefix = new Array<number>(sortedDates.length + 1).fill(0);
     for (let i = 0; i < sortedDates.length; i++) {
-        prefix[i + 1] = prefix[i] + dailyHours.get(sortedDates[i])!;
+        prefix[i + 1] = prefix[i] + dailyMinutes.get(sortedDates[i])!;
     }
     
-    let worstHours = 0;
+    let worstMinutes = 0;
     let worstStartDate = '';
     let worstEndDate = '';
     
@@ -58,15 +59,17 @@ export const studentVisaRule: V8RuleEvaluator = (ctx) => {
             startPtr++;
         }
         
-        const windowHours = prefix[endIdx + 1] - prefix[startPtr];
-        if (windowHours > worstHours) {
-            worstHours = windowHours;
+        const windowMinutes = prefix[endIdx + 1] - prefix[startPtr];
+        if (windowMinutes > worstMinutes) {
+            worstMinutes = windowMinutes;
             worstStartDate = winStartDate;
             worstEndDate = endDateStr;
         }
     }
     
-    if (worstHours <= limitHours) return [];
+    const limitMinutes = Math.round(limitHours * 60);
+    if (worstMinutes <= limitMinutes) return [];
+    const worstHours = worstMinutes / 60;
     
     return [{
         rule_id: 'V8_STUDENT_VISA_LIMIT',

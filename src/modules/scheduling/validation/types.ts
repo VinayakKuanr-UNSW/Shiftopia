@@ -9,6 +9,7 @@
  */
 
 import type { ContractRecordV2 } from '@/modules/compliance/v8/types';
+import type { SolverConfig } from '@/modules/compliance/v8/swap-engine/types';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 // =============================================================================
@@ -215,8 +216,11 @@ export interface EmployeeInfo {
      * (e.g. V8_ORD_HOURS_AVG, exempt for CASUAL). Undefined/null when
      * unavailable, in which case the engine defaults to CASUAL.
      */
-    contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+    contract_type?: 'FT' | 'PT' | 'CASUAL' | 'FLEXI_PART_TIME' | null;
     contracted_weekly_hours?: number;
+    /** Declared ordinary-hours work cycle (ICC EBA cl 35.x(a) / 12.2(b)). */
+    ordinary_hours_cycle_weeks?: number;
+    ordinary_hours_cycle_anchor?: string;
     /**
      * YYYY-MM-DD dates with APPROVED leave inside the candidate window
      * (audit F1). Feeds V8_LEAVE_CONFLICT — a BLOCKING rule for any candidate
@@ -269,6 +273,8 @@ export interface ValidationRunOptions {
     skipQualificationChecks?: boolean;
     /** (Optional) Pre-fetched data to skip network calls. */
     injectedData?: InjectedSimulationData;
+    /** (Optional) Rate-card compliance thresholds forwarded to V8 (e.g. daily caps). */
+    solverConfig?: SolverConfig;
 }
 
 

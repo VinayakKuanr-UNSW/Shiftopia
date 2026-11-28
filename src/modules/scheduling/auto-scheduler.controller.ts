@@ -32,11 +32,20 @@ import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/
 import { extractLevel } from '../rosters/domain/projections/utils/cost';
 import { estimateDetailedShiftCost as estimateDetailedShiftCostObj } from '../rosters/domain/projections/utils/cost/index';
 import { resolveRateSet, type RateSet } from '../rosters/domain/projections/utils/cost/rate-schedule';
+import { resolveCardOn, type PricedCard, type RateCardSchedule } from '../rosters/domain/projections/utils/cost/rate-card-resolver';
+import type { RateCardLoadings } from '../rosters/domain/projections/utils/cost/loadings';
+import { fetchPublishedRateCardSchedules } from '../payroll/data/ebaRates.read.api';
 import { calculateFatigueWithRecovery, effectiveMinutes, FATIGUE_BANDS } from '../rosters/domain/projections/utils/fatigue';
 import { calculateUtilization } from '../rosters/domain/projections/utils/fairness';
 import type { ShiftMeta, EmployeeMeta } from './optimizer/solution-parser';
-import { isFullTimeEmployee, toTargetEmploymentType } from '@/modules/core/model/employment.types';
-import type { AvailabilityOverrideRef, ExistingShiftRef } from './types';
+import {
+    isFlexibleEmploymentStatus,
+    isFullTimeEmployee,
+    resolveEmploymentType,
+    toTargetEmploymentType,
+} from '@/modules/core/model/employment.types';
+import type { EmployeeInfo } from '@/modules/scheduling/validation/types';
+import type { AvailabilityOverrideRef, ExistingShiftRef, SchedulerMode, SolverPricingPolicy, SolverSchedulerMode } from './types';
 import { auditor } from './audit/auditor';
 import { rosterFetcher, durationMinutes, shiftDate } from './data/roster-fetcher';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
@@ -51,6 +60,8 @@ import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { resolveJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
 import { fetchOrganizationJurisdictions } from '@/modules/core/lib/organizationJurisdiction';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import { v8ConfigFromLoadings } from '@/modules/compliance/v8/swap-engine/constraint-engine';
+import type { SolverConfig } from '@/modules/compliance/v8/swap-engine/types';
 import type {
     OptimizeRequest,
     OptimizeResponse,
@@ -99,12 +110,16 @@ import type {
 function buildSolverConstraints(
     supplied: OptimizeRequest['constraints'] | undefined,
     shifts: OptimizerShift[],
+    schedulerMode?: SolverSchedulerMode,
+    card?: PricedCard | null,
 ): OptimizeRequest['constraints'] {
     const earliest = shifts.reduce<string | undefined>(
         (min, s) => (!min || (s.shift_date && s.shift_date < min) ? s.shift_date : min),
         undefined,
     );
-    const rateSet = resolveRateSet(earliest);
+    // The organization's card when there is one (run() refuses an organization
+    // without a card covering the window); the embedded schedule otherwise.
+    const rateSet = card?.rateSet ?? resolveRateSet(earliest);
     return {
         min_rest_minutes: 600,
         relax_constraints: false,
@@ -113,6 +128,30 @@ function buildSolverConstraints(
         // Cents: the CP-SAT objective is integral, and 1113 is exact where
         // 11.13 is not.
         split_shift_allowance_cents: Math.round(rateSet.allowances.splitShift * 100),
+        ...(schedulerMode ? { scheduler_mode: schedulerMode } : {}),
+        ...(card ? { pricing_policy: solverPricingPolicy(card.loadings) } : {}),
+    };
+}
+
+/** The card's loadings and operational thresholds as the solver reads them (PricingPolicyReq). */
+export function solverPricingPolicy(l: RateCardLoadings): SolverPricingPolicy {
+    return {
+        casual_loading: l.casualLoading,
+        saturday_loading: l.saturdayLoading,
+        sunday_loading: l.sundayLoading,
+        public_holiday_loading: l.publicHolidayLoading,
+        night_loading_mon_thu: l.nightLoadingMonThu,
+        night_loading_fri: l.nightLoadingFri,
+        night_loading_sat_sun: l.nightLoadingSatSun,
+        overtime_first_hours: l.overtimeFirstHours,
+        overtime_first_multiplier: l.overtimeFirstMultiplier,
+        overtime_after_multiplier: l.overtimeAfterMultiplier,
+        ordinary_daily_cap_hours: l.ordinaryDailyCapHours,
+        security_ordinary_cap_hours: l.securityOrdinaryCapHours,
+        min_engagement_minutes: l.minEngagementMinutes,
+        min_engagement_sunday_minutes: l.minEngagementSundayMinutes,
+        min_engagement_public_holiday_minutes: l.minEngagementPublicHolidayMinutes,
+        min_engagement_training_minutes: l.minEngagementTrainingMinutes,
     };
 }
 
@@ -266,11 +305,70 @@ export function buildPendingLeaveOverrides(
  * baseline may be written. Casuals return 0 and are thereby exempt from HC-7,
  * matching `_add_min_contract_hours`'s `<= 0` skip.
  */
-export function baselineWeeklyContractMinutes(contractType: string | null | undefined): number {
+/** ICC EBA Schedule 3 §3.1(d) — Full-Time Security weekly contract (38h ord + 4h add'l = 42h). */
+export const FT_SECURITY_WEEKLY_CONTRACT_MINUTES = 2520;
+/** ICC EBA cl 12.4(a), cl 35.3(a) — Flexible Part-Time statutory minimum baseline (624h/52w = 12h/wk = 720m). */
+export const FPT_WEEKLY_CONTRACT_MINUTES = 720;
+
+export function baselineWeeklyContractMinutes(
+    contractType: string | null | undefined,
+    opts?: { isSecurityRole?: boolean; isFlexible?: boolean },
+): number {
     const raw = contractType || '';
-    if (raw === 'FT' || /full/i.test(raw)) return 2280;  // 38h
+    if (raw === 'FT' || /full/i.test(raw)) {
+        return opts?.isSecurityRole ? FT_SECURITY_WEEKLY_CONTRACT_MINUTES : 2280; // 42h vs 38h
+    }
+    if (raw === 'FLEXI_PART_TIME' || opts?.isFlexible) {
+        return FPT_WEEKLY_CONTRACT_MINUTES; // 720m (12h/wk)
+    }
     if (raw === 'PT' || /part/i.test(raw)) return 1200;  // 20h
     return 0;                                            // casual — HC-7 exempt
+}
+
+/**
+ * Resolve a Regular Part-Time employee's weekly contracted minutes (ICC EBA
+ * cl 12.3(b): predetermined hours strictly `< 38` per week).
+ *
+ * `EligibilityService` defaults unset `contracted_weekly_hours` to `38`, so
+ * guarding `> 0 && < 38` honours real predetermined PT contracts (e.g. 15h,
+ * 20h, 24h, 30h, 35h) while falling back to `baselineWeeklyContractMinutes('PT')`
+ * (`1200m` = `20h`) when unset.
+ */
+export function resolvePtWeeklyContractMinutes(
+    e: Pick<EmployeeMeta, 'contracted_weekly_hours'>,
+    overrideMinContractMinutes?: number,
+): number {
+    if (overrideMinContractMinutes != null) return overrideMinContractMinutes;
+    if (
+        typeof e.contracted_weekly_hours === 'number' &&
+        Number.isFinite(e.contracted_weekly_hours) &&
+        e.contracted_weekly_hours > 0 &&
+        e.contracted_weekly_hours < 38
+    ) {
+        return Math.round(e.contracted_weekly_hours * 60);
+    }
+    return baselineWeeklyContractMinutes('PT');
+}
+
+/**
+ * Resolve a Flexible Part-Time employee's weekly contracted minutes (ICC EBA
+ * cl 12.4(a) & cl 35.3(a): minimum 624h per annum = 12h/week = 720m baseline,
+ * up to 38h/week cycle average).
+ */
+export function resolveFptWeeklyContractMinutes(
+    e: Pick<EmployeeMeta, 'contracted_weekly_hours'>,
+    overrideMinContractMinutes?: number,
+): number {
+    if (overrideMinContractMinutes != null) return overrideMinContractMinutes;
+    if (
+        typeof e.contracted_weekly_hours === 'number' &&
+        Number.isFinite(e.contracted_weekly_hours) &&
+        e.contracted_weekly_hours > 0 &&
+        e.contracted_weekly_hours <= 38
+    ) {
+        return Math.round(e.contracted_weekly_hours * 60);
+    }
+    return FPT_WEEKLY_CONTRACT_MINUTES;
 }
 
 /**
@@ -560,6 +658,7 @@ export function estimateGreedyFallbackCost(
     emp: EmployeeMeta,
     empDet: Partial<OptimizerEmployee> | undefined,
     priorOrdinaryHoursThisWeek: number | undefined,
+    rateCards?: RateCardSchedule,
     jurisdiction?: string,
 ): number {
     // cl 36.1 vs Sch.3 §3.2/§5.3: the unpaid meal break is
@@ -574,9 +673,10 @@ export function estimateGreedyFallbackCost(
     const mins = isSecurityShift
         ? grossMins
         : Math.max(0, grossMins - (shift.unpaid_break_minutes ?? 0));
-    const employmentType = emp.contract_type === 'CASUAL' || /casual/i.test(emp.contract_type || '')
+    const resolvedEmpType = resolveEmploymentType(emp.employment_status, emp.contract_type);
+    const employmentType = resolvedEmpType === 'Casual'
         ? 'Casual'
-        : /part/i.test(emp.contract_type || '') ? 'Part-Time' : 'Full-Time';
+        : resolvedEmpType === 'PT' ? 'Part-Time' : 'Full-Time';
     // Object-based call (replaces the former 32-positional-argument
     // legacy wrapper — an auditability risk the compliance audit
     // flagged: a silent argument-order mistake would compile
@@ -608,6 +708,7 @@ export function estimateGreedyFallbackCost(
             ? `LEVEL_${empDet.level}`
             : extractLevel(shift.roleName),
         priorOrdinaryHoursThisWeek,
+        rateCards,
         jurisdiction: jurisdiction ?? resolveJurisdiction({
             jurisdiction: shift.jurisdiction,
             organizationId: shift.organization_id,
@@ -679,9 +780,17 @@ export class AutoSchedulerInputTooLargeError extends Error {
 // INPUT / OPTIONS
 // =============================================================================
 
-interface AutoSchedulerInput {
+export interface AutoSchedulerInput {
     shifts: ShiftMeta[];
     employees: EmployeeMeta[];
+    /**
+     * Employment-mode partition (ICC Sydney EBA 2025).
+     * Defaults to 'ALL' (mixed pool). When 'FT_STANDARD', strictly isolates
+     * Standard Non-Security Full-Time shifts & employees (cl 35.1, 12.2),
+     * skips the Casual Fairness Ledger, sizes HC-7 demand on NET paid minutes,
+     * and enforces 1-shift/day + SC-13 paired consecutive RDOs.
+     */
+    mode?: SchedulerMode;
     employeeDetails?: Map<string, Partial<OptimizerEmployee>>;
     constraints?: OptimizerConstraints;
     strategy?: OptimizerStrategy;
@@ -737,6 +846,278 @@ function solverEmploymentType(e: EmployeeMeta): string {
     return e.contract_type === 'PT' || /part/i.test(e.contract_type || '') ? 'Part-Time' : 'Full-Time';
 }
 
+/** ICC EBA cl 35.1(c)-(d) — Standard Full-Time daily net ordinary hours bounds. */
+const FT_MIN_DAILY_NET_MINUTES = 456; // 7.6h
+const FT_MAX_DAILY_NET_MINUTES = 720; // 12.0h
+
+/**
+ * ICC EBA cl 12.3(e), cl 35.2(d)-(e), cl 56.2 & Sch 3 §5.2(d)-(e) — Regular
+ * Part-Time daily worked/paid duration bounds:
+ *   - 3.0h (180m) flat minimum engagement on weekdays, Sundays, and training
+ *     (no 2h training exception and no 4h Sunday uplift for plain PT)
+ *   - 4.0h (240m) minimum engagement on Public Holidays (cl 56.2)
+ *   - 12.0h (720m) daily ordinary hours ceiling
+ */
+export const PT_MIN_ENGAGEMENT_MINUTES = 180;
+export const PT_PH_MIN_ENGAGEMENT_MINUTES = 240;
+export const PT_MAX_DAILY_NET_MINUTES = 720;
+
+/**
+ * ICC EBA cl 12.4(c), cl 35.3(d)-(g) & cl 56.2 — Flexible Part-Time daily worked/paid bounds:
+ *   - 2.0h (120m) minimum engagement for training/meeting on non-event day (cl 12.4(c)(i), cl 35.3(f)(i))
+ *   - 4.0h (240m) minimum engagement on Sunday or Public Holiday (cl 12.4(c)(iii), cl 35.3(f)(iii), cl 56.2)
+ *   - 3.0h (180m) minimum engagement on standard weekday (cl 12.4(c)(iv), cl 35.3(f)(iv))
+ *   - 12.0h (720m) daily ordinary hours ceiling (cl 35.3(d))
+ *   - 10 consecutive days maximum work streak without a day off (cl 35.3(g))
+ */
+export const FPT_MIN_ENGAGEMENT_MINUTES = 180;
+export const FPT_TRAINING_MIN_ENGAGEMENT_MINUTES = 120;
+export const FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES = 240;
+export const FPT_MAX_DAILY_NET_MINUTES = 720;
+export const FPT_MAX_CONSECUTIVE_DAYS = 10;
+
+/**
+ * ICC EBA cl 12.5(c), cl 35.4(c)-(f), cl 56.2 & Sch 3 §5.3 — Casual daily worked/paid bounds:
+ *   - 2.0h (120m) minimum engagement for training/meeting on non-event day (cl 12.5(c)(i))
+ *   - 4.0h (240m) minimum engagement on Sunday (cl 12.5(c)(ii))
+ *   - 4.0h (240m) minimum engagement on Public Holiday (cl 56.2)
+ *   - 3.0h (180m) minimum engagement on standard weekday (cl 12.5(c)(iii))
+ *   - 4.0h (240m) minimum engagement for Event Security on ANY day (Sch 3 §5.3(e))
+ *   - 3.0h (180m) minimum engagement per shift for Event Security working 2 shifts in a day (Sch 3 §5.3(g))
+ *   - 12.0h (720m) daily ordinary hours ceiling (cl 35.4(c))
+ *   - Maximum 2 engagements starting on any one calendar day (cl 35.4(f))
+ */
+export const CASUAL_MIN_ENGAGEMENT_MINUTES = 180;
+export const CASUAL_TRAINING_MIN_ENGAGEMENT_MINUTES = 120;
+export const CASUAL_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES = 240;
+export const CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES = 240;
+export const CASUAL_MAX_DAILY_NET_MINUTES = 720;
+export const CASUAL_MAX_DAILY_ENGAGEMENTS = 2;
+
+/**
+ * Net paid/worked minutes of a shift (cl 36.1 deducts unpaid meal breaks for
+ * general staff; Sch 3 §3.2(a) pays meal breaks on the clock for Security).
+ */
+export function shiftNetMinutes(
+    s: Pick<ShiftMeta, 'start_time' | 'end_time' | 'unpaid_break_minutes'>,
+    isSecurity = false,
+): number {
+    const gross = durationMinutes(s.start_time, s.end_time);
+    return isSecurity ? gross : Math.max(0, gross - (s.unpaid_break_minutes ?? 0));
+}
+
+/**
+ * Layer 1 shift filter for `FT_STANDARD`:
+ *   - Must target Full-Time (`'FT'`) or unscoped (`null`/`undefined`)
+ *   - Must NOT require flexible part-time (`target_requires_flexible`)
+ *   - Must NOT be a Schedule 3 Security shift (`isSecurityRoleName`)
+ */
+export function isStandardFtShift(
+    s: Pick<ShiftMeta, 'target_employment_type' | 'target_requires_flexible' | 'roleName'>,
+): boolean {
+    if (s.target_employment_type && s.target_employment_type !== 'FT') return false;
+    if (s.target_requires_flexible) return false;
+    if (isSecurityRoleName(s.roleName)) return false;
+    return true;
+}
+
+/**
+ * Layer 1 employee filter for `FT_STANDARD`:
+ *   - Substantive engagement is Full-Time (`isFullTimeEmployee`)
+ *   - Not Flexible (`!is_flexible`)
+ *   - Not Schedule 3 Security (`!isSecurityRole` — belongs to `FT_SECURITY`)
+ */
+export function isStandardFtEmployee(
+    e: EmployeeMeta,
+    opts?: { isSecurityRole?: boolean },
+): boolean {
+    if (!isFullTimeEmployee(e.employment_status, e.contract_type)) return false;
+    if (e.is_flexible) return false;
+    if (opts?.isSecurityRole) return false;
+    return true;
+}
+
+/**
+ * Layer 1 shift filter for `FT_SECURITY` (ICC EBA Schedule 3 §3.1):
+ *   - Must be a Schedule 3 Security shift (`isSecurityRoleName`)
+ *   - Must target Full-Time (`'FT'`) or unscoped (`null`/`undefined`)
+ *   - Must NOT require flexible part-time (`target_requires_flexible`)
+ */
+export function isFtSecurityShift(
+    s: Pick<ShiftMeta, 'target_employment_type' | 'target_requires_flexible' | 'roleName'>,
+): boolean {
+    if (!isSecurityRoleName(s.roleName)) return false;
+    if (s.target_employment_type && s.target_employment_type !== 'FT') return false;
+    if (s.target_requires_flexible) return false;
+    return true;
+}
+
+/**
+ * Layer 1 employee filter for `FT_SECURITY` (ICC EBA Schedule 3 §3.1):
+ *   - Substantive engagement is Full-Time (`isFullTimeEmployee`)
+ *   - Not Flexible (`!is_flexible`)
+ *   - Schedule 3 Security (`Boolean(opts?.isSecurityRole)`)
+ *   - Excludes Part-Time Event Security (Sch 3 §5.2) & Casual Event Security (§5.3)
+ */
+export function isFtSecurityEmployee(
+    e: EmployeeMeta,
+    opts?: { isSecurityRole?: boolean },
+): boolean {
+    if (!isFullTimeEmployee(e.employment_status, e.contract_type)) return false;
+    if (e.is_flexible) return false;
+    if (!opts?.isSecurityRole) return false;
+    return true;
+}
+
+/**
+ * Layer 1 shift filter for `PT` (Regular / Predetermined Part-Time — ICC EBA
+ * cl 12.3 & cl 35.2, plus Schedule 3 §5.2 Event Security Part-Time):
+ *   - Must target Part-Time (`'PT'`) or unscoped (`null`/`undefined`)
+ *   - Must NOT require Flexible Part-Time (`target_requires_flexible` belongs to `FPT`)
+ *   - Includes BOTH Standard PT and Event Security PT shifts
+ */
+export function isPtShift(
+    s: Pick<ShiftMeta, 'target_employment_type' | 'target_requires_flexible'>,
+): boolean {
+    if (s.target_employment_type && s.target_employment_type !== 'PT') return false;
+    if (s.target_requires_flexible) return false;
+    return true;
+}
+
+/**
+ * Layer 1 employee filter for `PT` (Regular / Predetermined Part-Time — ICC EBA
+ * cl 12.3 & cl 35.2, plus Schedule 3 §5.2 Event Security Part-Time):
+ *   - Substantive engagement resolves to `'PT'` (`resolveEmploymentType`)
+ *   - Strictly NOT Flexible Part-Time (`!is_flexible`, `!isFlexibleEmploymentStatus`)
+ *   - Includes BOTH Standard PT (`!isSecurityRole`) and Event Security PT (`isSecurityRole`)
+ */
+export function isPtEmployee(
+    e: EmployeeMeta,
+    opts?: { isFlexible?: boolean },
+): boolean {
+    if (resolveEmploymentType(e.employment_status, e.contract_type) !== 'PT') return false;
+    if (e.is_flexible || isFlexibleEmploymentStatus(e.employment_status) || opts?.isFlexible) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Layer 1 shift filter for `FPT` (Flexible Part-Time — ICC EBA cl 12.4 & cl 35.3):
+ *   - Must target Part-Time (`'PT'`) or unscoped (`null`/`undefined`)
+ *   - Must NOT be targeted strictly at Regular Part-Time (`target_employment_type === 'PT' && !target_requires_flexible`)
+ *   - Untargeted shifts or shifts with `target_requires_flexible === true` are eligible
+ *   - Includes BOTH Standard FPT and Event Security FPT shifts
+ */
+export function isFptShift(
+    s: Pick<ShiftMeta, 'target_employment_type' | 'target_requires_flexible'>,
+): boolean {
+    if (s.target_employment_type && s.target_employment_type !== 'PT') return false;
+    if (s.target_employment_type === 'PT' && !s.target_requires_flexible) return false;
+    return true;
+}
+
+/**
+ * Layer 1 employee filter for `FPT` (Flexible Part-Time — ICC EBA cl 12.4 & cl 35.3):
+ *   - Substantive engagement resolves to `'PT'` (`resolveEmploymentType`)
+ *   - Strictly Flexible Part-Time (`is_flexible`, `isFlexibleEmploymentStatus`, or `opts?.isFlexible`)
+ *   - Includes BOTH Standard FPT (`!isSecurityRole`) and Event Security FPT (`isSecurityRole`)
+ */
+export function isFptEmployee(
+    e: EmployeeMeta,
+    opts?: { isFlexible?: boolean },
+): boolean {
+    if (resolveEmploymentType(e.employment_status, e.contract_type) !== 'PT') return false;
+    const isFlex = Boolean(e.is_flexible || isFlexibleEmploymentStatus(e.employment_status) || opts?.isFlexible);
+    return isFlex;
+}
+
+/**
+ * Layer 1 shift filter for `CASUAL` (ICC EBA cl 12.5 & cl 35.4):
+ *   - Must target Casual (`'Casual'`) or unscoped (`null`/`undefined`)
+ *   - Must NOT require flexible part-time (`target_requires_flexible`)
+ *   - Must NOT target Full-Time (`'FT'`) or Part-Time (`'PT'`)
+ *   - Includes BOTH Standard Casual and Event Security Casual shifts
+ */
+export function isCasualShift(
+    s: Pick<ShiftMeta, 'target_employment_type' | 'target_requires_flexible'>,
+): boolean {
+    if (s.target_employment_type && s.target_employment_type !== 'Casual') return false;
+    if (s.target_requires_flexible) return false;
+    return true;
+}
+
+/**
+ * Layer 1 employee filter for `CASUAL` (ICC EBA cl 12.5 & cl 35.4):
+ *   - Substantive engagement resolves to `'Casual'` (`resolveEmploymentType`)
+ *   - Includes BOTH Standard Casual (`!isSecurityRole`) and Event Security Casual (`isSecurityRole`)
+ *   - Excludes Full-Time, Regular Part-Time, and Flexible Part-Time
+ */
+export function isCasualEmployee(e: EmployeeMeta): boolean {
+    return resolveEmploymentType(e.employment_status, e.contract_type) === 'Casual';
+}
+
+interface ValidationContextMaps {
+    leaveByEmployee?: ReadonlyMap<string, string[]>;
+    workCycles?: ReadonlyMap<string, { ordinary_hours_cycle_weeks?: number; ordinary_hours_cycle_anchor?: string }>;
+    securityRoleIds?: ReadonlySet<string>;
+}
+
+/**
+ * Hydrate the full V8 `EmployeeInfo` passed into `assignmentValidator.simulate`
+ * so `V8_ORD_HOURS_AVG` (anchored 1..4w cycle), `V8_FT_DAYS_OFF`,
+ * `V8_LEAVE_CONFLICT`, `V8_STUDENT_VISA_LIMIT`, and Schedule 3 exemptions all
+ * evaluate against the employee's real contract instead of defaulting to CASUAL.
+ */
+function buildInjectedEmployeeInfo(args: {
+    employeeId: string;
+    employeeName: string;
+    emp?: EmployeeMeta;
+    details?: Partial<OptimizerEmployee>;
+    ctx?: ValidationContextMaps;
+}): EmployeeInfo {
+    const { employeeId, employeeName, emp, details, ctx } = args;
+    const resolvedType = emp
+        ? resolveEmploymentType(emp.employment_status, emp.contract_type)
+        : null;
+    const isFlex = Boolean(
+        emp?.is_flexible ||
+        (emp?.employment_status && isFlexibleEmploymentStatus(emp.employment_status)) ||
+        details?.is_flexible
+    );
+    const contractType: EmployeeInfo['contract_type'] =
+        resolvedType === 'FT' ? 'FT'
+        : resolvedType === 'PT' ? (isFlex ? 'FLEXI_PART_TIME' : 'PT')
+        : resolvedType === 'Casual' ? 'CASUAL'
+        : null;
+
+    const mergedLeave = Array.from(new Set([
+        ...(details?.unavailable_dates ?? []),
+        ...(ctx?.leaveByEmployee?.get(employeeId) ?? []),
+    ]));
+
+    const cycle = ctx?.workCycles?.get(employeeId);
+    const isSecurityRole = details?.is_security_role
+        ?? (ctx?.securityRoleIds
+            ? (emp?.contracted_role_ids ?? []).some(id => ctx.securityRoleIds!.has(id))
+            : undefined);
+
+    return {
+        id: employeeId,
+        name: employeeName,
+        contract_type: contractType,
+        contracted_weekly_hours: emp?.contracted_weekly_hours || undefined,
+        ordinary_hours_cycle_weeks: cycle?.ordinary_hours_cycle_weeks ?? details?.ordinary_hours_cycle_weeks,
+        ordinary_hours_cycle_anchor: cycle?.ordinary_hours_cycle_anchor ?? details?.ordinary_hours_cycle_anchor,
+        leave_days: mergedLeave.length > 0 ? mergedLeave : undefined,
+        is_security_role: isSecurityRole,
+        is_student_visa: emp?.is_student ?? details?.is_student,
+        contracts: details?.contracts || [],
+        qualifications: details?.qualifications || [],
+        employment_statuses: emp?.employment_status ? [emp.employment_status] : undefined,
+    };
+}
+
 /**
  * When OR-Tools is unavailable or returns INFEASIBLE, fall back to a greedy
  * first-fit strategy: iterate employees in load-ascending order, assign each
@@ -762,9 +1143,24 @@ async function greedyFallback(
     windowObligation?: ReadonlyMap<string, number>,
     /** Casual employees' confidence-weighted ledger debts — the solver's `fairness_debts`. */
     fairnessDebts?: ReadonlyMap<string, Partial<Record<FairnessMetric, number>>>,
+    validationCtx?: ValidationContextMaps,
+    mode: SchedulerMode = 'ALL',
+    card?: PricedCard | null,
     /** Public-holiday jurisdiction resolver per shift (matches the optimizer's day typing). */
     jurisdictionFor?: (shift: ShiftMeta) => string,
 ): Promise<ValidatedProposal[]> {
+    const isFtStandard = mode === 'FT_STANDARD';
+    const isFtSecurity = mode === 'FT_SECURITY';
+    const isFtMode = isFtStandard || isFtSecurity;
+    const isPtMode = mode === 'PT';
+    const isFptMode = mode === 'FPT';
+    const isCasualMode = mode === 'CASUAL';
+    const isPermanentMode = isFtMode || isPtMode || isFptMode;
+    const cardLoadings = card?.loadings;
+    const dailyCapMins = (isSec: boolean) => cardLoadings
+        ? Math.round((isSec ? cardLoadings.securityOrdinaryCapHours : cardLoadings.ordinaryDailyCapHours) * 60)
+        : FT_MAX_DAILY_NET_MINUTES;
+    const solverConfig: SolverConfig | undefined = cardLoadings ? v8ConfigFromLoadings(cardLoadings) : undefined;
     // Resolve strategy once here with the same defaults used when building
     // the Python optimizer request (see OptimizeRequest construction below).
     // This ensures the greedy fallback honours UI slider values instead of
@@ -797,21 +1193,79 @@ async function greedyFallback(
         let assigned = false;
         const shiftJurisdiction = jurisdictionFor
             ? jurisdictionFor(shift)
-            : resolveJurisdiction({ jurisdiction: shift.jurisdiction, organizationId: shift.organization_id });
+            : resolveJurisdiction({
+                jurisdiction: shift.jurisdiction ?? card?.jurisdiction,
+                organizationId: shift.organization_id,
+            });
+        const netMins = shiftNetMinutes(shift, isFtSecurity);
+        const ftMaxDaily = dailyCapMins(isFtSecurity);
+        if (isFtMode && (netMins < FT_MIN_DAILY_NET_MINUTES || netMins > ftMaxDaily)) {
+            const modePrefix = isFtSecurity ? 'Full-Time Security' : 'Standard Full-Time';
+            proposals.push({
+                shiftId: shift.id,
+                employeeId: '',
+                employeeName: '',
+                shiftDate: shift.shift_date,
+                startTime: shift.start_time,
+                endTime: shift.end_time,
+                optimizerCost: 0,
+                employmentType: 'Full-Time',
+                complianceStatus: 'FAIL',
+                violations: [{
+                    type: netMins < FT_MIN_DAILY_NET_MINUTES ? 'FT_MIN_DAILY_HOURS' : 'MAX_DAILY_HOURS',
+                    ruleName: netMins < FT_MIN_DAILY_NET_MINUTES ? 'FT Minimum Daily Hours (cl 35.1(c))' : 'FT Maximum Daily Hours (cl 35.1(d) / Sch 3 §3.1(a))',
+                    description: netMins < FT_MIN_DAILY_NET_MINUTES
+                        ? `${modePrefix} shift paid duration (${(netMins / 60).toFixed(1)}h) is below the 7.6h minimum (ICC EBA cl 35.1(c)).`
+                        : `${modePrefix} shift paid duration (${(netMins / 60).toFixed(1)}h) exceeds the ${(ftMaxDaily / 60).toFixed(1)}h maximum (ICC EBA cl 35.1(d) / Sch 3 §3.1(a)).`,
+                    blocking: true,
+                }],
+                passing: false,
+            });
+            continue;
+        }
         // The ledger's own category split (Sat/Sun/PH/night 22:00–06:00), so the
         // fallback prices this shift exactly as the solver's SC-11/SC-11b do.
         const shiftMinutes = categoryMinutes(
             shift.shift_date,
             shift.start_time,
             shift.end_time,
-            Math.max(0, durationMinutes(shift.start_time, shift.end_time) - (shift.unpaid_break_minutes ?? 0)),
+            netMins,
             (d) => getShiftDayType(d, shiftJurisdiction).isPublicHoliday,
         );
+
+        const shiftDayType = getShiftDayType(shift.shift_date, shiftJurisdiction);
+        const minStd = cardLoadings?.minEngagementMinutes ?? PT_MIN_ENGAGEMENT_MINUTES;
+        const minSun = cardLoadings?.minEngagementSundayMinutes ?? FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES;
+        const minPh  = cardLoadings?.minEngagementPublicHolidayMinutes ?? PT_PH_MIN_ENGAGEMENT_MINUTES;
+        const minTr  = cardLoadings?.minEngagementTrainingMinutes ?? FPT_TRAINING_MIN_ENGAGEMENT_MINUTES;
+        const ptMinReq = shiftDayType.isPublicHoliday ? minPh : minStd;
+        const fptMinReq = (shift as any).is_training
+            ? minTr
+            : shiftDayType.isPublicHoliday
+                ? minPh
+                : shiftDayType.isSunday
+                    ? minSun
+                    : minStd;
+        const casualMinReq = (shift as any).is_training
+            ? minTr
+            : shiftDayType.isPublicHoliday
+                ? minPh
+                : shiftDayType.isSunday
+                    ? minSun
+                    : minStd;
 
         // Score each employee for this shift
         const candidateScores = employees.map(emp => {
             const currentAssignments = assignedByEmployee.get(emp.id) ?? [];
             const existingShifts = existingRoster.get(emp.id) ?? [];
+            const details = employeeDetails.get(emp.id);
+            const empIsSec = Boolean(
+                details?.is_security_role
+                    ?? (emp as any).is_security_role
+                    ?? (validationCtx?.securityRoleIds
+                        ? (emp.contracted_role_ids ?? []).some(id => validationCtx.securityRoleIds!.has(id))
+                        : false),
+            );
             
             // Map assigned IDs back to shift data for the health utilities
             // This is a bit expensive in O(S) but necessary for a smart fallback
@@ -828,7 +1282,13 @@ async function greedyFallback(
                         // Resolved with the SAME helper `ExistingShiftRef`
                         // uses, so a shift contributes identically whether it
                         // was already committed or proposed by this run.
-                        duration_minutes: durationMinutes(s.start_time, s.end_time),
+                        duration_minutes: isFtStandard
+                            ? shiftNetMinutes(s, false)
+                            : isFtSecurity
+                                ? shiftNetMinutes(s, true)
+                                : (isPtMode || isFptMode || isCasualMode)
+                                    ? shiftNetMinutes(s, empIsSec)
+                                    : durationMinutes(s.start_time, s.end_time),
                         unpaid_break_minutes: s.unpaid_break_minutes
                     } : null;
                 }).filter(Boolean)
@@ -842,19 +1302,6 @@ async function greedyFallback(
             );
 
             // 2. Utilization Score.
-            //
-            // The denominator is the WINDOW obligation passed in by `run()`,
-            // not `employeeDetails.min_contract_minutes` — nothing populates
-            // that field, so it was 0 for every employee and this whole term
-            // was inert: a penalty that could never fire and a bonus that was
-            // the same constant for everyone, cancelling out of the argmax. The
-            // fallback consequently never preferred an under-loaded permanent
-            // over a casual, which is the FT starvation HC-7 exists to prevent
-            // — in the path that runs precisely when the optimizer is unhealthy
-            // and nobody is watching. See `windowContractObligationMinutes`,
-            // `inWindowScheduledMinutes` and `greedyUtilizationTerms` for the
-            // scale and zero-obligation reasoning behind each input.
-            const details = employeeDetails.get(emp.id);
             const contractedMins = windowObligation?.get(emp.id) ?? 0;
             const scheduledMins = inWindowScheduledMinutes(
                 totalShiftsForEmp as { shift_date?: string; duration_minutes?: number }[],
@@ -863,34 +1310,20 @@ async function greedyFallback(
 
             // Strategy multipliers — `strategyMult` is the shared mirror of
             // optimizer-service/model_builder.py `_strategy_mult`.
-            // cost_weight is honoured only by the Python OR-Tools optimizer; the greedy
-            // fallback does not compute per-shift cost and leaves that term at default.
             const fairnessWeight = resolvedStrategy.fairness_weight ?? 50;
             const fatigueMult  = strategyMult(resolvedStrategy.fatigue_weight ?? 50);
             const fairnessMult = strategyMult(fairnessWeight);
 
-            // Penalty Calculation
-            // Fatigue past the "ok" band is penalised quadratically, scaled by
-            // fatigue_weight. The knee is FATIGUE_BANDS.OK_MAX so the fallback
-            // starts penalising at exactly the point the FTG badge turns amber —
-            // it used to knee at a bare `15`, below the UI's own 20, so a
-            // manager saw green for someone the fallback was already avoiding
-            // (audit F-23).
             const fatiguePenalty = health.projected > FATIGUE_BANDS.OK_MAX
                 ? Math.pow(health.projected - FATIGUE_BANDS.OK_MAX, 2) * 50 * fatigueMult
                 : 0;
-            // Over-utilization (> 100%) is a hard over-cap, not a strategy
-            // lever; under-utilization (< 80%) earns a fairness bonus scaled by
-            // fairness_weight. Both are neutral without a contract — see
-            // `greedyUtilizationTerms`.
             const { utilization: utl, penalty: utilizationPenalty, bonus: fairnessBonus } =
                 greedyUtilizationTerms(scheduledMins, contractedMins, fairnessMult);
 
-            // Casual ledger bias — the SHARED pricing kernel, identical to the
-            // solver's SC-11/SC-11b (audit F-10/F-13). Only casuals carry debts.
-            // Sign note: `shiftFairnessPenaltyCents` returns a PENALTY (positive
-            // = bias away), and this scorer maximises, so it is subtracted.
-            const debtBonus = -shiftFairnessPenaltyCents(fairnessDebts?.get(emp.id), shiftMinutes, fairnessWeight);
+            // Casual ledger bias — disabled in permanent modes (casual-only module).
+            const debtBonus = isPermanentMode
+                ? 0
+                : -shiftFairnessPenaltyCents(fairnessDebts?.get(emp.id), shiftMinutes, fairnessWeight);
 
             const pref = new Set(details?.preferred_shift_ids || []);
             const preferenceBonus = pref.has(shift.id) ? 50 : 0; // base preference bonus ($5.00 equivalent)
@@ -899,9 +1332,11 @@ async function greedyFallback(
 
             return { 
                 emp, 
+                empIsSec,
                 score, 
                 fatigueScore: health.projected,
-                utilization: utl 
+                utilization: utl,
+                totalShiftsForEmp,
             };
         });
 
@@ -910,19 +1345,58 @@ async function greedyFallback(
             .filter(c => {
                 // Role-set eligibility — mirrors the solver's employee_eligible
                 // and the manual/bulk R10 rule: an employee may work a shift only
-                // if they hold a contract for the shift's role. (Replaces the old
-                // numeric level-hierarchy gate, which let any higher-level person
-                // take lower-level work and diverged from the solver.) Skip when
-                // the shift carries no role requirement.
+                // if they hold a contract for the shift's role.
                 if (shift.role_id) {
                     const roles = c.emp.contracted_role_ids ?? [];
                     if (!roles.includes(shift.role_id)) return false;
                 }
 
-                // HC-EmploymentType: kept as a SOFT preference upstream in
-                // the optimizer (see SC-1 Employment Isolation). Don't
-                // hard-reject here — that would block legitimate
-                // cross-assignments when the right pool is exhausted.
+                // cl 35.1(e) / cl 39.1 / trg_shift_ft_one_per_day: Full-Time
+                // works continuously on at most one shift per calendar day.
+                if (isFtMode) {
+                    const hasSameDay = c.totalShiftsForEmp.some(
+                        s => (s as { shift_date?: string } | null)?.shift_date === shift.shift_date,
+                    );
+                    if (hasSameDay) return false;
+                }
+
+                // cl 12.3(e) / cl 35.2(d)-(e) / cl 56.2 / Sch 3 §5.2(d)-(e):
+                // Regular Part-Time worked/paid bounds per employee (unpaid meal
+                // break subtracted for Standard PT, paid meal break kept for
+                // Event Security PT per Sch 3 §5.3(a)).
+                if (isPtMode) {
+                    const workedMins = shiftNetMinutes(shift, c.empIsSec);
+                    if (workedMins < ptMinReq || workedMins > dailyCapMins(c.empIsSec)) {
+                        return false;
+                    }
+                }
+
+                // cl 12.4(c) / cl 35.3(d)-(f) / cl 56.2:
+                // Flexible Part-Time worked/paid bounds per employee (unpaid meal
+                // break subtracted for Standard FPT, paid meal break kept for
+                // Event Security FPT per Sch 3 §5.3(a)).
+                if (isFptMode) {
+                    const workedMins = shiftNetMinutes(shift, c.empIsSec);
+                    if (workedMins < fptMinReq || workedMins > dailyCapMins(c.empIsSec)) {
+                        return false;
+                    }
+                }
+
+                // cl 35.4(f) & cl 12.5(c) / cl 35.4(c) / cl 56.2 / Sch 3 §5.3:
+                // Casual worked/paid bounds and max 2 daily engagements.
+                if (isCasualMode) {
+                    const sameDayShifts = c.totalShiftsForEmp.filter(
+                        s => (s as any)?.shift_date === shift.shift_date && !(s as any)?.is_training,
+                    );
+                    if (sameDayShifts.length >= CASUAL_MAX_DAILY_ENGAGEMENTS) {
+                        return false;
+                    }
+                    const workedMins = shiftNetMinutes(shift, c.empIsSec);
+                    const minReq = c.empIsSec ? CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES : casualMinReq;
+                    if (workedMins < minReq || workedMins > dailyCapMins(c.empIsSec)) {
+                        return false;
+                    }
+                }
                 
                 return true;
             })
@@ -935,10 +1409,6 @@ async function greedyFallback(
         for (const candidate of sorted) {
             const { emp } = candidate;
             
-            // No overqualification penalty (single-mode policy): holding a
-            // role's contract makes that shift a legitimate assignment, so a
-            // multi-role employee is not penalised for taking a lower role.
-
             const existingV8ShiftIds = assignedByEmployee.get(emp.id) ?? [];
             const candidateIds = [...existingV8ShiftIds, shift.id];
 
@@ -953,6 +1423,7 @@ async function greedyFallback(
                     emp.id,
                     { 
                         mode: 'PARTIAL_APPLY',
+                        solverConfig,
                         injectedData: {
                             candidateShifts: shifts.filter(s => candidateIds.includes(s.id)) as any,
                             existingShifts: existing.map(e => ({
@@ -964,25 +1435,20 @@ async function greedyFallback(
                                 unpaid_break_minutes: e.unpaid_break_minutes ?? 0,
                                 paid_break_minutes: e.paid_break_minutes ?? 0,
                             })) as any,
-                            employee: {
-                                id: emp.id,
-                                name: emp.name,
-                                contracts: details?.contracts || [],
-                                qualifications: details?.qualifications || [],
-                                // Same reason as the solver path: without the raw
-                                // contract status V8_EMPLOYMENT_TARGET cannot fire,
-                                // and greedy would hand back the same off-target
-                                // assignments the DB trigger rejects.
-                                employment_statuses: emp.employment_status
-                                    ? [emp.employment_status]
-                                    : undefined,
-                            } as any
+                            employee: buildInjectedEmployeeInfo({
+                                employeeId: emp.id,
+                                employeeName: emp.name,
+                                emp,
+                                details,
+                                ctx: validationCtx,
+                            }),
                         }
                     },
                 );
                 const shiftResult = simResult.results.find(r => r.shiftId === shift.id);
                 if (shiftResult?.passing) {
                     assignedByEmployee.get(emp.id)!.push(shift.id);
+                    const empResolved = resolveEmploymentType(emp.employment_status, emp.contract_type);
                     proposals.push({
                         shiftId: shift.id,
                         employeeId: emp.id,
@@ -991,7 +1457,7 @@ async function greedyFallback(
                         startTime: shift.start_time,
                         endTime: shift.end_time,
                         optimizerCost: 0,
-                        employmentType: /casual/i.test(emp.contract_type || '') ? 'Casual' : 'Full-Time',
+                        employmentType: empResolved === 'Casual' ? 'Casual' : empResolved === 'PT' ? 'Part-Time' : 'Full-Time',
                         complianceStatus: 'PASS',
                         violations: [],
                         passing: true,
@@ -1007,6 +1473,27 @@ async function greedyFallback(
         }
 
         if (!assigned) {
+            const ptWorkedRef = isPtMode
+                ? shiftNetMinutes(shift, isSecurityRoleName(shift.roleName))
+                : 0;
+            const ptBelowMin = isPtMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) < ptMinReq);
+            const ptAboveMax = isPtMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) > dailyCapMins(c.empIsSec));
+
+            const fptWorkedRef = isFptMode
+                ? shiftNetMinutes(shift, isSecurityRoleName(shift.roleName))
+                : 0;
+            const fptBelowMin = isFptMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) < fptMinReq);
+            const fptAboveMax = isFptMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) > dailyCapMins(c.empIsSec));
+
+            const casualWorkedRef = isCasualMode
+                ? shiftNetMinutes(shift, isSecurityRoleName(shift.roleName))
+                : 0;
+            const casualBelowMin = isCasualMode && candidateScores.every(c => {
+                const minReq = c.empIsSec ? CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES : casualMinReq;
+                return shiftNetMinutes(shift, c.empIsSec) < minReq;
+            });
+            const casualAboveMax = isCasualMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) > dailyCapMins(c.empIsSec));
+
             proposals.push({
                 shiftId: shift.id,
                 employeeId: '',
@@ -1015,9 +1502,59 @@ async function greedyFallback(
                 startTime: shift.start_time,
                 endTime: shift.end_time,
                 optimizerCost: 0,
-                employmentType: 'Casual',
+                employmentType: isFtMode ? 'Full-Time' : (isPtMode || isFptMode) ? 'Part-Time' : 'Casual',
                 complianceStatus: 'FAIL',
-                violations: [{
+                violations: ptBelowMin && candidateScores.length > 0 ? [{
+                    type: 'MIN_ENGAGEMENT',
+                    ruleName: shiftDayType.isPublicHoliday
+                        ? 'Public Holiday Minimum Engagement (cl 56.2)'
+                        : 'Part-Time Minimum Engagement (cl 12.3(e) / cl 35.2(e))',
+                    description: shiftDayType.isPublicHoliday
+                        ? `Part-Time shift worked duration (${(ptWorkedRef / 60).toFixed(1)}h) is below the 4.0h Public Holiday minimum (ICC EBA cl 56.2).`
+                        : `Part-Time shift worked duration (${(ptWorkedRef / 60).toFixed(1)}h) is below the 3.0h minimum engagement (ICC EBA cl 12.3(e) / cl 35.2(e)).`,
+                    blocking: true,
+                }] : ptAboveMax && candidateScores.length > 0 ? [{
+                    type: 'MAX_DAILY_HOURS',
+                    ruleName: 'Part-Time Maximum Daily Hours (cl 35.2(d) / Sch 3 §5.2(d))',
+                    description: `Part-Time shift worked duration (${(ptWorkedRef / 60).toFixed(1)}h) exceeds the 12.0h daily ceiling (ICC EBA cl 35.2(d) / Sch 3 §5.2(d)).`,
+                    blocking: true,
+                }] : fptBelowMin && candidateScores.length > 0 ? [{
+                    type: 'MIN_ENGAGEMENT',
+                    ruleName: (shift as any).is_training
+                        ? 'Training Minimum Engagement (cl 12.4(c)(i) / cl 35.3(f)(i))'
+                        : (shiftDayType.isSunday || shiftDayType.isPublicHoliday)
+                            ? 'Sunday/PH Minimum Engagement (cl 12.4(c)(iii) / cl 35.3(f)(iii))'
+                            : 'Flexible Part-Time Minimum Engagement (cl 12.4(c)(iv) / cl 35.3(f)(iv))',
+                    description: (shift as any).is_training
+                        ? `Flexible Part-Time training shift worked duration (${(fptWorkedRef / 60).toFixed(1)}h) is below the 2.0h minimum (ICC EBA cl 12.4(c)(i)).`
+                        : (shiftDayType.isSunday || shiftDayType.isPublicHoliday)
+                            ? `Flexible Part-Time Sunday/PH shift worked duration (${(fptWorkedRef / 60).toFixed(1)}h) is below the 4.0h minimum (ICC EBA cl 12.4(c)(iii)).`
+                            : `Flexible Part-Time shift worked duration (${(fptWorkedRef / 60).toFixed(1)}h) is below the 3.0h standard minimum (ICC EBA cl 12.4(c)(iv)).`,
+                    blocking: true,
+                }] : fptAboveMax && candidateScores.length > 0 ? [{
+                    type: 'MAX_DAILY_HOURS',
+                    ruleName: 'Flexible Part-Time Maximum Daily Hours (cl 35.3(d))',
+                    description: `Flexible Part-Time shift worked duration (${(fptWorkedRef / 60).toFixed(1)}h) exceeds the 12.0h daily ceiling (ICC EBA cl 35.3(d)).`,
+                    blocking: true,
+                }] : casualBelowMin && candidateScores.length > 0 ? [{
+                    type: 'MIN_ENGAGEMENT',
+                    ruleName: (shift as any).is_training
+                        ? 'Training Minimum Engagement (cl 12.5(c)(i))'
+                        : (shiftDayType.isSunday || shiftDayType.isPublicHoliday)
+                            ? 'Sunday/PH Minimum Engagement (cl 12.5(c)(ii) / cl 56.2)'
+                            : 'Casual Minimum Engagement (cl 12.5(c)(iii) / Sch 3 §5.3(e))',
+                    description: (shift as any).is_training
+                        ? `Casual training shift worked duration (${(casualWorkedRef / 60).toFixed(1)}h) is below the 2.0h minimum (ICC EBA cl 12.5(c)(i)).`
+                        : (shiftDayType.isSunday || shiftDayType.isPublicHoliday)
+                            ? `Casual Sunday/PH shift worked duration (${(casualWorkedRef / 60).toFixed(1)}h) is below the 4.0h minimum (ICC EBA cl 12.5(c)(ii) / cl 56.2).`
+                            : `Casual shift worked duration (${(casualWorkedRef / 60).toFixed(1)}h) is below the minimum engagement.`,
+                    blocking: true,
+                }] : casualAboveMax && candidateScores.length > 0 ? [{
+                    type: 'MAX_DAILY_HOURS',
+                    ruleName: 'Casual Maximum Daily Hours (cl 35.4(c))',
+                    description: `Casual shift worked duration (${(casualWorkedRef / 60).toFixed(1)}h) exceeds the 12.0h daily ceiling (ICC EBA cl 35.4(c)).`,
+                    blocking: true,
+                }] : [{
                     type: 'NO_ELIGIBLE_EMPLOYEE', ruleName: 'No Eligible Employee',
                     description: 'No available employee passed compliance for this shift.', blocking: true,
                 }],
@@ -1058,9 +1595,62 @@ export class AutoSchedulerController {
         if (input.shifts.length === 0) {
             throw new Error('No shifts to schedule in this range — widen the dates or the scope filter.');
         }
-        if (input.shifts.length > MAX_OPTIMIZER_SHIFTS) {
+
+        const activeMode: SchedulerMode = input.mode ?? 'ALL';
+        const isFtStandard = activeMode === 'FT_STANDARD';
+        const isFtSecurity = activeMode === 'FT_SECURITY';
+        const isFtMode = isFtStandard || isFtSecurity;
+        const isPtMode = activeMode === 'PT';
+        const isFptMode = activeMode === 'FPT';
+        const isCasualMode = activeMode === 'CASUAL';
+        const isPermanentMode = isFtMode || isPtMode || isFptMode;
+        const solverMode: SolverSchedulerMode | undefined = activeMode === 'ALL' ? undefined : activeMode;
+
+        // ── Layer -0.5: Mode Partitioning (FT_STANDARD / FT_SECURITY / PT / FPT) ──
+        // Best-effort Security role derivation runs against the FULL input batch
+        // before filtering so Security role_ids remain known even after Security
+        // shifts are removed from `scopedShifts`.
+        const securityRoleIds = deriveSecurityRoleIds(input.shifts);
+        const scopedShifts = isFtStandard
+            ? input.shifts.filter(isStandardFtShift)
+            : isFtSecurity
+                ? input.shifts.filter(isFtSecurityShift)
+                : isPtMode
+                    ? input.shifts.filter(isPtShift)
+                    : isFptMode
+                        ? input.shifts.filter(isFptShift)
+                        : isCasualMode
+                            ? input.shifts.filter(isCasualShift)
+                            : input.shifts;
+
+        if (isFtStandard && scopedShifts.length === 0) {
+            throw new Error(
+                'No Standard Full-Time shifts to schedule in this range — switch mode or check shift employment targets.',
+            );
+        }
+        if (isFtSecurity && scopedShifts.length === 0) {
+            throw new Error(
+                'No Full-Time Security shifts to schedule in this range — switch mode or check shift roles and employment targets.',
+            );
+        }
+        if (isPtMode && scopedShifts.length === 0) {
+            throw new Error(
+                'No Part-Time shifts to schedule in this range — switch mode or check shift employment targets.',
+            );
+        }
+        if (isFptMode && scopedShifts.length === 0) {
+            throw new Error(
+                'No Flexible Part-Time shifts to schedule in this range — switch mode or check shift employment targets.',
+            );
+        }
+        if (isCasualMode && scopedShifts.length === 0) {
+            throw new Error(
+                'No Casual shifts to schedule in this range — switch mode or check shift employment targets.',
+            );
+        }
+        if (scopedShifts.length > MAX_OPTIMIZER_SHIFTS) {
             throw new AutoSchedulerInputTooLargeError(
-                `Too many shifts (${input.shifts.length}). The optimizer accepts at most ${MAX_OPTIMIZER_SHIFTS} per run — narrow the date range.`,
+                `Too many shifts (${scopedShifts.length}). The optimizer accepts at most ${MAX_OPTIMIZER_SHIFTS} per run — narrow the date range.`,
             );
         }
         if (input.employees.length > MAX_OPTIMIZER_EMPLOYEES) {
@@ -1069,6 +1659,35 @@ export class AutoSchedulerController {
             );
         }
 
+        // Pre-DB candidate filter: in FT_SECURITY we keep all non-flexible FT
+        // staff whose caller-supplied `is_security_role` is not explicitly false
+        // so `fetchEmployeeContractDetails` can still discover Schedule 3 status
+        // from `user_contracts` before `scopedEmployees` applies the strict check.
+        const candidateEmployees = isFtStandard
+            ? input.employees.filter(e =>
+                isStandardFtEmployee(e, {
+                    isSecurityRole: input.employeeDetails?.get(e.id)?.is_security_role
+                        ?? (e.contracted_role_ids ?? []).some(id => securityRoleIds.has(id)),
+                }))
+            : isFtSecurity
+                ? input.employees.filter(e =>
+                    isFullTimeEmployee(e.employment_status, e.contract_type)
+                    && !e.is_flexible
+                    && input.employeeDetails?.get(e.id)?.is_security_role !== false)
+                : isPtMode
+                    ? input.employees.filter(e =>
+                        isPtEmployee(e, {
+                            isFlexible: input.employeeDetails?.get(e.id)?.is_flexible,
+                        }))
+                    : isFptMode
+                        ? input.employees.filter(e =>
+                            isFptEmployee(e, {
+                                isFlexible: input.employeeDetails?.get(e.id)?.is_flexible,
+                            }))
+                        : isCasualMode
+                            ? input.employees.filter(isCasualEmployee)
+                            : input.employees;
+
         const throwIfAborted = () => {
             if (input.signal?.aborted) {
                 throw new DOMException('AutoScheduler run aborted', 'AbortError');
@@ -1076,13 +1695,58 @@ export class AutoSchedulerController {
         };
 
         const t0 = performance.now();
-        console.debug('[AutoScheduler] Starting — shifts=%d employees=%d', input.shifts.length, input.employees.length);
+        console.debug(
+            '[AutoScheduler] Starting — mode=%s shifts=%d employees=%d',
+            activeMode, scopedShifts.length, candidateEmployees.length,
+        );
+
+        // ── Contract-derived classification (compliance audit finding —
+        // 2026-08-02): real Schedule 1/2 level, Schedule 3 Security status,
+        // and Schedule 4/5/6 apprentice/trainee/SWS category from each
+        // employee's Active `user_contracts` row. Caller-supplied
+        // `employeeDetails` still wins per-field where present — see
+        // `mergeEmployeeDetails`.
+        const contractDetails = await rosterFetcher.fetchEmployeeContractDetails(candidateEmployees);
+        const employeeDetails = mergeEmployeeDetails(contractDetails, input.employeeDetails);
+        throwIfAborted();
+
+        // Finalize employee pool after DB contract classification resolves
+        // Schedule 3 Security status (`is_security_role`).
+        const resolveIsSecurity = (e: EmployeeMeta): boolean => {
+            const det = employeeDetails.get(e.id);
+            return det?.is_security_role
+                ?? (e as any).is_security_role
+                ?? (e.contracted_role_ids ?? []).some(id => securityRoleIds.has(id));
+        };
+        const scopedEmployees = isFtStandard
+            ? candidateEmployees.filter(e => {
+                const det = employeeDetails.get(e.id);
+                return isStandardFtEmployee(e, { isSecurityRole: resolveIsSecurity(e) }) && !(det?.is_flexible ?? false);
+            })
+            : isFtSecurity
+                ? candidateEmployees.filter(e => {
+                    const det = employeeDetails.get(e.id);
+                    return isFtSecurityEmployee(e, { isSecurityRole: resolveIsSecurity(e) }) && !(det?.is_flexible ?? false);
+                })
+                : isPtMode
+                    ? candidateEmployees.filter(e => {
+                        const det = employeeDetails.get(e.id);
+                        return isPtEmployee(e, { isFlexible: det?.is_flexible });
+                    })
+                    : isFptMode
+                        ? candidateEmployees.filter(e => {
+                            const det = employeeDetails.get(e.id);
+                            return isFptEmployee(e, { isFlexible: det?.is_flexible });
+                        })
+                        : isCasualMode
+                            ? candidateEmployees.filter(isCasualEmployee)
+                            : candidateEmployees;
 
         // ── Layer 0: Demand-vs-supply pre-check ──────────────────────────────
         // Cheap arithmetic check before we burn CPU on the solver. Surfaces
         // mathematically-impossible days (more shift-hours than worker-hours)
         // that would otherwise just appear as silently uncovered shifts.
-        const capacityCheck = this._capacityCheck(input.shifts, input.employees, input.employeeDetails);
+        const capacityCheck = this._capacityCheck(scopedShifts, scopedEmployees, employeeDetails);
         if (!capacityCheck.sufficient) {
             console.warn(
                 '[AutoScheduler] Capacity deficit detected on %d day(s) — total deficit %d min',
@@ -1092,65 +1756,32 @@ export class AutoSchedulerController {
         }
 
         // ── Roster awareness: fetch existing committed shifts ────────────────
-        // Without this, the optimizer is blind to shifts already assigned to
-        // these employees (e.g. from a previous Apply within the same session
-        // or work scheduled outside the current planner view). The solver
-        // will then propose conflicting work that compliance rejects, so a
-        // re-optimize collapses from many passing proposals to almost none.
         const existingRoster = await rosterFetcher.fetchExistingRoster(
-            input.shifts, input.employees,
+            scopedShifts, scopedEmployees,
         );
         // ── Availability awareness: fetch declared slots ─────────────────────
-        // Used as a hard filter in `employee_eligible` on the Python side.
-        // Policy: an employee with zero availability records on file is
-        // treated as universally available (not yet onboarded); an employee
-        // with *any* records on file is treated as unavailable for any
-        // shift not covered by a declared slot in the optimization window.
         const availabilityData = await rosterFetcher.fetchAvailability(
-            input.shifts, input.employees,
+            scopedShifts, scopedEmployees,
         );
         // ── Leave awareness (audit F1): approved leave = LEGAL-HARD ──────────
-        // Approved leave dates feed the solver's per-day `unavailable_dates`
-        // hard exclusion, so an employee on leave can never be proposed for
-        // those days. Leave wins over coverage (legal_hard » coverage), same
-        // tier as the other statutory caps.
         const leaveByEmployee = await rosterFetcher.fetchApprovedLeave(
-            input.shifts, input.employees,
+            scopedShifts, scopedEmployees,
         );
         // ── Pending leave: SOFT, not hard ────────────────────────────────────
-        // A request is not a decision. Hard-excluding it would let anyone take
-        // themselves off the roster by asking, so it becomes a 5000c penalty
-        // the solver routes around when it cheaply can — which is enough to
-        // stop the common failure: autopilot rosters someone into leave that is
-        // approved two days later, and the only remedy left is the manual
-        // post-approval unassign flow.
         const pendingLeaveByEmployee = await rosterFetcher.fetchPendingLeave(
-            input.shifts, input.employees,
+            scopedShifts, scopedEmployees,
         );
-        // Employee-declared exceptions — the first producer this channel has
-        // ever had. Subtractive, so unlike an availability declaration a narrow
-        // one cannot un-roster the person who wrote it.
+        // Employee-declared exceptions
         const exceptionsByEmployee = await rosterFetcher.fetchAvailabilityExceptions(
-            input.shifts, input.employees,
+            scopedShifts, scopedEmployees,
         );
-        // ── Contract-derived classification (compliance audit finding —
-        // 2026-08-02): real Schedule 1/2 level, Schedule 3 Security status,
-        // and Schedule 4/5/6 apprentice/trainee/SWS category from each
-        // employee's Active `user_contracts` row. Caller-supplied
-        // `employeeDetails` still wins per-field where present — see
-        // `mergeEmployeeDetails`.
-        const contractDetails = await rosterFetcher.fetchEmployeeContractDetails(input.employees);
-        const employeeDetails = mergeEmployeeDetails(contractDetails, input.employeeDetails);
         throwIfAborted();
 
-        // Contract ordinary-hours envelopes (solver HC-5e). Read separately from
-        // the classification columns above on purpose — see
-        // `fetchOrdinaryHoursEnvelopes`. Empty map = every contract unrestricted,
-        // which is production's current state and a safe one.
-        const envelopes = await rosterFetcher.fetchOrdinaryHoursEnvelopes(input.employees);
+        // Contract ordinary-hours envelopes (solver HC-5e).
+        const envelopes = await rosterFetcher.fetchOrdinaryHoursEnvelopes(scopedEmployees);
         throwIfAborted();
         // Declared cl 35.x(a) work cycle (solver HC-4), resolved as V8 resolves it.
-        const workCycles = await rosterFetcher.fetchOrdinaryHoursCycles(input.employees);
+        const workCycles = await rosterFetcher.fetchOrdinaryHoursCycles(scopedEmployees);
         throwIfAborted();
         const totalExisting = Array.from(existingRoster.values())
             .reduce((acc, list) => acc + list.length, 0);
@@ -1169,7 +1800,7 @@ export class AutoSchedulerController {
         const pastShifts: ShiftMeta[] = [];
         const futureShifts: ShiftMeta[] = [];
 
-        for (const s of input.shifts) {
+        for (const s of scopedShifts) {
             // Re-use logic from IncrementalValidator but on ShiftMeta.
             // ShiftMeta has no start_at, so resolve the authored Sydney
             // wall-clock (shift_date + start_time) to an absolute instant.
@@ -1199,7 +1830,7 @@ export class AutoSchedulerController {
             startTime: s.start_time,
             endTime: s.end_time,
             optimizerCost: 0,
-            employmentType: 'Casual',
+            employmentType: isFtMode ? 'Full-Time' : (isPtMode || isFptMode) ? 'Part-Time' : 'Casual',
             complianceStatus: 'FAIL',
             violations: [{ type, ruleName: UNSCHEDULABLE_LABEL[type], description, blocking: true }],
             passing: false,
@@ -1210,13 +1841,32 @@ export class AutoSchedulerController {
         const excludedShiftIds = excludedProposals.map(p => p.shiftId);
 
         // ── Layer 1: Build optimizer request ─────────────────────────────────
-        const dates = input.shifts.map(s => s.shift_date).sort();
+        const dates = scopedShifts.map(s => s.shift_date).sort();
         const start = new Date(dates[0]);
         const end = new Date(dates[dates.length - 1]);
         const diffDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
         const weekScale = diffDays / 7;
 
         console.debug('[AutoScheduler] Scaling limits for %f week(s) (%d days)', weekScale.toFixed(2), diffDays);
+
+        // The organization's published rate card in force at the window's start
+        // drives holiday jurisdiction, candidate rates, split-shift allowance,
+        // solver pricing/threshold policy, and V8 daily caps. No card ⇒ refuse
+        // rather than price at another organization's — or ICC's — rates.
+        const orgId = input.organizationId;
+        let rateCards: RateCardSchedule | undefined;
+        let windowCard: PricedCard | null = null;
+        if (orgId) {
+            rateCards = (await fetchPublishedRateCardSchedules([orgId])).get(orgId) ?? [];
+            windowCard = resolveCardOn(rateCards, dates[0]);
+            if (!windowCard) {
+                throw new Error(
+                    `No published pay rate card covers ${dates[0]} for this organization. ` +
+                    'Publish one in Payroll → Pay Rates, then run the AutoScheduler again.',
+                );
+            }
+        }
+        const v8SolverConfig: SolverConfig | undefined = windowCard ? v8ConfigFromLoadings(windowCard.loadings) : undefined;
 
         const orgJurisdictions = await fetchOrganizationJurisdictions([
             input.organizationId,
@@ -1226,6 +1876,7 @@ export class AutoSchedulerController {
             s.jurisdiction
             ?? (s.organization_id ? orgJurisdictions.get(s.organization_id) : undefined)
             ?? input.jurisdiction
+            ?? windowCard?.jurisdiction
             ?? (input.organizationId ? orgJurisdictions.get(input.organizationId) : undefined)
             ?? resolveJurisdiction({ organizationId: s.organization_id ?? input.organizationId });
 
@@ -1253,10 +1904,6 @@ export class AutoSchedulerController {
                 demand_source: s.demand_source,
                 target_employment_type: s.target_employment_type,
                 target_requires_flexible: s.target_requires_flexible ?? false,
-                // Carried to the wire so HC-5d can tell which job the shift is
-                // for. A solve spans sub-departments, so the slot list cannot be
-                // narrowed when it is fetched — the match has to happen per
-                // (slot, shift) inside the solver, and it needs both sides.
                 sub_department_id: s.sub_department_id ?? null,
                 level: s.level ?? 0,
                 is_training: (s as any).is_training ?? false,
@@ -1270,37 +1917,41 @@ export class AutoSchedulerController {
             };
         });
 
-        // Total demand across the window — used to cap per-employee minimum
-        // obligations so HC-7 (min contract hours) cannot dominate HC-1
-        // (coverage). Without this cap, on a long horizon `weekScale` blows
-        // up the min-contract obligation past the total available demand,
-        // and the solver leaves shifts uncovered to satisfy the floor.
+        // Total demand across the window — in `FT_STANDARD`, sum NET paid
+        // minutes (cl 36.1 unpaid meal breaks excluded); in `FT_SECURITY`, sum
+        // PAID minutes (Sch 3 §3.2(a) meal breaks are paid = gross duration);
+        // in `PT` & `FPT`, sum worked/paid minutes per shift role (cl 36.1 vs Sch 3 §5.3(a)).
         const totalDemandMinutes = futureShifts.reduce(
-            (acc, s) => acc + durationMinutes(s.start_time, s.end_time),
+            (acc, s) => acc + (isFtStandard
+                ? shiftNetMinutes(s, false)
+                : isFtSecurity
+                    ? shiftNetMinutes(s, true)
+                    : (isPtMode || isFptMode || isCasualMode)
+                        ? shiftNetMinutes(s, isSecurityRoleName(s.roleName))
+                        : durationMinutes(s.start_time, s.end_time)),
             0,
         );
 
-        // Weekly contracted minimum per employee, resolved ONCE here so the
-        // fair-share caps and the obligation sent to the solver cannot drift
-        // apart. See `baselineWeeklyContractMinutes` /
-        // `resolveContractObligationMinutes` for why each input is shaped the
-        // way it is.
         const weeklyContractMinutes = new Map<string, number>(
-            input.employees.map(e => [
+            scopedEmployees.map(e => [
                 e.id,
-                employeeDetails.get(e.id)?.min_contract_minutes
-                    ?? baselineWeeklyContractMinutes(e.contract_type),
+                isPtMode
+                    ? resolvePtWeeklyContractMinutes(e, employeeDetails.get(e.id)?.min_contract_minutes)
+                    : isFptMode
+                        ? resolveFptWeeklyContractMinutes(e, employeeDetails.get(e.id)?.min_contract_minutes)
+                        : isCasualMode
+                            ? 0
+                            : (employeeDetails.get(e.id)?.min_contract_minutes
+                            ?? baselineWeeklyContractMinutes(isFtMode ? 'FT' : e.contract_type, {
+                                isSecurityRole: resolveIsSecurity(e),
+                                isFlexible: Boolean(e.is_flexible || employeeDetails.get(e.id)?.is_flexible),
+                            })),
             ]),
         );
         const fairShareCaps = buildFairShareCaps(totalDemandMinutes, weeklyContractMinutes);
 
-        // Uncapped, leave-credited window obligation. The solver gets the
-        // CAPPED figure (its objective needs the safety valve); the greedy
-        // fallback's utilization ratio gets this one, because the cap answers
-        // "how much work is there" and a utilization denominator has to answer
-        // "how much is this person owed".
         const windowObligationMinutes = new Map<string, number>(
-            input.employees.map(e => [
+            scopedEmployees.map(e => [
                 e.id,
                 windowContractObligationMinutes(
                     weeklyContractMinutes.get(e.id) ?? 0,
@@ -1310,26 +1961,18 @@ export class AutoSchedulerController {
             ]),
         );
 
-        // Casual fairness ledger: fairness is casual-only, so it is read for
-        // casual employees and only their (confidence-weighted) debts steer.
-        // Requires a real org scope. When absent we SKIP entirely rather than
-        // invent one — the ledger's organization_id is a uuid, so a fabricated
-        // value would error and silently disable the feature anyway.
-        const orgId = input.organizationId;
+        // Casual fairness ledger: fairness is casual-only. In permanent modes
+        // (`FT_STANDARD` / `FT_SECURITY` / `PT`), skip outright with `'not_applicable'`.
         const casualIds = new Set(
-            input.employees.filter(e => solverEmploymentType(e) === 'Casual').map(e => e.id),
+            scopedEmployees.filter(e => solverEmploymentType(e) === 'Casual').map(e => e.id),
         );
         let debtsMap: Map<string, Partial<Record<FairnessMetric, number>>> | undefined;
-        // Audit F-04: record WHY the ledger did or didn't influence this run. An
-        // empty debts map used to be indistinguishable from "nobody owes
-        // anything", so longitudinal fairness could be silently off for weeks.
-        let ledgerStatus: FairnessLedgerRunStatus = {
-            applied: false, reason: 'no_org_scope',
-            employeesWithDebts: 0, windowEnd: null, ageDays: null,
-        };
-        if (orgId && casualIds.size === 0) {
+        let ledgerStatus: FairnessLedgerRunStatus = isPermanentMode
+            ? { applied: false, reason: 'not_applicable', employeesWithDebts: 0, windowEnd: null, ageDays: null }
+            : { applied: false, reason: 'no_org_scope', employeesWithDebts: 0, windowEnd: null, ageDays: null };
+        if (!isPermanentMode && orgId && casualIds.size === 0) {
             ledgerStatus = { applied: false, reason: 'no_data', employeesWithDebts: 0, windowEnd: null, ageDays: null };
-        } else if (orgId) {
+        } else if (!isPermanentMode && orgId) {
             try {
                 // Org-wide, filtered below: hundreds of casual ids in an `.in()`
                 // filter overrun the request URL.
@@ -1356,29 +1999,35 @@ export class AutoSchedulerController {
             }
         }
 
-        // Effective-dated EA rate set for the window (audit F6): the solver's
-        // cost ranking must track classification AND CPI increases, never a
-        // frozen L1 snapshot. Resolved once at the window start.
-        const windowRateSet = resolveRateSet(dates[0]);
+        const windowRateSet = windowCard?.rateSet ?? resolveRateSet(dates[0]);
 
-        // Best-effort "is this employee Security" signal for the current batch —
-        // see `deriveSecurityRoleIds`/`resolveSecurityAnnualisedRate` above.
-        const securityRoleIds = deriveSecurityRoleIds(input.shifts);
-
-        const optimizerEmployees: OptimizerEmployee[] = input.employees.map(e => {
+        const optimizerEmployees: OptimizerEmployee[] = scopedEmployees.map(e => {
             const det = employeeDetails.get(e.id);
-            const isFT = e.contract_type === 'FT' || /full/i.test(e.contract_type || '');
-            const isPT = e.contract_type === 'PT' || /part/i.test(e.contract_type || '');
-            const isCasual = /casual/i.test(e.contract_type || '');
+            const resolvedType = resolveEmploymentType(e.employment_status, e.contract_type);
+            const isFT = isFullTimeEmployee(e.employment_status, e.contract_type);
+            const isPT = resolvedType === 'PT' || e.contract_type === 'PT' || /part/i.test(e.contract_type || '');
+            const isCasual = isCasualMode || resolvedType === 'Casual' || (!isFT && !isPT && /casual/i.test(e.contract_type || ''));
 
-            const isSecurityEmployee = det?.is_security_role
-                ?? (e.contracted_role_ids ?? []).some(id => securityRoleIds.has(id));
+            const isSecurityEmployee = resolveIsSecurity(e);
             const securityRate = resolveSecurityAnnualisedRate(windowRateSet, {
                 isFullTime: isFT, isSecurityEmployee, level: det?.level,
             });
 
-            // Default to 38h/wk (2280m) if FT, 20h/wk (1200m) if PT, else 40h/wk max for Casuals
-            const baseMax = isFT ? 2280 : isPT ? 1200 : 2400;
+            // Sch 3 §3.1(d): FT Security works 42h/wk (2520m) averaged over 8w;
+            // Standard FT works 38h/wk (2280m); PT honours predetermined contract
+            // (>= 20h/wk = 1200m); FPT cl 35.3(e) up to 38h/wk cycle average; Casual 40h/wk (2400m).
+            const isFPT = isFptMode || (isPT && Boolean(e.is_flexible || det?.is_flexible || isFlexibleEmploymentStatus(e.employment_status)));
+            const fptContractWeekly = weeklyContractMinutes.get(e.id) ?? FPT_WEEKLY_CONTRACT_MINUTES;
+            const ptContractWeekly = weeklyContractMinutes.get(e.id) ?? 1200;
+            const baseMax = (isFT && isSecurityEmployee)
+                ? FT_SECURITY_WEEKLY_CONTRACT_MINUTES
+                : isFT
+                    ? 2280
+                    : isFPT
+                        ? 2280
+                        : isPT
+                            ? Math.max(1200, ptContractWeekly)
+                            : 2400;
 
             // Window-aware minimum: scale the weekly contract by `weekScale`,
             // CREDIT approved leave against it, then cap at the demand this
@@ -1402,8 +2051,15 @@ export class AutoSchedulerController {
                 ? (`LEVEL_${det.level}` as keyof typeof windowRateSet.wageRates)
                 : null;
             const scheduleRate = levelKey
-                ? (isCasual ? windowRateSet.wageRates[levelKey].casual : windowRateSet.wageRates[levelKey].permanent)
+                ? (isCasual ? windowRateSet.wageRates[levelKey]?.casual : windowRateSet.wageRates[levelKey]?.permanent) ?? null
                 : null;
+            const hourlyRate = securityRate ?? scheduleRate ?? windowRateSet.defaultRate;
+            if (!Number.isFinite(hourlyRate)) {
+                throw new Error(
+                    `${windowCard?.code ?? 'The rate card'} has no rate for ${e.name}'s classification` +
+                    (det?.level ? ` (Level ${det.level})` : '') + '. Add it in Payroll → Pay Rates, then run the AutoScheduler again.',
+                );
+            }
 
             return {
                 id: e.id,
@@ -1412,15 +2068,21 @@ export class AutoSchedulerController {
                 contracted_role_ids: e.contracted_role_ids ?? [],
                 is_security_role: isSecurityEmployee,
 
-                hourly_rate: securityRate ?? scheduleRate ?? windowRateSet.defaultRate,
-                contract_weekly_minutes: (e.contracted_weekly_hours || 38) * 60,
+                hourly_rate: hourlyRate,
+                contract_weekly_minutes: isFPT
+                    ? fptContractWeekly
+                    : isPT
+                        ? ptContractWeekly
+                        : isCasual
+                            ? 0
+                            : (e.contracted_weekly_hours || (isFT && isSecurityEmployee ? 42 : 38)) * 60,
                 level: det?.level ?? 0,
                 // `employeeDetails` never sets is_flexible (fetchEmployeeContractDetails
                 // does not select employment_status), so this was permanently false and
                 // no one could ever satisfy a `target_requires_flexible` shift. Prefer
                 // the value EligibilityService already resolved from the in-scope
                 // contract; fall back to the details map for other callers.
-                is_flexible: e.is_flexible ?? det?.is_flexible ?? false,
+                is_flexible: (isCasual || isFT) ? false : (isFptMode ? true : (e.is_flexible ?? det?.is_flexible ?? false)),
                 is_student: det?.is_student ?? false,
                 visa_limit: (det as any)?.visa_limit ?? 2880,
                 // HC-5c compares this against `shift.target_employment_type`, and the
@@ -1533,7 +2195,7 @@ export class AutoSchedulerController {
         // correctly. Meanwhile the failure is an under-assignment — shifts left
         // uncovered with no reason attached to the person who could have taken
         // them — which is precisely the kind that goes unnoticed. So: name them.
-        const multiEngagement = input.employees.filter(
+        const multiEngagement = scopedEmployees.filter(
             (e) => (e as { has_multiple_engagement_types?: boolean }).has_multiple_engagement_types,
         );
         if (multiEngagement.length > 0) {
@@ -1547,17 +2209,11 @@ export class AutoSchedulerController {
             );
         }
 
-        // HC-7 obligation summary. The solver cannot report an obligation it is
-        // unable to discharge — it absorbs the Tier-1 slack silently — so the
-        // only place the shape of that obligation is visible is here. `capped`
-        // is the count whose contract floor was cut by the fair-share cap
-        // rather than by leave: a persistently high number means the window
-        // holds less work than the permanent workforce is owed.
         if (weeklyContractMinutes.size > 0) {
             const obligated = optimizerEmployees.filter(o => (o.min_contract_minutes ?? 0) > 0);
             let capped = 0;
             let leaveCredited = 0;
-            for (const e of input.employees) {
+            for (const e of scopedEmployees) {
                 const weekly = weeklyContractMinutes.get(e.id) ?? 0;
                 if (weekly <= 0) continue;
                 const leaveDays = (leaveByEmployee.get(e.id) ?? []).length;
@@ -1568,13 +2224,19 @@ export class AutoSchedulerController {
             console.info(
                 '[AutoScheduler] HC-7: %d/%d employees carry a contract floor (%dh total over %s week(s)); %d leave-credited, %d cut by the fair-share cap',
                 obligated.length,
-                input.employees.length,
+                scopedEmployees.length,
                 Math.round(obligated.reduce((a, o) => a + (o.min_contract_minutes ?? 0), 0) / 60),
                 weekScale.toFixed(2),
                 leaveCredited,
                 capped,
             );
         }
+
+        const validationCtx: ValidationContextMaps = {
+            leaveByEmployee,
+            workCycles,
+            securityRoleIds,
+        };
 
         let optimizerStatus: OptimizerStatus = 'UNKNOWN';
         let solveTimeMs = 0;
@@ -1590,15 +2252,7 @@ export class AutoSchedulerController {
         let optimizerRationaleByShift: Record<string, AssignmentRationale> | undefined;
 
         // ── Layer 2: Call optimizer (with fallback) ───────────────────────────
-        // Auto-scale the solver budget with problem size. Preprocess time
-        // grows roughly linearly with raw_pairs; large rosters (e.g. 624
-        // shifts × 103 employees → ~64k vars / 1.5M constraints) need
-        // ~7-8s of preprocess + adequate solve time on top. A flat 30s cap
-        // forces those runs to time out and engage greedy unnecessarily.
         const rawPairs = optimizerShifts.length * optimizerEmployees.length;
-        // Extra wall-clock headroom for the largest monthly rosters. This
-        // composes with the solver's front-loaded per-tier time allocation,
-        // giving heavy runs enough budget to finish instead of timing out.
         const dynamicBudget = rawPairs > 30_000
             ? 120      // big problems (large monthly rosters): 120s
             : rawPairs > 10_000
@@ -1616,22 +2270,13 @@ export class AutoSchedulerController {
             const optimizeReq: OptimizeRequest = {
                 shifts: optimizerShifts,
                 employees: optimizerEmployees,
-                // Availability is a HARD constraint for the auto-scheduler: unset =
-                // unavailable, and the solver may never place a shift outside a
-                // declared block. Forced on regardless of caller-supplied constraints.
-                constraints: buildSolverConstraints(input.constraints, optimizerShifts),
+                constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode, windowCard),
                 // B1 — single-mode: always send the pinned policy (no sliders).
                 strategy: SINGLE_MODE_STRATEGY,
                 solver_params: {
                     max_time_seconds: solverBudget,
                     num_workers: input.numWorkers ?? 8,
                     compute_alternatives: input.computeAlternatives ?? false,
-                    // Large month-long rosters time-starve the fairness/cost
-                    // tiers on one monolithic solve. For big problems, decompose
-                    // by ISO week (solver pins prior weeks → cross-week rest,
-                    // hour caps and cumulative fairness are preserved). The
-                    // solver auto-skips to monolithic when the range is <2 weeks,
-                    // so this is safe for any large single-week problem too.
                     decompose_by_week: rawPairs > 30_000,
                 },
             };
@@ -1658,13 +2303,25 @@ export class AutoSchedulerController {
                 const validationStart = performance.now();
                 // Past shifts are excluded from greedy too — appended
                 // back as failed proposals so they stay visible in the UI.
-                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes, debtsMap, jurisdictionFor);
+                validatedProposals = await greedyFallback(
+                    futureShifts,
+                    scopedEmployees,
+                    employeeDetails,
+                    existingRoster,
+                    input.strategy,
+                    windowObligationMinutes,
+                    debtsMap,
+                    validationCtx,
+                    activeMode,
+                    windowCard,
+                    jurisdictionFor,
+                );
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
             } else {
                 // ── Parse + compliance validate ───────────────────────────────
-                const { shiftMap, employeeMap } = solutionParser.buildMaps(input.shifts, input.employees);
+                const { shiftMap, employeeMap } = solutionParser.buildMaps(scopedShifts, scopedEmployees);
                 const { groups, uncoveredV8ShiftIds: uncov } = solutionParser.parse(optimizeResponse, shiftMap, employeeMap);
                 
                 // Add back the past shifts as uncovered (optimizer never saw them)
@@ -1675,7 +2332,9 @@ export class AutoSchedulerController {
                     groups,
                     employeeDetails,
                     existingRoster,
-                    employeeMap
+                    employeeMap,
+                    validationCtx,
+                    v8SolverConfig,
                 );
 
                 // Add back the past shifts as explicitly failed proposals (for UI visibility)
@@ -1694,7 +2353,19 @@ export class AutoSchedulerController {
                 usedFallback = true;
                 optimizerStatus = 'UNKNOWN';
                 const validationStart = performance.now();
-                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes, debtsMap, jurisdictionFor);
+                validatedProposals = await greedyFallback(
+                    futureShifts,
+                    scopedEmployees,
+                    employeeDetails,
+                    existingRoster,
+                    input.strategy,
+                    windowObligationMinutes,
+                    debtsMap,
+                    validationCtx,
+                    activeMode,
+                    windowCard,
+                    jurisdictionFor,
+                );
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -1705,13 +2376,6 @@ export class AutoSchedulerController {
         throwIfAborted();
 
         // ── Layer 2.4: Compliance repair — re-home rejected assignments ───────
-        // Maximise COMPLIANT coverage. Any shift whose optimizer assignment
-        // failed the compliance validator is re-solved onto a DIFFERENT compliant
-        // employee (the failing pair is excluded), pinning the kept roster so
-        // cross-assignment rest/hours still hold. Bounded + best-effort: it never
-        // blocks the preview, and only runs on the real optimizer path (greedy
-        // fallback has no solver to re-solve). Whatever still can't be placed
-        // compliantly is left uncovered by the hard gate below.
         if (!usedFallback && validatedProposals.some(p => !p.passing)) {
             throwIfAborted();
             const repairStart = performance.now();
@@ -1720,16 +2384,15 @@ export class AutoSchedulerController {
                 proposals: validatedProposals,
                 optimizerShifts,
                 optimizerEmployees,
-                inputShifts: input.shifts,
-                inputEmployees: input.employees,
+                inputShifts: scopedShifts,
+                inputEmployees: scopedEmployees,
                 employeeDetails,
                 existingRoster,
-                // Availability is a HARD constraint for the auto-scheduler: unset =
-                // unavailable, and the solver may never place a shift outside a
-                // declared block. Forced on regardless of caller-supplied constraints.
-                constraints: buildSolverConstraints(input.constraints, optimizerShifts),
+                validationCtx,
+                constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode, windowCard),
                 budgetSeconds: Math.min(30, Math.max(10, Math.round(solverBudget / 4))),
                 signal: input.signal,
+                solverConfig: v8SolverConfig,
             });
             const after = validatedProposals.filter(p => !p.passing).length;
             console.info(
@@ -1739,40 +2402,20 @@ export class AutoSchedulerController {
         }
 
         // ── Layer 2.5: Enrich with Health Metrics (Fatigue/Fairness/Cost) ────
-        // We calculate production-grade metrics for all proposals to ensure
-        // the manager has an accurate audit of the projected roster health.
         if (validatedProposals.length > 0) {
-            const employeeMap = new Map(input.employees.map(e => [e.id, e]));
-            // cl 42 weekly OT for the greedy-fallback re-estimate (compliance
-            // audit finding — 2026-08-02) — see buildGreedyFallbackPriorOrdinaryMap.
-            // A no-op (undefined lookups) on the optimizer path, since it's only
-            // consulted inside the `usedFallback` branch below.
+            const employeeMap = new Map(scopedEmployees.map(e => [e.id, e]));
             const fallbackPriorOrdinaryMap = usedFallback
-                ? buildGreedyFallbackPriorOrdinaryMap(validatedProposals, existingRoster, input.shifts)
+                ? buildGreedyFallbackPriorOrdinaryMap(validatedProposals, existingRoster, scopedShifts)
                 : new Map<string, number>();
 
             for (const p of validatedProposals) {
                 if (!p.employeeId) continue;
                 const emp = employeeMap.get(p.employeeId);
-                const shift = input.shifts.find(s => s.id === p.shiftId);
+                const shift = scopedShifts.find(s => s.id === p.shiftId);
 
-                // 1. Cost (dollars, AUD)
-                // On the optimizer path the solver already returned the
-                // per-assignment cost it actually optimized — it is threaded
-                // here as `p.optimizerCost` (set from `proposal.cost` in
-                // `_validateProposals`, which originates in solution-parser).
-                // That solver value IS the single source of truth and is what
-                // the pillar "Labour cost" (`pillars.cost.total`) sums, so the
-                // grid "Total Cost" reconciles with the pillar only if we leave
-                // it untouched. Re-estimating client-side via `estimateShiftCost`
-                // here is a different cost engine that diverges by ~15%.
-                //
-                // The greedy fallback never calls the optimizer, so no solver
-                // cost exists — in that case we DO re-estimate. Both engines
-                // return dollars, so no unit conversion is needed.
                 if (usedFallback && shift && emp) {
                     p.optimizerCost = estimateGreedyFallbackCost(
-                        shift, emp, employeeDetails.get(emp.id), fallbackPriorOrdinaryMap.get(p.shiftId), jurisdictionFor(shift),
+                        shift, emp, employeeDetails.get(emp.id), fallbackPriorOrdinaryMap.get(p.shiftId), rateCards, jurisdictionFor(shift),
                     );
                 }
 
@@ -1788,7 +2431,7 @@ export class AutoSchedulerController {
                         start_time: pr.startTime,
                         end_time: pr.endTime,
                         duration_minutes: durationMinutes(pr.startTime, pr.endTime),
-                        unpaid_break_minutes: input.shifts.find(s => s.id === pr.shiftId)?.unpaid_break_minutes ?? 0
+                        unpaid_break_minutes: scopedShifts.find(s => s.id === pr.shiftId)?.unpaid_break_minutes ?? 0
                     })),
                 ];
 
@@ -1797,20 +2440,58 @@ export class AutoSchedulerController {
                     p.shiftDate,
                 ).current;
 
-                // 3. Calculate Utilization (Fairness)
-                const scheduledMins = totalShifts.reduce((acc, s) => acc + (s as any).duration_minutes || 0, 0);
-                const contractedMins = (emp?.max_weekly_minutes ?? 2400) * weekScale;
-                p.utilization = calculateUtilization(scheduledMins / 60, contractedMins / 60);
+                // 3. Calculate Utilization (Contract Obligation in FT_STANDARD / FT_SECURITY / PT)
+                if (isFtStandard) {
+                    const netInWindow = totalShifts
+                        .filter(s => (s.shift_date ?? '') >= dates[0])
+                        .reduce(
+                            (acc, s) => acc + Math.max(0, ((s as any).duration_minutes || 0) - ((s as any).unpaid_break_minutes || 0)),
+                            0,
+                        );
+                    const ftTarget = windowObligationMinutes.get(p.employeeId) || (2280 * weekScale);
+                    p.utilization = calculateUtilization(netInWindow / 60, ftTarget / 60);
+                } else if (isFtSecurity) {
+                    // Sch 3 §3.2(a): FT Security meal break is paid -> full clock duration counts
+                    const paidInWindow = totalShifts
+                        .filter(s => (s.shift_date ?? '') >= dates[0])
+                        .reduce((acc, s) => acc + ((s as any).duration_minutes || 0), 0);
+                    const secTarget = windowObligationMinutes.get(p.employeeId) || (FT_SECURITY_WEEKLY_CONTRACT_MINUTES * weekScale);
+                    p.utilization = calculateUtilization(paidInWindow / 60, secTarget / 60);
+                } else if (isPtMode) {
+                    const empIsSec = emp ? resolveIsSecurity(emp) : false;
+                    const workedInWindow = totalShifts
+                        .filter(s => (s.shift_date ?? '') >= dates[0])
+                        .reduce(
+                            (acc, s) => acc + (empIsSec
+                                ? ((s as any).duration_minutes || 0)
+                                : Math.max(0, ((s as any).duration_minutes || 0) - ((s as any).unpaid_break_minutes || 0))),
+                            0,
+                        );
+                    const ptTarget = windowObligationMinutes.get(p.employeeId)
+                        || ((weeklyContractMinutes.get(p.employeeId) || 1200) * weekScale);
+                    p.utilization = calculateUtilization(workedInWindow / 60, ptTarget / 60);
+                } else if (isFptMode) {
+                    const empIsSec = emp ? resolveIsSecurity(emp) : false;
+                    const workedInWindow = totalShifts
+                        .filter(s => (s.shift_date ?? '') >= dates[0])
+                        .reduce(
+                            (acc, s) => acc + (empIsSec
+                                ? ((s as any).duration_minutes || 0)
+                                : Math.max(0, ((s as any).duration_minutes || 0) - ((s as any).unpaid_break_minutes || 0))),
+                            0,
+                        );
+                    const fptTarget = windowObligationMinutes.get(p.employeeId)
+                        || ((weeklyContractMinutes.get(p.employeeId) || FPT_WEEKLY_CONTRACT_MINUTES) * weekScale);
+                    p.utilization = calculateUtilization(workedInWindow / 60, fptTarget / 60);
+                } else {
+                    const scheduledMins = totalShifts.reduce((acc, s) => acc + (s as any).duration_minutes || 0, 0);
+                    const contractedMins = (emp?.max_weekly_minutes ?? 2400) * weekScale;
+                    p.utilization = calculateUtilization(scheduledMins / 60, contractedMins / 60);
+                }
             }
         }
 
         // ── Compliance is a HARD gate ─────────────────────────────────────────
-        // A non-compliant assignment is NEVER applied (commit() drops it at the
-        // recheck step), so it must not be presented as a "proposal" either —
-        // otherwise the scorecard shows <100% compliance for a roster we would
-        // never actually book. Reclassify every failing proposal as an UNCOVERED
-        // shift: the applied roster is then 100% compliant BY CONSTRUCTION, and
-        // coverage honestly reflects the compliant maximum the solver reached.
         const compliantProposals = validatedProposals.filter(p => p.passing);
         const droppedForCompliance = validatedProposals.filter(p => !p.passing);
         uncoveredV8ShiftIds = Array.from(
@@ -1820,11 +2501,6 @@ export class AutoSchedulerController {
         const passing = compliantProposals.length;
         const failing = 0; // by construction — nothing non-compliant reaches the roster
 
-        // Recompute coverage + cost pillars over the COMPLIANT set so the
-        // scorecard matches what will actually be booked (the solver computed
-        // them over every proposal, including the ones we just uncovered).
-        // Fairness/wellbeing move only marginally and need solver-side
-        // effective-minute state to recompute, so they are left as reported.
         let pillars = optimizerPillars;
         if (pillars) {
             const total = pillars.coverage?.total ?? (passing + uncoveredV8ShiftIds.length);
@@ -1845,8 +2521,6 @@ export class AutoSchedulerController {
             };
         }
 
-        // Tell the U5 banner WHY each compliance-dropped shift is uncovered (the
-        // solver's own binding list only covers shifts it couldn't place at all).
         const complianceBinding = droppedForCompliance
             .filter(p => p.violations?.length)
             .map(p => ({
@@ -1857,6 +2531,7 @@ export class AutoSchedulerController {
             }));
 
         const result: AutoSchedulerResult = {
+            mode: activeMode,
             optimizerStatus,
             solveTimeMs,
             validationTimeMs,
@@ -1865,23 +2540,16 @@ export class AutoSchedulerController {
             failing,
             uncoveredV8ShiftIds,
             proposals: compliantProposals,  // only assignments we will actually book
-            // The exact snapshot this preview validated. A shift without a
-            // version is omitted, and the RPC refuses an absent entry.
             shiftVersions: Object.fromEntries(
-                input.shifts
+                scopedShifts
                     .filter(s => typeof s.version === 'number')
                     .map(s => [s.id, s.version as number]),
             ),
             canCommit: passing > 0,
             usedFallback,
             capacityCheck,
-            // Forward the per-category breakdown from the Python service.
-            // Null when the greedy fallback path was taken (usedFallback=true)
-            // because greedyFallback never calls the optimizer.
             objective_breakdown: optimizerObjectiveBreakdown,
             fairnessLedger: ledgerStatus,
-            // B3/B5/B4 — single-mode transparency for the scorecard, constraint
-            // banner, trade-off explorer, and per-shift "why" panel.
             pillars,
             bindingConstraints: [...(optimizerBinding ?? []), ...complianceBinding],
             alternatives: optimizerAlternatives,
@@ -1895,27 +2563,20 @@ export class AutoSchedulerController {
             throwIfAborted();
             const auditStart = performance.now();
             
-            // We audit both:
-            // 1. Uncovered shifts (optimizer couldn't place)
-            // 2. Failed shifts (optimizer placed but compliance rejected)
-        const shiftsToAudit = [
+            const shiftsToAudit = [
                 ...result.uncoveredV8ShiftIds,
                 ...result.proposals.filter(p => !p.passing).map(p => p.shiftId)
             ];
-            // Remove duplicates
             const uniqueAuditIds = Array.from(new Set(shiftsToAudit));
 
             result.uncoveredAudit = await auditor.audit({
                 targetShiftIds: uniqueAuditIds,
-                allShifts: input.shifts,
-                allEmployees: input.employees,
+                allShifts: scopedShifts,
+                allEmployees: scopedEmployees,
                 proposals: result.proposals,
                 optimizerShifts,
                 optimizerEmployees,
-                // Availability is a HARD constraint for the auto-scheduler: unset =
-                // unavailable, and the solver may never place a shift outside a
-                // declared block. Forced on regardless of caller-supplied constraints.
-                constraints: buildSolverConstraints(input.constraints, optimizerShifts),
+                constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode, windowCard),
                 capacityCheck,
                 availabilityData,
             });
@@ -2036,12 +2697,17 @@ export class AutoSchedulerController {
         // Per-employee daily cap (default 8h). Today employees don't carry
         // a max_daily_minutes field on the public type, but the optimizer
         // overrides do — fall back to default for the rest.
-        const dailyCapFor = (empId: string): number => {
-            const det = employeeDetails?.get(empId) as Partial<OptimizerEmployee> | undefined;
+        const secRoleIds = deriveSecurityRoleIds(shifts);
+        const dailyCapFor = (emp: EmployeeMeta): number => {
+            const det = employeeDetails?.get(emp.id) as Partial<OptimizerEmployee> | undefined;
             const weekly = det?.max_weekly_minutes;
             // Approximate daily cap as weekly / 5 if provided (matches typical
-            // 5-day work weeks); else default.
+            // 5-day work weeks); else 12h (720m) for Sch 3 Security (whose
+            // standard shift is 12h, §3.1(a)) or 10h (600m) general default.
             if (weekly && weekly > 0) return Math.round(weekly / 5);
+            const isSec = det?.is_security_role
+                ?? (emp.contracted_role_ids ?? []).some(id => secRoleIds.has(id));
+            if (isSec) return FT_MAX_DAILY_NET_MINUTES;
             return DEFAULT_MAX_DAILY_MINUTES;
         };
 
@@ -2067,7 +2733,7 @@ export class AutoSchedulerController {
         // Supply per day = sum of all employees' daily caps. Employees can
         // theoretically work any day, so this is an upper bound on supply
         // (real availability windows would only reduce it further).
-        const supplyPerDay = employees.reduce((acc, e) => acc + dailyCapFor(e.id), 0);
+        const supplyPerDay = employees.reduce((acc, e) => acc + dailyCapFor(e), 0);
 
         const perDay: CapacityDayBreakdown[] = [];
         let totalDemand = 0;
@@ -2134,13 +2800,15 @@ export class AutoSchedulerController {
         inputEmployees: EmployeeMeta[];
         employeeDetails: Map<string, Partial<OptimizerEmployee>>;
         existingRoster: Map<string, ExistingShiftRef[]>;
+        validationCtx?: ValidationContextMaps;
         constraints: OptimizerConstraints;
         budgetSeconds: number;
         signal?: AbortSignal;
+        solverConfig?: SolverConfig;
     }): Promise<ValidatedProposal[]> {
         const {
             proposals, optimizerShifts, optimizerEmployees, inputShifts, inputEmployees,
-            employeeDetails, existingRoster, constraints, budgetSeconds, signal,
+            employeeDetails, existingRoster, validationCtx, constraints, budgetSeconds, signal, solverConfig,
         } = args;
         const MAX_ITERS = 3;
         const SEP = '\x00';
@@ -2161,6 +2829,7 @@ export class AutoSchedulerController {
 
         const excluded = new Set<string>();
         const unresolved = new Map<string, ValidatedProposal>();
+        const gaveUp: ValidatedProposal[] = [];
         for (const p of pending) {
             excluded.add(`${p.employeeId}${SEP}${p.shiftId}`);
             unresolved.set(p.shiftId, p);
@@ -2216,7 +2885,14 @@ export class AutoSchedulerController {
             for (const [empId, pins] of pinsByEmp) {
                 augmentedRoster.set(empId, [...(existingRoster.get(empId) ?? []), ...pins]);
             }
-            const repairValidated = await this._validateProposals(groups, employeeDetails, augmentedRoster);
+            const repairValidated = await this._validateProposals(
+                groups,
+                employeeDetails,
+                augmentedRoster,
+                employeeMap,
+                validationCtx,
+                solverConfig,
+            );
 
             const placed = new Set(repairValidated.map(p => p.shiftId));
             const newlyPassing = repairValidated.filter(p => p.passing);
@@ -2229,16 +2905,20 @@ export class AutoSchedulerController {
                 if (unresolved.has(p.shiftId)) unresolved.set(p.shiftId, p); // latest failing attempt
             }
             // A pending shift the solver couldn't place at all this round has no
-            // remaining compliant candidate → give up on it (leave uncovered).
+            // remaining compliant candidate → stop retrying it, and preserve its
+            // failing proposal in `gaveUp` so the hard gate marks it uncovered.
             for (const sid of Array.from(unresolved.keys())) {
-                if (!placed.has(sid)) unresolved.delete(sid);
+                if (!placed.has(sid)) {
+                    gaveUp.push(unresolved.get(sid)!);
+                    unresolved.delete(sid);
+                }
             }
             if (newlyFailing.length === 0) break; // nothing new failed → converged
         }
 
         // Kept compliant + whatever still couldn't be re-homed (stays failing →
         // uncovered by the hard gate) + the unfixable failures.
-        return [...compliant, ...Array.from(unresolved.values()), ...nonRepairable];
+        return [...compliant, ...gaveUp, ...Array.from(unresolved.values()), ...nonRepairable];
     }
 
     private async _validateProposals(
@@ -2246,17 +2926,10 @@ export class AutoSchedulerController {
         employeeDetails: Map<string, Partial<OptimizerEmployee>>,
         existingRoster: Map<string, ExistingShiftRef[]>,
         employeeMap?: Map<string, EmployeeMeta>,
+        validationCtx?: ValidationContextMaps,
+        solverConfig?: SolverConfig,
     ): Promise<ValidatedProposal[]> {
         const all: ValidatedProposal[] = [];
-
-        // The employee's raw in-scope contract status, as an array because V8
-        // models multi-contract staff. Omitted (rather than guessed) when the
-        // caller has no employee map, keeping the rule fail-open exactly as
-        // documented instead of inventing a status to match against.
-        const employmentStatusesFor = (employeeId: string): string[] | undefined => {
-            const status = employeeMap?.get(employeeId)?.employment_status;
-            return status ? [status] : undefined;
-        };
 
         // Aggregate compliance-failure diagnostics into ONE summary log at the
         // end, instead of one noisy console line per employee (100+ staff floods
@@ -2270,21 +2943,15 @@ export class AutoSchedulerController {
             try {
                 const details = employeeDetails.get(group.employeeId);
                 const existing = existingRoster.get(group.employeeId) ?? [];
+                const emp = employeeMap?.get(group.employeeId);
 
                 validationResult = await assignmentValidator.simulate(
                     group.shiftIds, 
                     group.employeeId, 
                     { 
                         mode: 'PARTIAL_APPLY',
+                        solverConfig,
                         injectedData: {
-                            // Pass candidate shifts in their unassigned
-                            // (draft) state. The validator's Rule 2
-                            // (`ALREADY_ASSIGNED`) rejects any shift whose
-                            // `assigned_employee_id` is set — pre-stamping
-                            // the optimizer's target employee here makes
-                            // every proposal flunk validation. The intended
-                            // assignee is conveyed via `group.employeeId`
-                            // (the second argument to simulate()).
                             candidateShifts: group.proposals.map(p => ({
                                 id: p.shiftId,
                                 shift_date: p.shiftDate,
@@ -2295,10 +2962,6 @@ export class AutoSchedulerController {
                                 lifecycle_status: 'draft',
                                 unpaid_break_minutes: p.unpaidBreakMinutes ?? 0,
                                 paid_break_minutes: p.paidBreakMinutes ?? 0,
-                                // Without these the rebuilt candidate loses its
-                                // employment target and V8_EMPLOYMENT_TARGET goes
-                                // silent, so this validator would keep ratifying
-                                // assignments the DB trigger rejects.
                                 target_employment_type: p.targetEmploymentType ?? null,
                                 target_requires_flexible: p.targetRequiresFlexible ?? false,
                             })) as any,
@@ -2311,18 +2974,13 @@ export class AutoSchedulerController {
                                 unpaid_break_minutes: e.unpaid_break_minutes ?? 0,
                                 paid_break_minutes: e.paid_break_minutes ?? 0,
                             })) as any,
-                            employee: {
-                                id: group.employeeId,
-                                name: group.employeeName,
-                                contracts: details?.contracts || [],
-                                qualifications: details?.qualifications || [],
-                                // V8_EMPLOYMENT_TARGET returns [] when this is
-                                // empty, so the shift-side hydration above only
-                                // takes effect once the employee side is present
-                                // too. Raw contract status — NOT `contract_type`,
-                                // which erases the Flexible Part-Time variant.
-                                employment_statuses: employmentStatusesFor(group.employeeId),
-                            } as any
+                            employee: buildInjectedEmployeeInfo({
+                                employeeId: group.employeeId,
+                                employeeName: group.employeeName,
+                                emp,
+                                details,
+                                ctx: validationCtx,
+                            }),
                         }
                     },
                 );

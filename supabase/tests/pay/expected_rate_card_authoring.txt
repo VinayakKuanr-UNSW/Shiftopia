@@ -1,0 +1,42 @@
+view-only (epsilon) creates a card: refused (42501)
+another organization creates a card: refused (42501)
+currency aud: refused (22023)
+unknown rule set: refused (22023)
+blank code: refused (22023)
+publish a card with no rates: refused (55000)
+Administrator creates a card: draft, 0 rate(s), notes FWC approval pending
+it starts with the rule set's default loadings (= ICC's seeded card): t
+meta: set status: refused (22023)
+meta of a published card: refused (55000)
+meta updated: t
+upsert 3 rates: 3
+casual paid off the casual-loading formula: refused (22023)
+editing an override line without a paid rate keeps the manual rate: t
+rate 0.004 (0.00 in cents): refused (22023)
+rate 1000000: refused (22023)
+rate 0: refused (22023)
+basis weekly: refused (22023)
+classification "level 3": refused (22023)
+annualised without a paid rate: refused (22023)
+rates of a published card: refused (55000)
+permanent paid = ordinary, casual paid = ordinary × (1 + casual loading): t
+manual override kept with its flag and note: t
+view-only (epsilon) edits a rate: refused (42501)
+bulk adjust LEVEL_2 × 1.1: 1 line(s)
+bulk adjust × 3: refused (22023)
+LEVEL_2 casual now 34.10 / 42.63, LEVEL_1 untouched: t
+upsert allowances: 2
+allowance -1: refused (22023)
+allowance unit per_fortnight: refused (22023)
+remove one rate and one allowance: 2
+trainee matrix not an object: refused (22023)
+lines now: 2 rate(s), allowances meal=20.50, trainee schedule ICC 2028–29 trainees, SWS minimum 95
+copy: every line and the loadings, derivation ICC-EA-2026-27 × 1: t
+copy into an organization where the caller is not Administrator: refused (42501)
+copy with options: rates scaled t, allowances 0, trainee schedule 0
+Administrator of both copies into the other organization: t, still a draft: t
+copy LEVEL_3 lines and split_shift into the new card: t
+copy lines into a published card: refused (55000)
+authored card published: published; ICC-EA-2026-27 now ends 2028-07-09
+roll forward keeps notes and overrides: t
+anonymous callers: cannot call

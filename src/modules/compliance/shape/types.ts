@@ -266,8 +266,10 @@ export interface ShapeResult {
 export interface ShapeConfig {
     /** cl 35.1(c) — full-time daily ordinary floor. 7.6h. */
     ft_min_ordinary_day_minutes: number;
-    /** Maximum net length of a single shift. 12h. */
+    /** Maximum net length of a single shift. 12h (pay_rate_card_loadings.ordinary_daily_cap_hours). */
     max_shift_minutes:           number;
+    /** Maximum paid length of a single Security shift. 12h (pay_rate_card_loadings.security_ordinary_cap_hours). */
+    security_max_shift_minutes?: number;
     /**
      * HOUSE POLICY — maximum gross span of a single engagement, breaks
      * included. 12h. Advisory, not blocking.
@@ -292,6 +294,12 @@ export interface ShapeConfig {
      * value and its own rule rather than another row in that table.
      */
     public_holiday_min_engagement_minutes: number;
+    /** cl 12.3(e) / 12.4(c) / 12.5(c) — standard-day minimum engagement. 3h (180m). */
+    min_engagement_minutes:          number;
+    /** cl 12.4(c)(iii) / 12.5(c)(ii) — Sunday minimum engagement for FPT / Casual. 4h (240m). */
+    min_engagement_sunday_minutes:   number;
+    /** cl 12.4(c)(i) / 12.5(c)(i) — non-event-day training minimum engagement for FPT / Casual. 2h (120m). */
+    min_engagement_training_minutes: number;
     /**
      * cl 36.1 — net length above which an unpaid meal break is required. 5h.
      *
@@ -324,8 +332,12 @@ export interface ShapeConfig {
 export const DEFAULT_SHAPE_CONFIG: ShapeConfig = {
     ft_min_ordinary_day_minutes:    456,  // 7.6h — 38h ÷ 5
     max_shift_minutes:              720,  // 12h net
+    security_max_shift_minutes:     720,  // 12h paid
     max_spread_minutes:             720,  // 12h span — house policy, not cl 39.2
     public_holiday_min_engagement_minutes: 240,  // 4h — cl 56.2
+    min_engagement_minutes:         180,  // 3h — cl 12
+    min_engagement_sunday_minutes:  240,  // 4h — cl 12.4(c)/12.5(c)
+    min_engagement_training_minutes: 120, // 2h — cl 12.4(c)/12.5(c)
     meal_break_threshold_minutes:   300,  // 5h
     meal_break_min_minutes:          30,
     meal_break_max_minutes:          60,

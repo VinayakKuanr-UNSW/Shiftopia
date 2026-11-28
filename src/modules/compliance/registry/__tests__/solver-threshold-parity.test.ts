@@ -16,6 +16,11 @@ import {
 } from '../../v8/rules/consecutive-days';
 import { MAX_SPLIT_SHIFT_GAP_MINUTES } from '@/modules/rosters/domain/projections/utils/cost/split-shift-eligibility';
 import { resolveRateSet } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
+import { ICC_SYDNEY_EA_LOADINGS } from '@/modules/rosters/domain/projections/utils/cost/loadings';
+import { assignmentEvaluator } from '../../v8/swap-engine/assignment-evaluator';
+import { v8ConfigFromLoadings } from '../../v8/swap-engine/constraint-engine';
+import { evaluateShiftShape, shapeConfigFromLoadings } from '../../shape/evaluate';
+import { DEFAULT_SHAPE_CONFIG } from '../../shape/types';
 
 /**
  * The CP-SAT model and the labour layer must agree on every number.
@@ -225,5 +230,102 @@ describe('the solver actually uses the constants it declares', () => {
         // measured a longer spread than the agreement allows.
         expect(src).toMatch(/unpaid_break_minutes', 0\) or 0\)\s*\n\s*\+ \(getattr\(s, 'paid_break_minutes'/);
         expect(src).toMatch(/break_expr = 0\s*\n\s*limit = CASUAL_SECURITY_SPREAD_MINUTES/);
+    });
+
+    it('reads daily caps and min engagements from pricing_policy in both solver and /audit', () => {
+        const runner = readFileSync('optimizer-service/ortools_runner.py', 'utf8').replace(/#.*$/gm, '');
+        expect(code).toMatch(/policy\.daily_cap_minutes\(/);
+        expect(code).toMatch(/policy\.min_engagement_for\(/);
+        expect(code).toMatch(/self\.data\.constraints\.pricing_policy\.daily_cap_minutes\(/);
+        expect(runner).toMatch(/policy\.daily_cap_minutes\(/);
+        expect(runner).toMatch(/policy\.min_engagement_for\(/);
+    });
+});
+
+describe('rate-card thresholds — V8, Shape, and Python PricingPolicy agree', () => {
+    it('ICC loadings reproduce DEFAULT_V8_CONFIG and DEFAULT_SHAPE_CONFIG exactly', () => {
+        expect(v8ConfigFromLoadings(ICC_SYDNEY_EA_LOADINGS)).toEqual({
+            max_daily_hours: DEFAULT_V8_CONFIG.max_daily_hours,
+            security_max_daily_hours: DEFAULT_V8_CONFIG.security_max_daily_hours,
+        });
+        expect(shapeConfigFromLoadings(ICC_SYDNEY_EA_LOADINGS)).toEqual({
+            max_shift_minutes: DEFAULT_SHAPE_CONFIG.max_shift_minutes,
+            security_max_shift_minutes: DEFAULT_SHAPE_CONFIG.security_max_shift_minutes,
+            min_engagement_minutes: DEFAULT_SHAPE_CONFIG.min_engagement_minutes,
+            min_engagement_sunday_minutes: DEFAULT_SHAPE_CONFIG.min_engagement_sunday_minutes,
+            public_holiday_min_engagement_minutes: DEFAULT_SHAPE_CONFIG.public_holiday_min_engagement_minutes,
+            min_engagement_training_minutes: DEFAULT_SHAPE_CONFIG.min_engagement_training_minutes,
+        });
+    });
+
+    it('custom card daily caps (10h general, 8h security) bind V8 and Shape in lockstep', () => {
+        const custom = {
+            ...ICC_SYDNEY_EA_LOADINGS,
+            ordinaryDailyCapHours: 10,
+            securityOrdinaryCapHours: 8,
+        };
+        const v8Cfg = v8ConfigFromLoadings(custom);
+        const shapeCfg = shapeConfigFromLoadings(custom);
+
+        // 11h general shift: passes default 12h, blocked under 10h card by both V8 and Shape.
+        const gen11h = {
+            id: 's11', date: '2027-07-06', shift_date: '2027-07-06',
+            start_time: '07:00', end_time: '18:30', unpaid_break_minutes: 30,
+        };
+        expect(assignmentEvaluator.evaluate({
+            employee_id: 'e1', name: 'Gen', current_shifts: [], candidate_shift: gen11h,
+            action_type: 'assign', config: v8Cfg, employee_context: { contract_type: 'FT', is_security_role: false },
+        }).violations.map(v => v.constraint_id)).toContain('V8_MAX_DAILY_HOURS');
+        expect(evaluateShiftShape({
+            shift_date: '2027-07-06', start_time: '07:00', end_time: '18:30',
+            unpaid_break_minutes: 30, break_start: '12:00', break_end: '12:30',
+            target_employment_type: 'FT', is_security: false,
+        }, shapeCfg).hits.map(h => h.rule_id)).toContain('SHAPE_MAX_DURATION');
+
+        // 9h Security shift: passes 10h general cap, blocked under 8h security cap by both V8 and Shape.
+        const sec9h = {
+            id: 's9s', date: '2027-07-06', shift_date: '2027-07-06',
+            start_time: '07:00', end_time: '16:00', unpaid_break_minutes: 0,
+        };
+        expect(assignmentEvaluator.evaluate({
+            employee_id: 'e2', name: 'Sec', current_shifts: [], candidate_shift: sec9h,
+            action_type: 'assign', config: v8Cfg, employee_context: { contract_type: 'FT', is_security_role: true },
+        }).violations.map(v => v.constraint_id)).toContain('V8_MAX_DAILY_HOURS');
+        expect(evaluateShiftShape({
+            shift_date: '2027-07-06', start_time: '07:00', end_time: '16:00',
+            unpaid_break_minutes: 0, break_start: '11:00', break_end: '11:30',
+            target_employment_type: 'FT', is_security: true,
+        }, shapeCfg).hits.map(h => h.rule_id)).toContain('SHAPE_MAX_DURATION');
+    });
+
+    it('custom card min-engagement floors bind Shape across standard, Sunday, PH, and training', () => {
+        const custom = {
+            ...ICC_SYDNEY_EA_LOADINGS,
+            minEngagementMinutes: 240,
+            minEngagementSundayMinutes: 300,
+            minEngagementPublicHolidayMinutes: 360,
+            minEngagementTrainingMinutes: 90,
+        };
+        const shapeCfg = shapeConfigFromLoadings(custom);
+
+        expect(evaluateShiftShape({
+            shift_date: '2027-07-05', start_time: '09:00', end_time: '12:00',
+            target_employment_type: 'Casual',
+        }, shapeCfg).hits.map(h => h.rule_id)).toContain('SHAPE_MIN_ENGAGEMENT');
+
+        expect(evaluateShiftShape({
+            shift_date: '2027-07-11', start_time: '09:00', end_time: '13:00',
+            target_employment_type: 'Casual', is_sunday: true,
+        }, shapeCfg).hits.map(h => h.rule_id)).toContain('SHAPE_MIN_ENGAGEMENT');
+
+        expect(evaluateShiftShape({
+            shift_date: '2027-07-05', start_time: '09:00', end_time: '14:00',
+            target_employment_type: 'Casual', is_public_holiday: true,
+        }, shapeCfg).hits.map(h => h.rule_id)).toContain('SHAPE_MIN_ENGAGEMENT_PH');
+
+        expect(evaluateShiftShape({
+            shift_date: '2027-07-05', start_time: '09:00', end_time: '10:30',
+            target_employment_type: 'Casual', is_training: true,
+        }, shapeCfg).passed).toBe(true);
     });
 });

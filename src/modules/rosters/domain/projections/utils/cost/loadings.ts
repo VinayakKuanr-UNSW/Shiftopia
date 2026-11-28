@@ -56,6 +56,8 @@ export interface RateCardLoadings {
   higherDutiesMinHours: number;
   /** Hours past rostered finish that trigger the meal allowance (cl 28.1: 2.0). */
   mealAllowanceTriggerHours: number;
+  /** Supported Wage System minimum weekly payment in dollars (Sch 6 §1.4.2: 90). */
+  swsMinWeekly: number;
 }
 
 /**
@@ -84,6 +86,7 @@ export const ICC_SYDNEY_EA_LOADINGS: Readonly<RateCardLoadings> = Object.freeze(
   minEngagementTrainingMinutes: 120,
   higherDutiesMinHours: 4,
   mealAllowanceTriggerHours: 2.0,
+  swsMinWeekly: 90,
 });
 
 /** Column list for PostgREST selects on `public.pay_rate_card_loadings`. */
@@ -108,6 +111,7 @@ export const RATE_CARD_LOADINGS_SELECT = [
   'min_engagement_training_minutes',
   'higher_duties_min_hours',
   'meal_allowance_trigger_hours',
+  'sws_min_weekly',
 ].join(', ');
 
 const num = (v: unknown): number => {
@@ -138,5 +142,6 @@ export function mapDbLoadingsRow(row: Record<string, unknown>): RateCardLoadings
     minEngagementTrainingMinutes: num(row.min_engagement_training_minutes),
     higherDutiesMinHours: num(row.higher_duties_min_hours),
     mealAllowanceTriggerHours: num(row.meal_allowance_trigger_hours),
+    swsMinWeekly: num(row.sws_min_weekly),
   };
 }

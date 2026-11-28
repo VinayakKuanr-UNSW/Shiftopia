@@ -1,8 +1,10 @@
 import { DEFAULT_JURISDICTION } from '@/modules/core/lib/holidays';
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
 import { isPublicHolidayISO, SATURDAY, SUNDAY } from './constants';
-import { ICC_SYDNEY_EA_LOADINGS, type RateCardLoadings } from './loadings';
-import { resolveRateSet, type WageRateTable } from './rate-schedule';
+import { type RateCardLoadings } from './loadings';
+import { type WageRateTable } from './rate-schedule';
+import { resolvePricing } from './rate-card-resolver';
+import { UNPRICED_COST_BREAKDOWN } from './constants';
 import { resolvePaymentMinEngagementMinutes } from './min-engagement-floor';
 import { getTraineeBaseRate } from './trainee_matrix';
 import { getApprenticeMultiplier, SWS_MIN_WEEKLY } from './apprentice_matrix';
@@ -164,9 +166,17 @@ export function estimateDetailedShiftCost(
     shift_date = shift_date.split('T')[0];
   }
   
+  // Rates, allowances, loadings and the trainee schedule are the organization's
+  // published rate card in force on the shift date (rate-card-resolver.ts);
+  // without a schedule, the embedded effective-dated set (cl 25.1 as data).
+  const pricing = resolvePricing(shift_date, options.rateCards ?? ctx?.rateCards, options.loadings, ctx?.loadings);
+  if (!pricing) return UNPRICED_COST_BREAKDOWN;
+  const rateSet = pricing.rateSet;
+
   // ── Date facts (Phase 3) ───────────────────────────────────────────────
-  const jurisdiction = options.jurisdiction ?? ctx?.jurisdiction ?? DEFAULT_JURISDICTION;
-  const canUseCtx = !!ctx && (!options.jurisdiction || options.jurisdiction === (ctx.jurisdiction ?? DEFAULT_JURISDICTION));
+  // The card's organization types its own public holidays (e.g. Brisbane's Ekka).
+  const jurisdiction = pricing.jurisdiction ?? options.jurisdiction ?? ctx?.jurisdiction ?? DEFAULT_JURISDICTION;
+  const canUseCtx = !!ctx && jurisdiction === (ctx.jurisdiction ?? DEFAULT_JURISDICTION);
   let isHoliday: boolean;
   let dayOfWeek: number;
 
@@ -187,10 +197,6 @@ export function estimateDetailedShiftCost(
   // defensible reading (Flexible Part-Time is a sub-type of Part-Time under
   // cl 12.4), but the EA is not explicit. Kept as-is until the parties clarify.
   const isPartTime = /part/i.test(employmentType || '');
-  
-  // audit Phase 2: rates & allowances are effective-dated — resolve the set in
-  // force on this shift's date so cl 25.1 CPI increases are data, not code.
-  const rateSet = resolveRateSet(shift_date);
 
   let baseRate = rate;
 
@@ -256,6 +262,10 @@ export function estimateDetailedShiftCost(
       if (floorHourly > baseRate) baseRate = floorHourly;
     }
   }
+  else if (options.is_trainee && pricing.cardCode && !pricing.trainee) {
+    // The card has no Schedule 5 schedule: never price a trainee at ICC's.
+    return UNPRICED_COST_BREAKDOWN;
+  }
   else if (options.is_trainee) {
     baseRate = getTraineeBaseRate({
       category: options.trainee_category || 'junior',
@@ -265,7 +275,7 @@ export function estimateDetailedShiftCost(
       aqfLevel: (options.trainee_aqf_level as any) || 3,
       yearOfTraineeship: options.trainee_year || 1,
       isPartTime
-    }, shift_date); // effective-dated (Schedule 5 CPI uplift, cl 25.1)
+    }, shift_date, pricing.trainee ?? undefined); // the card's Schedule 5 set, else effective-dated embedded
 
     if (isPartTime && options.is_training_on_job) {
       baseRate *= 0.8;
@@ -279,10 +289,12 @@ export function estimateDetailedShiftCost(
     baseRate *= getApprenticeMultiplier(options, rateSet);
   }
 
-  const loadings = options.loadings ?? ctx?.loadings ?? ICC_SYDNEY_EA_LOADINGS;
+  const loadings = pricing.loadings;
   const casualMult = 1 + loadings.casualLoading;
   const ordinaryRate = isCasual ? baseRate / casualMult : baseRate;
-  if (isNaN(ordinaryRate)) return ZERO_RESULT;
+  // On a card, a rate the card cannot supply (no such level, no Level 1 default)
+  // is unpriced — not a priced $0.
+  if (isNaN(ordinaryRate)) return pricing.cardCode ? UNPRICED_COST_BREAKDOWN : ZERO_RESULT;
 
   // ── Net minutes calculation (Pure integer arithmetic) ──────────────────
   // `netMinutes` is the ONE source of truth here — every caller (confirmed

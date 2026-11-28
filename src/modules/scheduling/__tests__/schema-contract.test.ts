@@ -34,6 +34,7 @@ import type {
     OptimizerShift,
     OptimizerEmployee,
     OptimizerConstraints,
+    SolverPricingPolicy,
     OptimizerStrategy,
     AvailabilitySlotRef,
     ExistingShiftRef,
@@ -114,6 +115,18 @@ const CONSTRAINTS_FIELDS = fieldSet<Required<OptimizerConstraints>>({
     // request is filtered through `__dataclass_fields__` on the way in, so a
     // field missing from either side is dropped without an error.
     split_shift_allowance_cents: 0,
+    scheduler_mode: 0,
+    // The organization's rate-card loadings (PricingPolicyReq / PricingPolicy).
+    pricing_policy: 0,
+});
+
+const PRICING_POLICY_FIELDS = fieldSet<Required<SolverPricingPolicy>>({
+    casual_loading: 0, saturday_loading: 0, sunday_loading: 0, public_holiday_loading: 0,
+    night_loading_mon_thu: 0, night_loading_fri: 0, night_loading_sat_sun: 0,
+    overtime_first_hours: 0, overtime_first_multiplier: 0, overtime_after_multiplier: 0,
+    ordinary_daily_cap_hours: 0, security_ordinary_cap_hours: 0,
+    min_engagement_minutes: 0, min_engagement_sunday_minutes: 0,
+    min_engagement_public_holiday_minutes: 0, min_engagement_training_minutes: 0,
 });
 
 const STRATEGY_FIELDS = fieldSet<Required<OptimizerStrategy>>({
@@ -189,6 +202,7 @@ const PAIRS: PairCase[] = [
     { name: 'ExistingShift', snapshotKey: 'ExistingShift', tsFields: EXISTING_SHIFT_FIELDS },
     { name: 'AvailabilitySlot', snapshotKey: 'AvailabilitySlot', tsFields: AVAILABILITY_SLOT_FIELDS },
     { name: 'Constraints', snapshotKey: 'Constraints', tsFields: CONSTRAINTS_FIELDS },
+    { name: 'PricingPolicy', snapshotKey: 'PricingPolicy', tsFields: PRICING_POLICY_FIELDS },
     { name: 'Strategy', snapshotKey: 'Strategy', tsFields: STRATEGY_FIELDS },
 ];
 

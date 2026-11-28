@@ -28,6 +28,7 @@ from ortools_runner import (  # noqa: E402
     ConstraintsReq,
     EmployeeReq,
     ExistingShiftReq,
+    PricingPolicyReq,
     ShiftReq,
     SolverParamsReq,
     StrategyReq,
@@ -40,6 +41,7 @@ SNAPSHOT_TYPES = {
     "ExistingShift": ExistingShiftReq,
     "AvailabilitySlot": AvailabilitySlotReq,
     "Constraints": ConstraintsReq,
+    "PricingPolicy": PricingPolicyReq,
     "Strategy": StrategyReq,
     "SolverParams": SolverParamsReq,
 }

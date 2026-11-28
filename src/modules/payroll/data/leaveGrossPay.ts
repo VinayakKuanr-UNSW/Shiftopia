@@ -21,6 +21,7 @@
 import { supabase } from '@/platform/supabase/client';
 import { DEFAULT_JURISDICTION, isPublicHolidayISO } from '@/modules/core/lib/holidays';
 import { fetchOrganizationJurisdictions } from '@/modules/core/lib/organizationJurisdiction';
+import type { RateCardScheduleCache } from './ebaRates.read.api';
 import type { GrossPayShiftInput } from '../domain/computeShiftGrossPay';
 import type { CostCalculatorOptions } from '../../rosters/domain/projections/utils/cost/types';
 import type { PayBasis } from '@/modules/users/domain/contractPayTerms';
@@ -285,6 +286,8 @@ export function publicHolidayDaysInRange(
 /** Resolved per-employee context for pricing a leave day. */
 export interface LeaveEmployeeContext {
   employeeId: string;
+  /** The contract's organization — whose rate cards price the leave. */
+  organizationId?: string;
   employmentType?: CostCalculatorOptions['employmentType'];
   payBasis?: PayBasis;
   annualSalary?: number;
@@ -386,6 +389,7 @@ export function buildLeaveInputs(
       scheduledLengthMinutes: minutes,
       isOvernight: false,
       hoursSource: 'actual' as const,
+      organizationId: ctx.organizationId,
       payBasis: ctx.payBasis,
       annualSalary: ctx.annualSalary,
       contractedWeeklyHours: ctx.contractedWeeklyHours,
@@ -439,6 +443,7 @@ export function buildPublicHolidayInputs(
     // A salaried person's holiday is inside the salary. Without the pay basis
     // the day was priced as an EBA absence ON TOP of the full salary — a week
     // of annual leave with a public holiday paid that day twice.
+    organizationId: ctx.organizationId,
     payBasis: ctx.payBasis,
     annualSalary: ctx.annualSalary,
     contractedWeeklyHours: ctx.contractedWeeklyHours,
@@ -494,7 +499,7 @@ interface LeaveFetchBounds {
   subDeptIds?: string[];
 }
 
-export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<GrossPayShiftInput[]> {
+export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds, rateCardCache?: RateCardScheduleCache): Promise<GrossPayShiftInput[]> {
   const { data: leaves, error } = await (supabase as any)
     .from('leave_requests')
     .select('id, employee_id, leave_type, start_date, end_date, status, election_mode, requested_hours')
@@ -514,12 +519,21 @@ export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<
   const ctxById = await resolveLeaveContexts(employeeIds, bounds);
   const rosterByEmp = await fetchRosteredMinutes(employeeIds, bounds);
 
+  // Each person's organization types its own public holidays (via org
+  // jurisdiction lookup or its rate cards); without either, the default (AU-NSW).
+  const schedules = rateCardCache
+    ? await rateCardCache.get([...ctxById.values()].map((c) => c.organizationId ?? ''))
+    : null;
+  const cardJurisdictionOf = (orgId?: string) => schedules?.get(orgId ?? '')?.find((c) => c.jurisdiction)?.jurisdiction;
   const out: GrossPayShiftInput[] = [];
   const phSeen = new Set<string>(); // employee:date — overlapping requests must not double-pay a PH
   for (const req of approved) {
-    const ctx = ctxById.get(req.employee_id);
-    if (!ctx) continue; // no resolvable contract/rate — skip rather than guess.
-    const isHoliday = (ymd: string) => isPublicHolidayISO(ymd, ctx.jurisdiction ?? DEFAULT_JURISDICTION);
+    const baseCtx = ctxById.get(req.employee_id);
+    if (!baseCtx) continue; // no resolvable contract/rate — skip rather than guess.
+    const cardJur = cardJurisdictionOf(baseCtx.organizationId);
+    const jurisdiction = baseCtx.jurisdiction ?? cardJur ?? DEFAULT_JURISDICTION;
+    const ctx = baseCtx.jurisdiction || !cardJur ? baseCtx : { ...baseCtx, jurisdiction: cardJur };
+    const isHoliday = (ymd: string) => isPublicHolidayISO(ymd, jurisdiction);
     const flags = leaveTypeToFlags(req.leave_type, req.election_mode)!; // non-null: filtered above
     if (flags.isToilLeave) {
       // Hours, not days: each day carries its share of the request. No separate
@@ -722,6 +736,7 @@ async function resolveLeaveContexts(
 
     out.set(uid, {
       employeeId: uid,
+      organizationId: c.organization_id ?? undefined,
       employmentType: mapEmploymentType(empTypeById.get(uid)),
       payBasis,
       annualSalary,

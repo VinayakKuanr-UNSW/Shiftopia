@@ -19,6 +19,17 @@ import { useShiftsByDateRange, type ShiftFilters } from '@/modules/rosters/state
 import {
     autoSchedulerController,
     AutoSchedulerInputTooLargeError,
+    isStandardFtShift,
+    isStandardFtEmployee,
+    isFtSecurityShift,
+    isFtSecurityEmployee,
+    isPtShift,
+    isPtEmployee,
+    isFptShift,
+    isFptEmployee,
+    isCasualShift,
+    isCasualEmployee,
+    deriveSecurityRoleIds,
 } from '@/modules/scheduling';
 import { BLOCKER_LABELS } from '@/modules/scheduling/audit/auditor';
 import type {
@@ -27,9 +38,56 @@ import type {
     OptimizerHealth,
     ShiftMeta,
     EmployeeMeta,
+    SchedulerMode,
 } from '@/modules/scheduling';
 
 export type PipelinePhase = 'idle' | 'optimizing' | 'validating' | 'reviewing' | 'done';
+
+export interface SchedulerModeOption {
+    value: SchedulerMode;
+    label: string;
+    shortLabel: string;
+    description: string;
+}
+
+export const SCHEDULER_MODE_OPTIONS: readonly SchedulerModeOption[] = [
+    {
+        value: 'ALL',
+        label: 'All Staff (Mixed)',
+        shortLabel: 'All staff',
+        description: 'Mixed pool across Full-Time, Part-Time, Security, and Casual staff.',
+    },
+    {
+        value: 'FT_STANDARD',
+        label: 'Full-Time (Standard)',
+        shortLabel: 'FT Standard',
+        description: 'ICC EBA cl 35.1: 38h/wk cycle, 7.6–12h/day net, paired days off, no casuals or Security.',
+    },
+    {
+        value: 'FT_SECURITY',
+        label: 'Full-Time (Security)',
+        shortLabel: 'FT Security',
+        description: 'ICC EBA Sch 3: 42h/wk 8-week even-time cycle, paid 30m meal break, annualised rate.',
+    },
+    {
+        value: 'PT',
+        label: 'Part-Time (Regular)',
+        shortLabel: 'Part-Time',
+        description: 'ICC EBA cl 12.3 & 35.2 / Sch 3 §5.2: predetermined <38h/wk contract, 3h min (4h PH), split shifts allowed (≤12h net spread).',
+    },
+    {
+        value: 'FPT',
+        label: 'Part-Time (Flexible)',
+        shortLabel: 'Flexi PT',
+        description: 'ICC EBA cl 12.4 & 35.3: min 624h/yr (avg ≤38h/wk), 3h min (2h training, 4h Sun/PH), max 10 consecutive days.',
+    },
+    {
+        value: 'CASUAL',
+        label: 'Casual Team Members',
+        shortLabel: 'Casual',
+        description: 'ICC EBA cl 12.5 & 35.4: 25% loading, 3h min (2h training, 4h Sun/PH, 4h Sec), max 2 engagements/day, fairness ledger.',
+    },
+];
 
 /** Named windows people actually schedule, so nobody drives two pickers by hand. */
 export type WindowPreset = 'week' | 'fortnight' | 'month';
@@ -87,6 +145,8 @@ interface UseAutoSchedulerOptions {
      * on "Please select both start and end dates".
      */
     initialRange?: { startDate: string; endDate: string };
+    /** Initial employment-mode partition (defaults to 'ALL'). */
+    initialMode?: SchedulerMode;
 }
 
 /**
@@ -178,16 +238,29 @@ export function useAutoScheduler({
     organizationId,
     queryFilters,
     initialRange,
+    initialMode = 'ALL',
 }: UseAutoSchedulerOptions) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
+    const [mode, setModeState] = useState<SchedulerMode>(initialMode);
     const [health, setHealth] = useState<OptimizerHealth | null>(null);
     const [phase, setPhase] = useState<PipelinePhase>('idle');
     const [result, setResult] = useState<AutoSchedulerResult | null>(null);
     const [isCommitting, setIsCommitting] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
+
+    const setMode = useCallback((nextMode: SchedulerMode) => {
+        setModeState(prev => {
+            if (prev === nextMode) return prev;
+            if (phase === 'reviewing' || phase === 'done') {
+                setResult(null);
+                setPhase('idle');
+            }
+            return nextMode;
+        });
+    }, [phase]);
 
     const runAbortRef = useRef<AbortController | null>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -242,7 +315,7 @@ export function useAutoScheduler({
         queryFilters
     );
 
-    const filteredShifts = useMemo(() => {
+    const baseEligibleShifts = useMemo(() => {
         if (!startDate || !endDate || validationError) return [];
         // Scope: DRAFT + unassigned shifts that have not started. Published
         // shifts are in the bidding/offer pipeline. The controller re-checks
@@ -298,6 +371,40 @@ export function useAutoScheduler({
             } as ShiftMeta));
     }, [rawShifts, startDate, endDate, validationError, organizationId]);
 
+    const filteredShifts = useMemo(
+        () => (mode === 'FT_STANDARD'
+            ? baseEligibleShifts.filter(isStandardFtShift)
+            : mode === 'FT_SECURITY'
+                ? baseEligibleShifts.filter(isFtSecurityShift)
+                : mode === 'PT'
+                    ? baseEligibleShifts.filter(isPtShift)
+                    : mode === 'FPT'
+                        ? baseEligibleShifts.filter(isFptShift)
+                        : mode === 'CASUAL'
+                            ? baseEligibleShifts.filter(isCasualShift)
+                            : baseEligibleShifts),
+        [baseEligibleShifts, mode],
+    );
+
+    const scopedEmployees = useMemo(() => {
+        if (mode !== 'FT_STANDARD' && mode !== 'FT_SECURITY' && mode !== 'PT' && mode !== 'FPT' && mode !== 'CASUAL') return employees;
+        const securityRoleIds = deriveSecurityRoleIds(
+            rawShifts.map(s => ({
+                role_id: (s as any).role_id ?? null,
+                roleName: (s as any).role_name || (s as any).roles?.name || '',
+            })),
+        );
+        return employees.filter(e => {
+            const isSecurityRole = (e.contracted_role_ids ?? []).some(id => securityRoleIds.has(id));
+            if (mode === 'FT_STANDARD') return isStandardFtEmployee(e, { isSecurityRole });
+            if (mode === 'FT_SECURITY') return isFtSecurityEmployee(e, { isSecurityRole });
+            if (mode === 'PT') return isPtEmployee(e);
+            if (mode === 'FPT') return isFptEmployee(e);
+            if (mode === 'CASUAL') return isCasualEmployee(e);
+            return true;
+        });
+    }, [mode, employees, rawShifts]);
+
     const scopeBreakdown = useMemo<ScopeBreakdown>(() => {
         if (!startDate || !endDate || validationError) {
             return { total: 0, eligible: 0, assigned: 0, published: 0, alreadyStarted: 0 };
@@ -325,16 +432,16 @@ export function useAutoScheduler({
         // Must stay in sync with dynamicBudget in auto-scheduler.controller.ts.
         // Largest bucket gets extra headroom for big monthly rosters; this
         // composes with the solver's front-loaded per-tier time allocation.
-        const rawPairs = filteredShifts.length * employees.length;
+        const rawPairs = filteredShifts.length * scopedEmployees.length;
         if (rawPairs > 30000) return 120;
         if (rawPairs > 10000) return 60;
         return 30;
-    }, [filteredShifts.length, employees.length]);
+    }, [filteredShifts.length, scopedEmployees.length]);
 
     const preRunCapacity = useMemo(() => {
-        if (filteredShifts.length === 0 || employees.length === 0) return null;
-        return autoSchedulerController.capacityCheck(filteredShifts, employees);
-    }, [filteredShifts, employees]);
+        if (filteredShifts.length === 0 || scopedEmployees.length === 0) return null;
+        return autoSchedulerController.capacityCheck(filteredShifts, scopedEmployees);
+    }, [filteredShifts, scopedEmployees]);
 
     useEffect(() => {
         if (!open) return;
@@ -347,9 +454,34 @@ export function useAutoScheduler({
         if (health && !health.available) return 'The optimizer service is offline.';
         if (validationError) return validationError;
         if (isShiftsLoading) return 'Loading shifts in this window…';
-        if (filteredShifts.length === 0) return 'No shifts to fill in this window.';
+        if (filteredShifts.length === 0) {
+            return mode === 'FT_STANDARD'
+                ? 'No Standard Full-Time shifts to fill in this window.'
+                : mode === 'FT_SECURITY'
+                    ? 'No Full-Time Security shifts to fill in this window.'
+                    : mode === 'PT'
+                        ? 'No Part-Time shifts to fill in this window.'
+                        : mode === 'FPT'
+                            ? 'No Flexible Part-Time shifts to fill in this window.'
+                            : mode === 'CASUAL'
+                                ? 'No Casual shifts to fill in this window.'
+                                : 'No shifts to fill in this window.';
+        }
+        if (scopedEmployees.length === 0) {
+            return mode === 'FT_STANDARD'
+                ? 'No Standard Full-Time staff available in scope.'
+                : mode === 'FT_SECURITY'
+                    ? 'No Full-Time Security staff available in scope.'
+                    : mode === 'PT'
+                        ? 'No Part-Time staff available in scope.'
+                        : mode === 'FPT'
+                            ? 'No Flexible Part-Time staff available in scope.'
+                            : mode === 'CASUAL'
+                                ? 'No Casual staff available in scope.'
+                                : 'No staff available in scope.';
+        }
         return null;
-    }, [health, validationError, isShiftsLoading, filteredShifts.length]);
+    }, [health, validationError, isShiftsLoading, filteredShifts.length, scopedEmployees.length, mode]);
 
     const canRun = !!health?.available && !runBlockedReason;
 
@@ -365,7 +497,8 @@ export function useAutoScheduler({
         try {
             const schedResult = await autoSchedulerController.run({
                 shifts: filteredShifts,
-                employees,
+                employees: scopedEmployees,
+                mode,
                 organizationId,
                 signal: ac.signal,
                 timeLimitSeconds: estimatedTotalSeconds,
@@ -391,7 +524,7 @@ export function useAutoScheduler({
         } finally {
             if (runAbortRef.current === ac) runAbortRef.current = null;
         }
-    }, [filteredShifts, employees, toast, organizationId, estimatedTotalSeconds]);
+    }, [filteredShifts, scopedEmployees, mode, toast, organizationId, estimatedTotalSeconds]);
 
     const handleCancel = useCallback(() => {
         if (runAbortRef.current) {
@@ -529,6 +662,16 @@ export function useAutoScheduler({
                 'AUTO-SCHEDULE AUDIT REPORT',
                 row('Generated', new Date().toLocaleString()),
                 row('Window', `${startDate} to ${endDate}`),
+                row(
+                    'Mode',
+                    result.mode === 'FT_STANDARD'
+                        ? 'Full-Time (Standard — ICC EBA cl 35.1)'
+                        : result.mode === 'FT_SECURITY'
+                            ? 'Full-Time (Security — ICC EBA Sch 3)'
+                            : result.mode === 'PT'
+                                ? 'Part-Time (Regular — ICC EBA cl 12.3 & 35.2)'
+                                : 'All Staff (Mixed)',
+                ),
                 row('Optimizer status', result.optimizerStatus),
                 '',
             ];
@@ -564,7 +707,11 @@ export function useAutoScheduler({
                         ? `${p.fatigue.critical} over-tired · ${overStaff} staff up to ${overWorstH}h over their hours cap`
                         : p.fatigue.critical > 0 ? `${p.fatigue.critical} over-tired`
                             : p.fatigue.amber > 0 ? `${p.fatigue.amber} near limit` : 'all well-rested'));
-                lines.push(row('Fairness', `${p.fairness.score}/100`, `${p.fairness.employees_used} staff · ${Math.round(p.fairness.spread_minutes / 60)}h spread`));
+                lines.push(row(
+                    result.mode === 'FT_STANDARD' || result.mode === 'FT_SECURITY' || result.mode === 'PT' ? 'Workload Balance' : 'Fairness',
+                    `${p.fairness.score}/100`,
+                    `${p.fairness.employees_used} staff · ${Math.round(p.fairness.spread_minutes / 60)}h spread`,
+                ));
                 lines.push(row('Compliance', `${compliancePct}%`, `${result.passing}/${result.totalProposals} assignments passing`));
                 lines.push('');
             }
@@ -853,8 +1000,11 @@ export function useAutoScheduler({
         activeWindowPreset,
 
         // Scope
+        mode,
+        setMode,
         isShiftsLoading,
         filteredShifts,
+        scopedEmployees,
         scopeBreakdown,
         preRunCapacity,
         canRun,
