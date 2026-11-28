@@ -7,28 +7,30 @@ import { describe, expect, it } from 'vitest';
 import type { RateCard } from '../data/rateCards.api';
 import { ICC_SYDNEY_EA_LOADINGS } from '@/modules/rosters/domain/projections/utils/cost/loadings';
 import {
-  LOADING_FIELDS, compareAllowances, compareLoadings, compareRates, formatLoading, iccCl251Multiplier, latestPublished, sourceCardOf, validateRollForward,
+  LOADING_FIELDS, apprenticeRates, casualPaid, compareAllowances, compareLoadings, compareRates, formatLoading,
+  inputToLoading, loadingToInput, percentToMultiplier, validateNewCard, type NewCardForm, iccCl251Multiplier, latestPublished, sourceCardOf, validateRollForward,
   type RollForwardForm,
 } from '../ui/rate-admin/rateCardMath';
 
 const card = (o: Partial<RateCard>): RateCard => ({
-  id: 'id', code: 'CODE', name: 'Name', validFrom: '2025-01-01', validTo: null, status: 'published',
-  derivation: null, publishedAt: null, rates: [], allowances: [], loadings: null, ...o,
+  id: 'id', organizationId: 'org-1', code: 'CODE', name: 'Name', currency: 'AUD', ruleSet: 'icc_sydney_ea',
+  validFrom: '2025-01-01', validTo: null, status: 'published', derivation: null, publishedAt: null,
+  notes: null, awardFloorCheckedAt: null, rates: [], allowances: [], loadings: null, trainee: null, ...o,
 });
 
 const C2025 = card({ id: 'a', code: 'ICC-EA-2025', validFrom: '2025-01-01', validTo: '2026-07-05' });
 const C2026 = card({
   id: 'b', code: 'ICC-EA-2026-27', validFrom: '2026-07-06',
-  rates: [{ classification: 'LEVEL_2', employmentBasis: 'casual', ordinaryHourlyRate: 30, paidHourlyRate: 37.5 }],
-  allowances: [{ code: 'meal', amount: 20, unit: 'per_occasion' }],
+  rates: [{ classification: 'LEVEL_2', employmentBasis: 'casual', ordinaryHourlyRate: 30, paidHourlyRate: 37.5, isManualOverride: false, notes: null }],
+  allowances: [{ code: 'meal', amount: 20, unit: 'per_occasion', notes: null }],
 });
 const DRAFT = card({
   id: 'd', code: 'ICC-EA-2027-28', validFrom: '2027-07-05', status: 'draft', derivation: 'ICC-EA-2026-27 × 1.042',
   rates: [
-    { classification: 'LEVEL_2', employmentBasis: 'casual', ordinaryHourlyRate: 31.26, paidHourlyRate: 39.08 },
-    { classification: 'LEVEL_3', employmentBasis: 'casual', ordinaryHourlyRate: 32, paidHourlyRate: 40 },
+    { classification: 'LEVEL_2', employmentBasis: 'casual', ordinaryHourlyRate: 31.26, paidHourlyRate: 39.08, isManualOverride: false, notes: null },
+    { classification: 'LEVEL_3', employmentBasis: 'casual', ordinaryHourlyRate: 32, paidHourlyRate: 40, isManualOverride: false, notes: null },
   ],
-  allowances: [{ code: 'meal', amount: 20.84, unit: 'per_occasion' }],
+  allowances: [{ code: 'meal', amount: 20.84, unit: 'per_occasion', notes: null }],
 });
 const CARDS = [C2025, C2026, DRAFT];
 
@@ -151,5 +153,49 @@ describe('compareLoadings (pay_rate_card_loadings, draft vs source)', () => {
     ['dollars', 90, '$90.00'],
   ] as const)('formats %s %s as %s', (unit, value, expected) => {
     expect(formatLoading(unit, value)).toBe(expected);
+  });
+});
+
+describe('authoring helpers', () => {
+  it('casual paid = ordinary × (1 + casual loading), to cents (cl 12.5(b))', () => {
+    expect(casualPaid(26.96, 0.25)).toBe(33.7);
+    expect(casualPaid(34.1, 0.25)).toBe(42.63);
+  });
+
+  it.each([['5', 1.05], ['-2.5', 0.975], ['0', 1], ['', null], ['abc', null], ['-100', null], ['150', null]] as const)(
+    'percentage %s → multiplier %s', (input, expected) => expect(percentToMultiplier(input)).toBe(expected));
+
+  it('percent loadings are edited as percent; others as they are', () => {
+    expect(loadingToInput('percent', 0.175)).toBe('17.5');
+    expect(inputToLoading('percent', '17.5')).toBe(0.175);
+    expect(inputToLoading('minutes', '240')).toBe(240);
+    expect(inputToLoading('hours', '-1')).toBeNull();
+    expect(inputToLoading('dollars', '')).toBeNull();
+  });
+
+  const form = (o: Partial<NewCardForm>): NewCardForm => ({
+    mode: 'blank', sourceCardId: '', code: 'BCEC-1', name: 'BCEC', validFrom: '2026-07-01', notes: '',
+    rates: true, allowances: true, trainee: true, multiplier: '1', ...o,
+  });
+  it('a new card needs a fresh code, a name and a date; a copy also a source and a multiplier in (0, 2]', () => {
+    expect(validateNewCard(form({}), CARDS)).toEqual({});
+    expect(validateNewCard(form({ code: 'icc-ea-2025', name: ' ', validFrom: 'x' }), CARDS)).toMatchObject({
+      code: 'A card with this code already exists.', name: 'Enter a name.', validFrom: 'Enter the date the rates apply from.',
+    });
+    expect(Object.keys(validateNewCard(form({ mode: 'copy', sourceCardId: 'nope', multiplier: '3' }), CARDS)).sort())
+      .toEqual(['multiplier', 'sourceCardId']);
+  });
+
+  it('Schedule 4 apprentice rates come from the card\'s own Level 4 and Level 1', () => {
+    const c = card({ rates: [
+      { classification: 'LEVEL_4', employmentBasis: 'permanent', ordinaryHourlyRate: 30, paidHourlyRate: 30, isManualOverride: false, notes: null },
+      { classification: 'LEVEL_1', employmentBasis: 'permanent', ordinaryHourlyRate: 26, paidHourlyRate: 26, isManualOverride: false, notes: null },
+    ] });
+    const rows = apprenticeRates(c);
+    expect(rows[0]).toEqual({ label: 'Junior, year 1 (50% of Level 4)', hourly: 15 });
+    expect(rows.find((r) => r.label.startsWith('Adult, year 1'))?.hourly).toBe(24);   // 80% of L4
+    expect(rows.find((r) => r.label.startsWith('Adult, year 2'))?.hourly).toBe(26);   // Level 1 beats 60% of L4
+    expect(rows.find((r) => r.label.startsWith('Adult, year 4'))?.hourly).toBe(28.5); // 95% of L4 beats Level 1
+    expect(apprenticeRates(card({}))).toEqual([]);
   });
 });

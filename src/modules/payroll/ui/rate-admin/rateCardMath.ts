@@ -7,6 +7,7 @@
 
 import type { RateCard } from '../../data/rateCards.api';
 import type { RateCardLoadings } from '@/modules/rosters/domain/projections/utils/cost/loadings';
+import { APPRENTICE_MATRIX } from '@/modules/rosters/domain/projections/utils/cost/apprentice_matrix';
 
 /** The bounds roll_rate_card_forward enforces: (0, 2]. */
 export const MULTIPLIER_MAX = 2;
@@ -177,4 +178,96 @@ export function compareLoadings(draft: RateCard, source: RateCard | null): Loadi
   return LOADING_FIELDS
     .filter((f) => !prev || prev[f.key] !== next[f.key])
     .map((f) => ({ ...f, oldValue: prev ? prev[f.key] : null, newValue: next[f.key] }));
+}
+
+// ── Authoring helpers (the database re-checks all of these) ─────────────
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** cl 12.5(b): a casual paid rate is ordinary × (1 + the card's casual loading). */
+export const casualPaid = (ordinary: number, casualLoading: number): number => round2(ordinary * (1 + casualLoading));
+
+/** "5" (a 5% rise) → 1.05; null when not a usable percentage for bulk_adjust_rate_card_rates (0, 2]. */
+export function percentToMultiplier(input: string): number | null {
+  const pct = Number(input);
+  if (input.trim() === '' || !Number.isFinite(pct)) return null;
+  const m = Math.round((1 + pct / 100) * 1e6) / 1e6;
+  return m > 0 && m <= MULTIPLIER_MAX ? m : null;
+}
+
+export interface NewCardForm {
+  mode: 'blank' | 'copy';
+  sourceCardId: string;
+  code: string;
+  name: string;
+  validFrom: string;
+  notes: string;
+  rates: boolean;
+  allowances: boolean;
+  trainee: boolean;
+  multiplier: string;
+}
+
+export type NewCardErrors = Partial<Record<keyof NewCardForm, string>>;
+
+/** Field-level problems with a new or copied card; empty when it may be sent. */
+export function validateNewCard(form: NewCardForm, cards: readonly RateCard[]): NewCardErrors {
+  const errors: NewCardErrors = {};
+  if (form.mode === 'copy' && !cards.some((c) => c.id === form.sourceCardId)) {
+    errors.sourceCardId = 'Choose the card to copy.';
+  }
+  const code = form.code.trim();
+  if (!code) errors.code = 'Enter a code, e.g. BCEC-EA-2026.';
+  else if (cards.some((c) => c.code.toLowerCase() === code.toLowerCase())) errors.code = 'A card with this code already exists.';
+  if (!form.name.trim()) errors.name = 'Enter a name.';
+  if (!ISO_DATE.test(form.validFrom) || Number.isNaN(Date.parse(form.validFrom))) {
+    errors.validFrom = 'Enter the date the rates apply from.';
+  }
+  if (form.mode === 'copy') {
+    const m = Number(form.multiplier);
+    if (form.multiplier.trim() === '' || !Number.isFinite(m) || m <= 0 || m > MULTIPLIER_MAX) {
+      errors.multiplier = 'Enter a multiplier greater than 0 and at most ' + MULTIPLIER_MAX + ' (1 copies the figures as they are).';
+    }
+  }
+  return errors;
+}
+
+/** Loading values as typed in the editor: percentages as percent, everything else as is. */
+export const loadingToInput = (unit: LoadingUnit, value: number): string =>
+  String(unit === 'percent' ? Number((value * 100).toFixed(4)) : value);
+
+/** The editor's text back to the stored value; null when not a number at or above 0. */
+export function inputToLoading(unit: LoadingUnit, input: string): number | null {
+  const n = Number(input);
+  if (input.trim() === '' || !Number.isFinite(n) || n < 0) return null;
+  return unit === 'percent' ? Math.round(n * 1e4) / 1e6 : n;
+}
+
+export interface ApprenticeRate {
+  label: string;
+  hourly: number;
+}
+
+/**
+ * Schedule 4, from this card's own Level 4 and Level 1 permanent rates:
+ * junior apprentices are a % of Level 4 (§1.1); an adult apprentice gets the
+ * greater of 80% of Level 4 or the junior rate in year 1 (§1.2), and the
+ * greater of Level 1 or the junior rate after (§1.3). [] without both levels.
+ */
+export function apprenticeRates(card: RateCard): ApprenticeRate[] {
+  const perm = (cls: string) => card.rates.find((r) => r.classification === cls && r.employmentBasis === 'permanent')?.ordinaryHourlyRate;
+  const l4 = perm('LEVEL_4');
+  const l1 = perm('LEVEL_1');
+  if (!l4 || !l1) return [];
+  const junior = APPRENTICE_MATRIX.standard.no_yr12;
+  const rows: ApprenticeRate[] = ([1, 2, 3, 4] as const).map((y) => ({
+    label: 'Junior, year ' + y + ' (' + Math.round(junior[y] * 100) + '% of Level 4)',
+    hourly: round2(l4 * junior[y]),
+  }));
+  rows.push({ label: 'Adult, year 1 (greater of 80% of Level 4 or junior)', hourly: round2(Math.max(l4 * APPRENTICE_MATRIX.adult[1], l4 * junior[1])) });
+  ([2, 3, 4] as const).forEach((y) => rows.push({
+    label: 'Adult, year ' + y + ' (greater of Level 1 or junior)',
+    hourly: round2(Math.max(l1, l4 * junior[y])),
+  }));
+  return rows;
 }

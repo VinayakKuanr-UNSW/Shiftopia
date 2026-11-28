@@ -1,8 +1,9 @@
 /**
  * RateCardPeriods — the Versions tab: the organization's rate cards as
  * periods, newest first. Drafts appear only for payroll.manage holders (the
- * database returns them to nobody else); so do Roll forward, Publish and
- * Discard. The database decides every action — this only offers them.
+ * database returns them to nobody else); so do New card, Roll forward, Edit
+ * (the Rate Card Studio), Publish and Discard. The database decides every
+ * action — this only offers them.
  */
 
 import React, { useState } from 'react';
@@ -14,6 +15,8 @@ import type { RateCard } from '../../../data/rateCards.api';
 import { sourceCardOf } from '../rateCardMath';
 import DraftReview, { formatDate } from './DraftReview';
 import RollForwardDialog from './RollForwardDialog';
+import DraftEditor from './studio/DraftEditor';
+import NewRateCardDialog from './studio/NewRateCardDialog';
 
 const period = (c: RateCard) => `${formatDate(c.validFrom)} – ${c.validTo ? formatDate(c.validTo) : 'open'}`;
 
@@ -22,9 +25,11 @@ const closedBy = (draft: RateCard, cards: RateCard[]) =>
   cards.find((c) => c.status === 'published' && c.validTo === null && c.validFrom < draft.validFrom) ?? null;
 
 const RateCardPeriods: React.FC = () => {
-  const { cards, isLoading, error, refetch, canManage, rollForward, publish, discard } = useRateCards();
+  const { cards, isLoading, error, refetch, canManage, organizationId, rollForward, publish, discard } = useRateCards();
   const [rollOpen, setRollOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
 
   const newestFirst = [...cards].sort((a, b) => b.validFrom.localeCompare(a.validFrom));
 
@@ -42,7 +47,10 @@ const RateCardPeriods: React.FC = () => {
           </p>
         </div>
         {canManage && (
-          <Button onClick={() => setRollOpen(true)} disabled={cards.length === 0}>Roll forward…</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setNewOpen(true)}>New card…</Button>
+            <Button onClick={() => setRollOpen(true)} disabled={cards.length === 0}>Roll forward…</Button>
+          </div>
         )}
       </div>
 
@@ -90,11 +98,21 @@ const RateCardPeriods: React.FC = () => {
                   )}
                 </div>
                 {isDraft && (
-                  <Button variant="outline" size="sm" aria-expanded={open} onClick={() => setReviewing(open ? null : card.id)}>
-                    {open ? 'Hide review' : 'Review'}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {canManage && (
+                      <Button variant="outline" size="sm" aria-expanded={editing === card.id}
+                        onClick={() => setEditing(editing === card.id ? null : card.id)}>
+                        {editing === card.id ? 'Close editor' : 'Edit'}
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" aria-expanded={open} onClick={() => setReviewing(open ? null : card.id)}>
+                      {open ? 'Hide review' : 'Review'}
+                    </Button>
+                  </div>
                 )}
               </div>
+
+              {isDraft && canManage && editing === card.id && <DraftEditor card={card} cards={cards} />}
 
               {isDraft && open && (
                 <DraftReview
@@ -110,6 +128,15 @@ const RateCardPeriods: React.FC = () => {
           );
         })}
       </ul>
+
+      {newOpen && organizationId && (
+        <NewRateCardDialog
+          onOpenChange={setNewOpen}
+          cards={cards}
+          organizationId={organizationId}
+          onCreated={(id) => setEditing(id)}
+        />
+      )}
 
       {rollOpen && (
         <RollForwardDialog
