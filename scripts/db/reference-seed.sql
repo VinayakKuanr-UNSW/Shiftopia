@@ -22,11 +22,9 @@ WITH spec(ord, sch, rel, blank) AS (VALUES
     -- first: public_holidays and organizations reference jurisdictions
     (-1, 'public', 'jurisdictions',            '{}'::text[]),
     ( 0, 'public', 'public_holidays',          '{}'),
-    -- org structure (public.* is canonical; hr.departments / hr.subdepartments still mirror it)
+    -- org structure (public.* is canonical; hr.organizations/departments/subdepartments retired)
     ( 2, 'public', 'organizations',            '{email,phone}'),
-    ( 3, 'hr',     'departments',              '{}'),
     ( 4, 'public', 'departments',              '{}'),
-    ( 5, 'hr',     'subdepartments',           '{}'),
     ( 6, 'public', 'sub_departments',          '{}'),
     ( 7, 'hr',     'remuneration_levels',      '{}'),
     ( 8, 'hr',     'roles',                    '{}'),

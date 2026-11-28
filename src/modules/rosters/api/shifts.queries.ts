@@ -845,21 +845,21 @@ export const shiftsQueries = {
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
                 query = query.eq('subdepartment_id', subDepartmentId);
             } else if (departmentId && isValidUuid(departmentId)) {
-                // Fetch subdepartments for this department
-                const { data: subDepts } = await (supabase as any).schema('hr').from('subdepartments').select('id').eq('department_id', departmentId);
-                const subDeptIds = subDepts?.map((sd: any) => sd.id) || [];
+                // Fetch sub-departments for this department
+                const { data: subDepts } = await supabase.from('sub_departments').select('id').eq('department_id', departmentId);
+                const subDeptIds = subDepts?.map((sd) => sd.id) || [];
                 if (subDeptIds.length > 0) {
                     query = query.in('subdepartment_id', subDeptIds);
                 } else {
-                    return []; // No subdepartments, so no roles
+                    return []; // No sub-departments, so no roles
                 }
             } else if (organizationId && isValidUuid(organizationId)) {
                 // Fetch departments for this org
-                const { data: depts } = await (supabase as any).schema('hr').from('departments').select('id').eq('organization_id', organizationId);
-                const deptIds = depts?.map((d: any) => d.id) || [];
+                const { data: depts } = await supabase.from('departments').select('id').eq('organization_id', organizationId);
+                const deptIds = depts?.map((d) => d.id) || [];
                 if (deptIds.length > 0) {
-                    const { data: subDepts } = await (supabase as any).schema('hr').from('subdepartments').select('id').in('department_id', deptIds);
-                    const subDeptIds = subDepts?.map((sd: any) => sd.id) || [];
+                    const { data: subDepts } = await supabase.from('sub_departments').select('id').in('department_id', deptIds);
+                    const subDeptIds = subDepts?.map((sd) => sd.id) || [];
                     if (subDeptIds.length > 0) {
                         query = query.in('subdepartment_id', subDeptIds);
                     } else {

@@ -332,7 +332,7 @@ Deno.serve(async (req: Request) => {
           return q;
         })();
 
-    // ── 3. Roles (hr schema; every role is tied to a subdepartment) ──────────────
+    // ── 3. Roles (hr schema; every role is tied to a public.sub_departments row) ─
     const rolesPromise = cachedLookups
       ? Promise.resolve(null)
       : (async () => {
@@ -342,13 +342,13 @@ Deno.serve(async (req: Request) => {
           if (primarySubDeptId) {
             subDeptIds = [primarySubDeptId];
           } else if (primaryDeptId) {
-            const { data } = await hr.from("subdepartments").select("id").eq("department_id", primaryDeptId);
+            const { data } = await supabase.from("sub_departments").select("id").eq("department_id", primaryDeptId);
             subDeptIds = ((data ?? []) as { id: string }[]).map((d) => d.id);
           } else {
-            const { data: depts } = await hr.from("departments").select("id").eq("organization_id", organization_id);
+            const { data: depts } = await supabase.from("departments").select("id").eq("organization_id", organization_id);
             const deptIds = ((depts ?? []) as { id: string }[]).map((d) => d.id);
             if (deptIds.length > 0) {
-              const { data: sds } = await hr.from("subdepartments").select("id").in("department_id", deptIds);
+              const { data: sds } = await supabase.from("sub_departments").select("id").in("department_id", deptIds);
               subDeptIds = ((sds ?? []) as { id: string }[]).map((d) => d.id);
             }
           }

@@ -1786,41 +1786,41 @@ export type Database = {
         Row: {
           code: string | null
           color: string | null
-          created_at: string | null
+          created_at: string
           description: string | null
           icon: string | null
           id: string
-          is_active: boolean | null
+          is_active: boolean
           name: string
           organization_id: string
-          sort_order: number | null
-          updated_at: string | null
+          sort_order: number
+          updated_at: string
         }
         Insert: {
           code?: string | null
           color?: string | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           icon?: string | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           name: string
           organization_id: string
-          sort_order?: number | null
-          updated_at?: string | null
+          sort_order?: number
+          updated_at?: string
         }
         Update: {
           code?: string | null
           color?: string | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           icon?: string | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           name?: string
           organization_id?: string
-          sort_order?: number | null
-          updated_at?: string | null
+          sort_order?: number
+          updated_at?: string
         }
         Relationships: [
           {
@@ -4496,36 +4496,36 @@ export type Database = {
       sub_departments: {
         Row: {
           code: string | null
-          created_at: string | null
+          created_at: string
           department_id: string
           description: string | null
           id: string
-          is_active: boolean | null
+          is_active: boolean
           name: string
-          sort_order: number | null
-          updated_at: string | null
+          sort_order: number
+          updated_at: string
         }
         Insert: {
           code?: string | null
-          created_at?: string | null
+          created_at?: string
           department_id: string
           description?: string | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           name: string
-          sort_order?: number | null
-          updated_at?: string | null
+          sort_order?: number
+          updated_at?: string
         }
         Update: {
           code?: string | null
-          created_at?: string | null
+          created_at?: string
           department_id?: string
           description?: string | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           name?: string
-          sort_order?: number | null
-          updated_at?: string | null
+          sort_order?: number
+          updated_at?: string
         }
         Relationships: [
           {
