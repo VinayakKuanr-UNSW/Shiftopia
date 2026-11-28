@@ -3,8 +3,9 @@
 SET session_replication_role = replica;
 
 -- a second organization, for cross-org checks
-INSERT INTO public.organizations (id, name, code, is_active) VALUES
- ('00000000-0000-0000-0000-0000000000f2','Other Org','OTH',true) ON CONFLICT DO NOTHING;
+-- (Perth: no daylight saving and two to three hours from Sydney, so venue time is visible)
+INSERT INTO public.organizations (id, name, code, is_active, timezone) VALUES
+ ('00000000-0000-0000-0000-0000000000f2','Other Org','OTH',true,'Australia/Perth') ON CONFLICT DO NOTHING;
 INSERT INTO public.departments (id, organization_id, name, is_active) VALUES
  ('d2000000-0000-4000-8000-000000000001','00000000-0000-0000-0000-0000000000f2','Other Dept',true) ON CONFLICT DO NOTHING;
 INSERT INTO public.sub_departments (id, department_id, name, is_active) VALUES

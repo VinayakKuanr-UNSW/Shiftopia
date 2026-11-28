@@ -78,8 +78,9 @@ are hospitality or commercial partnerships, which may not need rostering at all
 - Replace the 38 hardcoded zones and the client's Sydney helpers with "the shift's (or
   organization's) timezone"; show times in the venue's zone, labelled when it differs
   from the viewer's.
-- Scheduled jobs run hourly and act on the organizations whose local time has reached
-  the job's hour, instead of one fixed UTC time.
+- Scheduled jobs keep fixed UTC schedules (the standard); their date logic follows each
+  venue. Grouping jobs by region so "nightly" lands at night only matters once venues
+  are 10+ hours apart.
 - Week start per organization.
 
 ### 3.2 Jurisdictions and holidays
