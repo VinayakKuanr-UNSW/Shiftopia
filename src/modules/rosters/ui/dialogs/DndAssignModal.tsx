@@ -160,6 +160,8 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
         shift_date,
         start_time,
         end_time,
+        organization_id,
+        organizations(jurisdiction),
         role_id,
         unpaid_break_minutes,
         required_skills,
@@ -192,6 +194,8 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
       date:                    shift?.shift_date ?? shiftDate,
       start_time:              shift?.start_time ?? shiftStartTime ?? '',
       end_time:                shift?.end_time ?? shiftEndTime ?? '',
+      organization_id:         shift?.organization_id ?? undefined,
+      jurisdiction:            (shift as any)?.organizations?.jurisdiction ?? undefined,
       role_id:                 shift?.role_id ?? '',
       required_qualifications: [
         ...(((shift?.required_skills as any) ?? []) as string[]),

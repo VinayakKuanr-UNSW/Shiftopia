@@ -13,6 +13,11 @@ import {
   type OrganizationOption,
 } from './organizationChoice';
 import { setSentryUser } from '@/platform/observability/sentry';
+import { DEFAULT_JURISDICTION } from '@/modules/core/lib/holidays';
+import {
+  clearOrganizationJurisdictions,
+  registerOrganizationJurisdictions,
+} from '@/modules/core/lib/jurisdiction-registry';
 
 // Re-export types for backward compatibility with existing imports
 
@@ -24,6 +29,7 @@ import { setSentryUser } from '@/platform/observability/sentry';
 interface AccessScope {
   organizationId: string | null;
   organizationName: string;
+  organizationJurisdiction: string;
   departmentId: string | null;
   departmentName: string | null;
   subDepartmentId: string | null;
@@ -54,6 +60,10 @@ interface AuthContextType {
   setActiveCertificateId: (id: string | null) => void;
   /** Derived access scope from the certificate - use this for data filtering */
   accessScope: AccessScope | null;
+  /** Known organizationId → public-holiday jurisdiction map for all orgs the user belongs to */
+  organizationJurisdictions: Record<string, string>;
+  /** Effective public-holiday jurisdiction of the active organization (active cert, else active contract, else DEFAULT_JURISDICTION) */
+  activeJurisdiction: string;
   /** Organizations the user holds active access in (more than one ⇒ they can switch) */
   organizations: OrganizationOption[];
   /** Make the user's highest certificate in this organization active; remembered per browser */
@@ -148,6 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Drop the offline cache too. Leaving it would let the next load resurrect
     // a profile whose token the server has already rejected.
     clearCachedProfile();
+    clearOrganizationJurisdictions();
     setUser(null);
     setPermissionObject(null);
     setActiveContractId(null);
@@ -278,6 +289,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT' && mounted) {
+        clearOrganizationJurisdictions();
         setUser(null);
         setPermissionObject(null);
         setIsLoading(false);
@@ -354,6 +366,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Must clear, or the next cold start would sign the previous user back in
     // from cache on a device with no network.
     clearCachedProfile();
+    clearOrganizationJurisdictions();
     setUser(null);
     setActiveContractId(null);
     setActiveCertificateId(null);
@@ -405,14 +418,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setActiveCertificateId(null);
   }, [user]);
 
+  // Organization ID → jurisdiction map derived from profile, certs & contracts.
+  const organizationJurisdictions = React.useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = { ...(user?.organizationJurisdictions ?? {}) };
+    for (const c of user?.contracts ?? []) {
+      if (c.organizationId && c.organizationJurisdiction && !map[c.organizationId]) {
+        map[c.organizationId] = c.organizationJurisdiction;
+      }
+    }
+    for (const cert of user?.certificates ?? []) {
+      if (cert.organizationId && cert.organizationJurisdiction && !map[cert.organizationId]) {
+        map[cert.organizationId] = cert.organizationJurisdiction;
+      }
+    }
+    return map;
+  }, [user]);
+
+  // Keep the synchronous registry aligned with the signed-in user (including offline cache).
+  useEffect(() => {
+    registerOrganizationJurisdictions(organizationJurisdictions);
+  }, [organizationJurisdictions]);
+
   // Derive access scope from the certificate or fallback to allowed_scope_tree
   const accessScope: AccessScope | null = React.useMemo(() => {
     // 1. Primary source: Active Certificate. Every certificate names its
     // organization (zeta included, since 20261125192142).
     if (activeCertificate) {
+      const orgJurisdiction =
+        activeCertificate.organizationJurisdiction
+        ?? (activeCertificate.organizationId ? organizationJurisdictions[activeCertificate.organizationId] : undefined)
+        ?? DEFAULT_JURISDICTION;
       return {
         organizationId: activeCertificate.organizationId,
         organizationName: activeCertificate.organizationName || 'Organization',
+        organizationJurisdiction: orgJurisdiction,
         departmentId: activeCertificate.departmentId,
         departmentName: activeCertificate.departmentName || null,
         subDepartmentId: activeCertificate.subDepartmentId,
@@ -431,6 +470,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return {
         organizationId: firstOrg.id,
         organizationName: firstOrg.name,
+        organizationJurisdiction: organizationJurisdictions[firstOrg.id] ?? DEFAULT_JURISDICTION,
         departmentId: null,
         departmentName: null,
         subDepartmentId: null,
@@ -443,7 +483,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     return null;
-  }, [activeCertificate, permissionObject]);
+  }, [activeCertificate, permissionObject, organizationJurisdictions]);
+
+  // Effective public-holiday jurisdiction for the signed-in user, including
+  // alpha employees who hold a contract without an access certificate.
+  const activeJurisdiction = React.useMemo(() => {
+    if (accessScope?.organizationJurisdiction) return accessScope.organizationJurisdiction;
+    if (activeContract?.organizationJurisdiction) return activeContract.organizationJurisdiction;
+    if (activeContract?.organizationId && organizationJurisdictions[activeContract.organizationId]) {
+      return organizationJurisdictions[activeContract.organizationId];
+    }
+    return DEFAULT_JURISDICTION;
+  }, [accessScope, activeContract, organizationJurisdictions]);
 
   return (
     <AuthContext.Provider
@@ -462,6 +513,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         activeCertificateId,
         setActiveCertificateId,
         accessScope,
+        organizationJurisdictions,
+        activeJurisdiction,
         organizations,
         selectOrganization,
         permissionObject,

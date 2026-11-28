@@ -12,6 +12,7 @@ import {
 import { cn } from '@/modules/core/lib/utils';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import { SmartShiftCard } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { ShiftCardOverflowMenu } from '@/modules/rosters/ui/components/ShiftCardOverflowMenu';
@@ -219,6 +220,7 @@ interface DroppableRoleCellProps {
   onAssignUnfilled: (unfilled: UnfilledShift) => void;
   isDnDModeActive: boolean;
   hasShifts?: boolean;
+  jurisdiction?: string;
   children: React.ReactNode;
 }
 
@@ -226,7 +228,7 @@ interface DroppableRoleCellProps {
 // table column widths/borders are identical whether or not DnD is registered.
 const ROLE_CELL_BASE_CLASS = 'min-w-[180px] px-3 py-3 border-r border-b border-border relative group/cell transition-colors h-full';
 
-const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleId, roleName, onMove, onAssignUnfilled, isDnDModeActive, hasShifts = false, children }) => {
+const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleId, roleName, onMove, onAssignUnfilled, isDnDModeActive, hasShifts = false, jurisdiction, children }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: [DND_SHIFT_TYPE, DND_UNFILLED_SHIFT],
     canDrop: (item: any) => {
@@ -259,7 +261,7 @@ const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleI
   }, [date, roleId, roleName, onMove, isDnDModeActive]);
 
   const parsedDate = parse(date, 'yyyy-MM-dd', new Date());
-  const holidayName = getPublicHolidayName(parsedDate);
+  const holidayName = getPublicHolidayName(parsedDate, jurisdiction);
   const isTodayDate = format(parsedDate, 'yyyy-MM-dd') === todayISO();
 
   return (
@@ -283,7 +285,7 @@ const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleI
 const DroppableRoleCell: React.FC<DroppableRoleCellProps> = (props) => {
   if (!props.isDnDModeActive) {
     const parsedDate = parse(props.date, 'yyyy-MM-dd', new Date());
-    const holidayName = getPublicHolidayName(parsedDate);
+    const holidayName = getPublicHolidayName(parsedDate, props.jurisdiction);
     const isTodayDate = format(parsedDate, 'yyyy-MM-dd') === todayISO();
     return (
       <td className={cn(
@@ -302,6 +304,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   selectedDate, viewType, canEdit, organizationId, departmentIds = [], subDepartmentIds = [], rosterId, shifts: parentShifts, projection, onEditShift, onMoveShift, onAssignShift, selectedV8ShiftIds: propsSelectedV8ShiftIds, isBulkMode, onToggleShiftSelection 
 }) => {
   const { toast } = useToast();
+  const jurisdiction = useJurisdiction({ organizationId });
   const activeDeptId = departmentIds[0];
   const activeSubDeptId = subDepartmentIds[0];
 
@@ -506,7 +509,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                     <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Role Description</span>
                   </th>
                   {dates.map(date => {
-                    const holidayName = getPublicHolidayName(date);
+                    const holidayName = getPublicHolidayName(date, jurisdiction);
                     const isToday = format(date, 'yyyy-MM-dd') === todayISO();
                     return (
                       <th key={date.toISOString()} data-today={isToday ? "true" : undefined} className={cn("sticky top-0 z-20 min-w-[180px] px-3 py-2.5 text-center transition-colors bg-muted/80 backdrop-blur-md dark:bg-muted/40", holidayName ? "bg-amber-500/10 dark:bg-amber-500/15 border-b-0" : "border-b border-border", isToday && "bg-primary/5")}>
@@ -514,7 +517,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                         <div className="flex items-center justify-center gap-1.5 mt-0.5 flex-wrap">
                           <span className={cn("text-[13px] font-mono tabular-nums leading-none", holidayName ? "text-amber-300 font-bold" : isToday ? "text-primary font-bold" : "text-muted-foreground/60 font-medium")}>{format(date, 'MMM d')}</span>
                           {holidayName && (
-                            <span className="text-[11px] italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`ANZ Public Holiday: ${holidayName}`}>
+                            <span className="text-[11px] italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`Public Holiday: ${holidayName}`}>
                               {holidayName}
                             </span>
                           )}
@@ -556,11 +559,11 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                   </td>
                   {dates.map(date => {
                     const dStr = format(date, 'yyyy-MM-dd');
-                    const holidayName = getPublicHolidayName(date);
+                    const holidayName = getPublicHolidayName(date, jurisdiction);
                     const rawCellShifts = role.shiftsByDate[dStr] || [];
                     const cellShifts = [...rawCellShifts].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
                     return (
-                      <DroppableRoleCell key={`${role.id}-${dStr}`} date={dStr} roleId={role.id} roleName={role.name} onMove={onMoveShift || (() => {})} onAssignUnfilled={() => {}} isDnDModeActive={isDnDModeActive} hasShifts={cellShifts.length > 0}>
+                      <DroppableRoleCell key={`${role.id}-${dStr}`} date={dStr} roleId={role.id} roleName={role.name} onMove={onMoveShift || (() => {})} onAssignUnfilled={() => {}} isDnDModeActive={isDnDModeActive} hasShifts={cellShifts.length > 0} jurisdiction={jurisdiction}>
                         <div className={cn("flex flex-col gap-1 min-h-[80px] h-full relative", cellShifts.length === 0 && "justify-center items-center")}>
                           {cellShifts.map(s => (
                             <DraggableShiftCard

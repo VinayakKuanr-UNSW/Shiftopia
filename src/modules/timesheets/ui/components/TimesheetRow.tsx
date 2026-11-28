@@ -45,6 +45,7 @@ import { getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReview
 import { validateBillableEdit, parseHHMM } from "../../domain/billable-edit";
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { getShiftDayType } from "@/modules/core/lib/holidays";
+import { useJurisdiction } from "@/modules/core/hooks/useJurisdiction";
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 import { fmtToil } from '@/modules/toil/domain/toil-rules';
 
@@ -101,6 +102,10 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     showDate = false,
 }) => {
     /* -- state -------------------------------------------------- */
+    const jurisdiction = useJurisdiction({
+        jurisdiction: entry.organizationJurisdiction,
+        organizationId: entry.organizationId,
+    });
     const [isEditingAdjusted, setIsEditingAdjusted] = useState(false);
     const [timingError, setTimingError] = useState('');
 
@@ -309,7 +314,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         // that window must still meet the guarantee (only a BLANK edit, which
         // validateBillableEdit already skips the check for, means "no billable
         // time at all").
-        const { isSunday, isPublicHoliday } = getShiftDayType(String(entry.date));
+        const { isSunday, isPublicHoliday } = getShiftDayType(String(entry.date), jurisdiction);
         const requiredMinutes = resolvePaymentMinEngagementMinutes({
             isTraining: !!entry.isTraining,
             isSunday,

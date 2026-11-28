@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { RosterSummaryCellDTO } from '../../api/rosterSummary.queries';
 import { AlertCircle, Maximize2 } from 'lucide-react';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { isSydneyPast } from '@/modules/core/lib/date.utils';
 import { RosterCellAddButton } from './RosterCellAddButton';
 
@@ -22,6 +23,8 @@ interface GroupSummaryCellProps {
    *  indicator rather than the "no selectable shifts" state, which would flash
    *  across every bucket and look like the feature is dead. */
   isLoading?: boolean;
+  /** Public-holiday jurisdiction (defaults to active org jurisdiction, else AU-NSW). */
+  jurisdiction?: string;
 }
 
 const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
@@ -36,7 +39,9 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
   selectableCount = 0,
   onToggleSelect,
   isLoading = false,
+  jurisdiction: jurisdictionProp,
 }) => {
+  const jurisdiction = useJurisdiction({ jurisdiction: jurisdictionProp });
   const colorMap: Record<string, { bg: string; text: string; bar: string; border: string; hover: string }> = {
     blue: { bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-400', bar: 'bg-blue-500', border: 'border-blue-400/40 dark:border-blue-500/20', hover: 'hover:bg-blue-500/15 hover:border-blue-500/40' },
     emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-400', bar: 'bg-emerald-500', border: 'border-emerald-400/40 dark:border-emerald-500/20', hover: 'hover:bg-emerald-500/15 hover:border-emerald-500/40' },
@@ -47,7 +52,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
   };
 
   const colors = colorMap[accent] || colorMap.gray;
-  const holidayName = getPublicHolidayName(date);
+  const holidayName = getPublicHolidayName(date, jurisdiction);
   // Without this the cell announces as an unnamed "button" — the visible content
   // is icons and abbreviations, none of which identifies the group or the date it belongs to.
   const dateLabel = format(date, 'd MMMM yyyy');
@@ -225,6 +230,7 @@ export const GroupSummaryCell = React.memo(GroupSummaryCellImpl, (prev, next) =>
     prev.isBulkMode === next.isBulkMode &&
     prev.selectionState === next.selectionState &&
     prev.selectableCount === next.selectableCount &&
-    prev.isLoading === next.isLoading
+    prev.isLoading === next.isLoading &&
+    prev.jurisdiction === next.jurisdiction
   );
 });

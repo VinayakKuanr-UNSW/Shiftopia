@@ -9,6 +9,7 @@ import {
 
 import { cn } from '@/modules/core/lib/utils';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { Calendar } from '@/modules/core/ui/primitives/calendar';
 
 /**
@@ -116,6 +117,8 @@ interface MonthGridProps {
   minCellHeight?: string;
   /** Class applied to every day cell button. */
   dayClassName?: string;
+  /** Public-holiday jurisdiction (defaults to active org jurisdiction, else AU-NSW). */
+  jurisdiction?: string;
   className?: string;
   classNames?: ClassNames;
 }
@@ -126,6 +129,7 @@ interface MonthGridConfig {
   dayLabel?: MonthGridProps['dayLabel'];
   dayClassName?: string;
   minCellHeight: string;
+  jurisdiction: string;
 }
 
 const MonthGridContext = React.createContext<MonthGridConfig | null>(null);
@@ -138,13 +142,18 @@ function defaultDayLabel(ctx: MonthGridDayContext): string {
   return parts.join(', ');
 }
 
-function buildDayContext(date: Date, displayMonth: Date, activeModifiers: Record<string, boolean>): MonthGridDayContext {
+function buildDayContext(
+  date: Date,
+  displayMonth: Date,
+  activeModifiers: Record<string, boolean>,
+  jurisdiction?: string,
+): MonthGridDayContext {
   return {
     date,
     displayMonth,
     isOutside: Boolean(activeModifiers.outside),
     modifiers: activeModifiers,
-    holidayName: activeModifiers.holiday ? getPublicHolidayName(date) : null,
+    holidayName: activeModifiers.holiday ? getPublicHolidayName(date, jurisdiction) : null,
   };
 }
 
@@ -165,7 +174,7 @@ function MonthGridDay({ date, displayMonth }: DayProps) {
   if (render.isHidden) return <div role="gridcell" aria-hidden="true" />;
 
   const activeModifiers = render.activeModifiers as unknown as Record<string, boolean>;
-  const dayCtx = buildDayContext(date, displayMonth, activeModifiers);
+  const dayCtx = buildDayContext(date, displayMonth, activeModifiers, cfg?.jurisdiction);
 
   const minCellHeight = cfg?.minCellHeight ?? '5rem';
   const label = (cfg?.dayLabel ?? defaultDayLabel)(dayCtx);
@@ -220,12 +229,14 @@ export function MonthGrid({
   captionVariant = 'default',
   minCellHeight = '5rem',
   dayClassName,
+  jurisdiction: jurisdictionProp,
   className,
   classNames,
 }: MonthGridProps) {
+  const jurisdiction = useJurisdiction({ jurisdiction: jurisdictionProp });
   const cfg = React.useMemo<MonthGridConfig>(
-    () => ({ renderDay, renderOverlay, dayLabel, dayClassName, minCellHeight }),
-    [renderDay, renderOverlay, dayLabel, dayClassName, minCellHeight],
+    () => ({ renderDay, renderOverlay, dayLabel, dayClassName, minCellHeight, jurisdiction }),
+    [renderDay, renderOverlay, dayLabel, dayClassName, minCellHeight, jurisdiction],
   );
 
   const modifiers = React.useMemo(() => {
@@ -244,15 +255,16 @@ export function MonthGrid({
    */
   const handleDayClick = React.useCallback(
     (date: Date, activeModifiers: Record<string, unknown>) => {
-      onDayActivate?.(date, buildDayContext(date, month, activeModifiers as Record<string, boolean>));
+      onDayActivate?.(date, buildDayContext(date, month, activeModifiers as Record<string, boolean>, jurisdiction));
     },
-    [onDayActivate, month],
+    [onDayActivate, month, jurisdiction],
   );
 
   return (
     <MonthGridContext.Provider value={cfg}>
       <Calendar
         size="surface"
+        jurisdiction={jurisdiction}
         month={month}
         onMonthChange={onMonthChange}
         onDayClick={handleDayClick}

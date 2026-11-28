@@ -6,6 +6,7 @@ import { format as formatDate } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { buttonVariants } from '@/modules/core/ui/primitives/button';
 import { getPublicHolidayName, isPublicHoliday } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { WEEK_STARTS_ON } from '@/modules/core/lib/date/week';
 
 /**
@@ -41,6 +42,8 @@ type CalendarSize = 'popover' | 'surface';
 type CalendarProps = React.ComponentProps<typeof DayPicker> & {
   /** Day-cell scale. See the note above. Default `popover`. */
   size?: CalendarSize;
+  /** Public-holiday jurisdiction (defaults to active org jurisdiction, else AU-NSW). */
+  jurisdiction?: string;
 };
 
 /** Day-cell metrics per size. Kept together so the two never drift. */
@@ -82,6 +85,8 @@ const SIZE_CLASSNAMES: Record<
   },
 };
 
+const CalendarJurisdictionContext = React.createContext<string | undefined>(undefined);
+
 /**
  * Day contents: the date number, plus the holiday name for screen readers.
  *
@@ -89,7 +94,8 @@ const SIZE_CLASSNAMES: Record<
  * carrying "this is a public holiday".
  */
 function CalendarDayContent({ date, activeModifiers }: DayContentProps) {
-  const holiday = activeModifiers.holiday ? getPublicHolidayName(date) : null;
+  const jurisdiction = React.useContext(CalendarJurisdictionContext);
+  const holiday = activeModifiers.holiday ? getPublicHolidayName(date, jurisdiction) : null;
   return (
     <>
       <span>{date.getDate()}</span>
@@ -104,6 +110,7 @@ function Calendar({
   showOutsideDays = true,
   weekStartsOn = WEEK_STARTS_ON, // Monday — app-wide convention (Mon–Sun)
   size = 'popover',
+  jurisdiction: jurisdictionProp,
   modifiers,
   modifiersClassNames,
   components,
@@ -111,8 +118,10 @@ function Calendar({
   ...props
 }: CalendarProps) {
   const s = SIZE_CLASSNAMES[size];
+  const jurisdiction = useJurisdiction({ jurisdiction: jurisdictionProp });
 
   return (
+    <CalendarJurisdictionContext.Provider value={jurisdiction}>
     <DayPicker
       showOutsideDays={showOutsideDays}
       weekStartsOn={weekStartsOn}
@@ -174,10 +183,9 @@ function Calendar({
         ...classNames,
       }}
       modifiers={{
-        // AUS (NSW) public holidays — marked in amber. Single source of truth
-        // in `core/lib/holidays`; see the note there about the two rival
-        // implementations this replaced.
-        holiday: (date: Date) => isPublicHoliday(date),
+        // Jurisdiction-aware public holidays — marked in amber. Single source
+        // of truth in `core/lib/holidays`.
+        holiday: (date: Date) => isPublicHoliday(date, jurisdiction),
         ...modifiers,
       }}
       modifiersClassNames={{
@@ -199,6 +207,7 @@ function Calendar({
         ...components,
       }}
     />
+    </CalendarJurisdictionContext.Provider>
   );
 }
 Calendar.displayName = 'Calendar';

@@ -110,10 +110,16 @@ export interface GrossPayShiftRow {
   sub_department_id?: string | null;
 
   // PostgREST embeds — may arrive as a single object or a one-element array.
+  organizations?:
+    | { id?: string | null; name?: string | null; jurisdiction?: string | null }
+    | Array<{ id?: string | null; name?: string | null; jurisdiction?: string | null }>
+    | null;
   roles?: GrossPayRoleEmbed | GrossPayRoleEmbed[] | null;
   remuneration_levels?: GrossPayRemLevelEmbed | GrossPayRemLevelEmbed[] | null;
 
   // ── Attached by the fetcher (not selected columns) ──────────────────────
+  /** Resolved public-holiday jurisdiction for the shift's organization. */
+  _jurisdiction?: string | null;
   /** Actual unpaid break minutes summed from completed `timesheet_breaks`. */
   _actualUnpaidBreakMinutes?: number | null;
   /** True when manager explicitly entered/overrode unpaid break on billables. */

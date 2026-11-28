@@ -16,6 +16,7 @@ import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { EmployeeFunctionBar } from '@/modules/core/ui/components/EmployeeFunctionBar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
+import { JurisdictionProvider, useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { startOfMonth } from 'date-fns';
 import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { 
@@ -33,6 +34,7 @@ const MyRosterPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   useOrgSelection(); // keeps context subscription without unused destructure
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
+  const jurisdiction = useJurisdiction({ organizationIds: scope.org_ids });
 
   const { shifts, isLoading, error, getShiftsForDate } = useMyRoster(view, selectedDate, scope);
 
@@ -79,6 +81,7 @@ const MyRosterPage: React.FC = () => {
   }
 
   return (
+    <JurisdictionProvider jurisdiction={jurisdiction}>
     <PageLayout>
       {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
       <GoldStandardHeader
@@ -210,6 +213,7 @@ const MyRosterPage: React.FC = () => {
         onOfferResponded={handleOfferResponded}
       />
     </PageLayout>
+    </JurisdictionProvider>
   );
 };
 

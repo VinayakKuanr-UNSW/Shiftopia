@@ -27,6 +27,7 @@ import { useAvailabilityScope } from '../state/useAvailabilityScope';
 import { resolveComplianceBasis, type ContractBasis } from '../domain/contract-basis';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { JurisdictionProvider, useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { formatEnvelopeDaysClause, formatEnvelopeTime } from '../ui/envelope-format';
@@ -86,6 +87,7 @@ const AvailabilityPage: React.FC = () => {
   // refused) and Casual in Set-up (silence means unavailable), and there is no
   // single declaration that is correct for both.
   const { scope, setScope } = useScopeFilter('personal');
+  const jurisdiction = useJurisdiction({ organizationIds: scope.org_ids });
 
   // `subdept_ids` is an array because the shared control is multi-select
   // everywhere else. Under `singleSelectLevels={['subdept']}` it holds at most
@@ -145,6 +147,7 @@ const AvailabilityPage: React.FC = () => {
   };
 
   return (
+    <JurisdictionProvider jurisdiction={jurisdiction}>
     <PageLayout>
       {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
       <GoldStandardHeader
@@ -414,6 +417,7 @@ const AvailabilityPage: React.FC = () => {
         )}
       </AnimatePresence>
     </PageLayout>
+    </JurisdictionProvider>
   );
 };
 

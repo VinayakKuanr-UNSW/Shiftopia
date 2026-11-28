@@ -30,6 +30,7 @@ import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useClockValue, isShiftPast, type ClockSnapshot } from '@/modules/core/hooks/useClock';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import {
     resolveBillableSide,
@@ -180,6 +181,11 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     [shiftData?.shift, isFinishedForBillable],
   );
 
+  const shiftJurisdiction = useJurisdiction({
+    jurisdiction: shiftData?.shift?.organizations?.jurisdiction,
+    organizationId: shiftData?.shift?.organization_id,
+  });
+
   // EBA minimum-engagement PAYMENT floor — same resolver the Timesheets card
   // and the cost engines use, so a shift never shows a different billable
   // floor decision depending which screen you view it from.
@@ -187,7 +193,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     if (!shiftData?.shift) return null;
     const rawNetMins = calculateNetMinutes(resolvedBillableStart, resolvedBillableEnd, unpaidBreak);
     if (rawNetMins === null) return null;
-    const { isSunday, isPublicHoliday } = getShiftDayType(shiftData.shift.shift_date);
+    const { isSunday, isPublicHoliday } = getShiftDayType(shiftData.shift.shift_date, shiftJurisdiction);
     const isSecurityRoleForFloor = isSecurityRoleName(shiftData.shift.roles?.name);
     return applyMinEngagementFloor(rawNetMins, {
       isTraining: (shiftData.shift as any).is_training === true,
@@ -197,7 +203,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
         (shiftData.shift as any).target_employment_type ?? user?.employmentType ?? null,
       isSecurityRole: isSecurityRoleForFloor,
     });
-  }, [resolvedBillableStart, resolvedBillableEnd, unpaidBreak, shiftData?.shift, user?.employmentType]);
+  }, [resolvedBillableStart, resolvedBillableEnd, unpaidBreak, shiftData?.shift, user?.employmentType, shiftJurisdiction]);
 
   // Augmented shiftData passed to SharedShiftCard: the raw shift row's
   // adjusted_start/end only carry a MANAGER EDIT (tier 1) — merge in the

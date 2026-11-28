@@ -1,3 +1,4 @@
+import { DEFAULT_JURISDICTION } from '@/modules/core/lib/holidays';
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
 import { isPublicHolidayISO, SATURDAY, SUNDAY } from './constants';
 import { ICC_SYDNEY_EA_LOADINGS, type RateCardLoadings } from './loadings';
@@ -164,15 +165,17 @@ export function estimateDetailedShiftCost(
   }
   
   // ── Date facts (Phase 3) ───────────────────────────────────────────────
+  const jurisdiction = options.jurisdiction ?? ctx?.jurisdiction ?? DEFAULT_JURISDICTION;
+  const canUseCtx = !!ctx && (!options.jurisdiction || options.jurisdiction === (ctx.jurisdiction ?? DEFAULT_JURISDICTION));
   let isHoliday: boolean;
   let dayOfWeek: number;
 
-  if (ctx) {
-    const facts = getDateFacts(ctx, shift_date);
+  if (canUseCtx) {
+    const facts = getDateFacts(ctx!, shift_date);
     isHoliday = facts.isPublicHoliday;
     dayOfWeek = facts.dayOfWeek;
   } else {
-    isHoliday = isPublicHolidayISO(shift_date);
+    isHoliday = isPublicHolidayISO(shift_date, jurisdiction);
     const dateObj = new Date(shift_date + 'T00:00:00');
     dayOfWeek = isNaN(dateObj.getTime()) ? 1 : dateObj.getDay();
   }
@@ -408,7 +411,9 @@ export function estimateDetailedShiftCost(
   let nextIsHoliday = false;
   if (shiftEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
-    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
+    nextIsHoliday = canUseCtx
+      ? getDateFacts(ctx!, nextStr).isPublicHoliday
+      : isPublicHolidayISO(nextStr, jurisdiction);
   }
 
   const segments = worked.ordinary.flatMap(([from, to]) =>

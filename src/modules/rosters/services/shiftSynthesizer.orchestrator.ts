@@ -39,6 +39,7 @@ import { evaluateShiftShape } from '@/modules/compliance/shape';
 import type { ShapeEmploymentTarget } from '@/modules/compliance/shape';
 import { buildSkeletonInput } from '@/modules/planning/unified/compliance/input-builder';
 import type { V8OrchestratorShift } from '@/modules/compliance/v8/index';
+import { fetchOrganizationJurisdiction } from '@/modules/core/lib/organizationJurisdiction';
 
 const logger = createModuleLogger('shiftSynthesizer.orchestrator');
 
@@ -197,6 +198,8 @@ function skeletonBreaks(startMinutes: number, endMinutes: number): {
 function runSkeletonCompliance(
   shift: SynthesizedShift,
   shiftDate: string,
+  organizationId?: string,
+  jurisdiction?: string,
 ): { status: string; blocked: boolean } {
   const startTime = minutesToTime(shift.startMinutes);
   const endTime = minutesToTime(shift.endMinutes);
@@ -211,6 +214,7 @@ function runSkeletonCompliance(
     is_training: false,
     target_employment_type: (shift.target_employment_type as ShapeEmploymentTarget) ?? 'Casual',
     target_requires_flexible: shift.target_requires_flexible ?? false,
+    jurisdiction,
   });
 
   // Layer 2 — remaining structural V8 rules.
@@ -219,6 +223,8 @@ function runSkeletonCompliance(
     date: shiftDate,
     start_time: startTime,
     end_time: endTime,
+    organization_id: organizationId,
+    jurisdiction,
     role_id: shift.roleId,
     required_qualifications: [],
     break_minutes: breaks.unpaid_break_minutes,
@@ -537,9 +543,12 @@ export async function synthesizeAndInsertShifts(
   // 4. Run Compliance Engine v2 per synthesized shift (skeleton -- no employee).
   //    All shifts proceed to Draft regardless of compliance status (option b).
   //    Blocked shifts are logged so managers can review them in the Draft queue.
+  const jurisdiction = params.organizationId
+    ? await fetchOrganizationJurisdiction(params.organizationId)
+    : undefined;
   let complianceBlockedCount = 0;
   for (const shift of finalShifts) {
-    const { status, blocked } = runSkeletonCompliance(shift, params.shiftDate);
+    const { status, blocked } = runSkeletonCompliance(shift, params.shiftDate, params.organizationId, jurisdiction);
     if (blocked) {
       complianceBlockedCount++;
       logger.warn('synthesized shift has structural compliance violation -- inserting as Draft for manager review', {

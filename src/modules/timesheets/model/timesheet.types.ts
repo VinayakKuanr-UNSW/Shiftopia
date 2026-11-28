@@ -27,6 +27,8 @@ export interface TimesheetRow {
     employeeId: string;
     employee: string;
     // Hierarchy 1
+    organizationId?: string | null;
+    organizationJurisdiction?: string;
     organization: string;
     department: string;
     subDepartment: string;

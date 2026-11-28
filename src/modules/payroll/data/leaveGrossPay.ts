@@ -19,7 +19,8 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { isPublicHolidayISO } from '@/modules/core/lib/holidays';
+import { DEFAULT_JURISDICTION, isPublicHolidayISO } from '@/modules/core/lib/holidays';
+import { fetchOrganizationJurisdictions } from '@/modules/core/lib/organizationJurisdiction';
 import type { GrossPayShiftInput } from '../domain/computeShiftGrossPay';
 import type { CostCalculatorOptions } from '../../rosters/domain/projections/utils/cost/types';
 import type { PayBasis } from '@/modules/users/domain/contractPayTerms';
@@ -306,6 +307,8 @@ export interface LeaveEmployeeContext {
   trainee_year?: number;
   is_sws?: boolean;
   sws_capacity_percentage?: number;
+  /** Public-holiday jurisdiction for this employee's leave contract organization. */
+  jurisdiction?: string;
 }
 
 /** A minimal shape of an approved leave request (from the DB). */
@@ -404,6 +407,7 @@ export function buildLeaveInputs(
       trainee_year: ctx.trainee_year,
       is_sws: ctx.is_sws,
       sws_capacity_percentage: ctx.sws_capacity_percentage,
+      jurisdiction: ctx.jurisdiction,
       ...emitFlags,
     });
   }
@@ -441,6 +445,7 @@ export function buildPublicHolidayInputs(
     rate: ctx.rate,
     classificationLevel: ctx.classificationLevel,
     employmentType: ctx.employmentType,
+    jurisdiction: ctx.jurisdiction,
     isPublicHolidayNotWorked: true,
   }));
 }
@@ -509,12 +514,12 @@ export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<
   const ctxById = await resolveLeaveContexts(employeeIds, bounds);
   const rosterByEmp = await fetchRosteredMinutes(employeeIds, bounds);
 
-  const isHoliday = (ymd: string) => isPublicHolidayISO(ymd);
   const out: GrossPayShiftInput[] = [];
   const phSeen = new Set<string>(); // employee:date — overlapping requests must not double-pay a PH
   for (const req of approved) {
     const ctx = ctxById.get(req.employee_id);
     if (!ctx) continue; // no resolvable contract/rate — skip rather than guess.
+    const isHoliday = (ymd: string) => isPublicHolidayISO(ymd, ctx.jurisdiction ?? DEFAULT_JURISDICTION);
     const flags = leaveTypeToFlags(req.leave_type, req.election_mode)!; // non-null: filtered above
     if (flags.isToilLeave) {
       // Hours, not days: each day carries its share of the request. No separate
@@ -635,7 +640,7 @@ async function resolveLeaveContexts(
   let cQuery = (supabase as any)
     .from('user_contracts')
     .select(
-      'user_id, remuneration_level, contracted_weekly_hours, status, start_date, end_date, employment_status, ' +
+      'user_id, organization_id, remuneration_level, contracted_weekly_hours, status, start_date, end_date, employment_status, ' +
       'pay_basis, annual_salary, ' +
       'is_apprentice, apprentice_type, apprentice_year, has_completed_year_12, ' +
       'is_trainee, trainee_category, trainee_level, trainee_exit_year, trainee_years_out, trainee_aqf_level, trainee_year, ' +
@@ -649,6 +654,15 @@ async function resolveLeaveContexts(
   if (cErr) console.error('[leaveGrossPay] user_contracts query error:', cErr);
 
   const bestByUser = pickLeaveContracts<any>(contracts ?? [], bounds.periodStart);
+
+  const contractOrgIds = Array.from(
+    new Set(
+      Array.from(bestByUser.values())
+        .map((c: any) => c.organization_id as string | null | undefined)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  const orgJurisdictions = await fetchOrganizationJurisdictions(contractOrgIds);
 
   // Employment type from profiles (parity with the shift path).
   const empTypeById = new Map<string, string | null>();
@@ -729,6 +743,7 @@ async function resolveLeaveContexts(
       trainee_year: c.trainee_year ?? undefined,
       is_sws: !!c.is_sws,
       sws_capacity_percentage: c.sws_capacity_percentage ?? undefined,
+      jurisdiction: c.organization_id ? orgJurisdictions.get(c.organization_id) : undefined,
     });
   }
   return out;

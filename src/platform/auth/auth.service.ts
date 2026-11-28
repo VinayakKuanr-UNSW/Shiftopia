@@ -1,5 +1,6 @@
 import { supabase } from '@/platform/supabase/client';
 import { AccessLevel, Role, User, UserContract, AccessCertificate, PermissionObject } from './types';
+import { registerOrganizationJurisdictions } from '@/modules/core/lib/jurisdiction-registry';
 
 /**
  * Raised when the server actively rejected our credentials, as opposed to
@@ -161,12 +162,12 @@ export const authService = {
                 status: c.status,
             }));
 
-            // 3. Fetch Certificates with related names (including certificate_type and is_active)
+            // 3. Fetch Certificates with related names & org jurisdiction (including certificate_type and is_active)
             const { data: certsData, error: certsErr } = await supabase
                 .from('app_access_certificates')
                 .select(`
                     *,
-                    organizations (name),
+                    organizations (name, jurisdiction),
                     departments (name),
                     sub_departments (name)
                 `)
@@ -186,19 +187,63 @@ export const authService = {
                 }
             }
 
-            const certificates: AccessCertificate[] = (certsData || []).map(c => ({
-                id: c.id,
-                userId: c.user_id,
-                certificateType: c.certificate_type as 'X' | 'Y',
-                accessLevel: c.access_level as AccessLevel,
-                organizationId: c.organization_id,
-                departmentId: c.department_id,
-                subDepartmentId: c.sub_department_id,
-                isActive: c.is_active,
-                organizationName: c.organizations ? (c.organizations as any).name : undefined,
-                departmentName: c.department_id ? (c.departments ? (c.departments as any).name : null) : null,
-                subDepartmentName: c.sub_department_id ? (c.sub_departments ? (c.sub_departments as any).name : null) : null,
-            }));
+            const organizationJurisdictions: Record<string, string> = {};
+
+            const certificates: AccessCertificate[] = (certsData || []).map(c => {
+                const orgEmbed = c.organizations as { name?: string | null; jurisdiction?: string | null } | null;
+                const orgJurisdiction = orgEmbed?.jurisdiction ?? undefined;
+                if (c.organization_id && orgJurisdiction) {
+                    organizationJurisdictions[c.organization_id] = orgJurisdiction;
+                }
+                return {
+                    id: c.id,
+                    userId: c.user_id,
+                    certificateType: c.certificate_type as 'X' | 'Y',
+                    accessLevel: c.access_level as AccessLevel,
+                    organizationId: c.organization_id,
+                    departmentId: c.department_id,
+                    subDepartmentId: c.sub_department_id,
+                    isActive: c.is_active,
+                    organizationName: orgEmbed?.name ?? undefined,
+                    organizationJurisdiction: orgJurisdiction,
+                    departmentName: c.department_id ? (c.departments ? (c.departments as any).name : null) : null,
+                    subDepartmentName: c.sub_department_id ? (c.sub_departments ? (c.sub_departments as any).name : null) : null,
+                };
+            });
+
+            // Alpha employees hold contracts without mirror certificates, and a
+            // user may hold an alpha contract in an org where they have no cert.
+            // Resolve any remaining contract org jurisdictions in one query.
+            const missingOrgIds = Array.from(
+                new Set(
+                    contracts
+                        .map(c => c.organizationId)
+                        .filter((id): id is string => !!id && !organizationJurisdictions[id]),
+                ),
+            );
+            if (missingOrgIds.length > 0) {
+                const { data: orgRows, error: orgErr } = await supabase
+                    .from('organizations')
+                    .select('id, jurisdiction')
+                    .in('id', missingOrgIds);
+                if (orgErr) {
+                    console.warn('[AuthService] Organization jurisdiction fetch error:', orgErr);
+                } else {
+                    for (const row of (orgRows ?? []) as Array<{ id?: string | null; jurisdiction?: string | null }>) {
+                        if (row.id && row.jurisdiction) {
+                            organizationJurisdictions[row.id] = row.jurisdiction;
+                        }
+                    }
+                }
+            }
+
+            for (const c of contracts) {
+                if (c.organizationId && organizationJurisdictions[c.organizationId]) {
+                    c.organizationJurisdiction = organizationJurisdictions[c.organizationId];
+                }
+            }
+
+            registerOrganizationJurisdictions(organizationJurisdictions);
 
             // 4. Calculate Highest Access Level (Using Certificates and Contracts)
             const levels: AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
@@ -239,6 +284,7 @@ export const authService = {
                 avatar: `https://api.dicebear.com/7.x/personas/svg?seed=${profile.email}`,
                 contracts: contracts,
                 certificates: certificates,
+                organizationJurisdictions,
                 highestAccessLevel: highest,
                 preferences: profile.preferences as User['preferences'],
             };

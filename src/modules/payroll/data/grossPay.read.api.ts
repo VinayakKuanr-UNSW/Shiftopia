@@ -35,6 +35,10 @@ import {
 } from '@/modules/timesheets/domain/billable-time';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import {
+  registerOrganizationJurisdiction,
+  resolveJurisdiction,
+} from '@/modules/core/lib/jurisdiction-registry';
+import {
   computeEmployeePeriodGrossPay,
   isoWeekKey,
   type PeriodBounds,
@@ -356,7 +360,12 @@ export function mapShiftRowToGrossPayInput(
   // NOT_WORKED short-circuit zeroes pay when there's genuinely no resolved
   // window, independent of this floor. A salaried shift is outside the EA, so
   // it gets no floor — its hours are the hours worked (time in lieu).
-  const { isSunday, isPublicHoliday } = getShiftDayType(row.shift_date);
+  const orgEmbed = firstEmbed(row.organizations);
+  const jurisdiction = resolveJurisdiction({
+    jurisdiction: row._jurisdiction ?? orgEmbed?.jurisdiction,
+    organizationId: row.organization_id,
+  });
+  const { isSunday, isPublicHoliday } = getShiftDayType(row.shift_date, jurisdiction);
   const netMinutes = rawNetMinutes === null
     ? 0
     : isSalaried
@@ -461,6 +470,7 @@ export function mapShiftRowToGrossPayInput(
     trainee_year: row._traineeYear,
     is_sws: row._isSws,
     sws_capacity_percentage: row._swsCapacityPercentage,
+    jurisdiction,
     timesheetStatus: ts?.status ?? null,
     lifecycleStatus: row.lifecycle_status ?? null,
     rawShift: {
@@ -620,6 +630,7 @@ export async function fetchHydratedShiftRows(
         organization_id,
         department_id,
         sub_department_id,
+        organizations(id, name, jurisdiction),
         roles(id, name, remuneration_level),
         assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
         roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name))
@@ -738,6 +749,11 @@ export async function fetchHydratedShiftRows(
   }
 
   for (const r of rows) {
+    const orgEmbed = firstEmbed(r.organizations);
+    if (orgEmbed?.jurisdiction) {
+      registerOrganizationJurisdiction(orgEmbed.id ?? r.organization_id, orgEmbed.jurisdiction);
+      r._jurisdiction = orgEmbed.jurisdiction;
+    }
     const att = (attByShift.get(r.id) as any) ?? null;
     const bil = (bilByShift.get(r.id) as any) ?? null;
     r._attendance = att;

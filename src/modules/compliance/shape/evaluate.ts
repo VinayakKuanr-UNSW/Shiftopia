@@ -174,7 +174,7 @@ export function evaluateShiftShape(
     const isTraining  = input.is_training === true;
     const isFlexible  = input.target_requires_flexible === true;
     const isSecurity  = input.is_security === true;
-    const dayType     = getShiftDayType(input.shift_date);
+    const dayType     = getShiftDayType(input.shift_date, input.jurisdiction);
     const isSunday    = input.is_sunday ?? dayType.isSunday;
     const isPH        = input.is_public_holiday ?? dayType.isPublicHoliday;
 

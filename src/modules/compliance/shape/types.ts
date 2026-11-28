@@ -241,6 +241,8 @@ export interface ShapeInput {
      */
     is_sunday?:            boolean;
     is_public_holiday?:    boolean;
+    /** Public-holiday jurisdiction for `shift_date` (e.g. 'AU-NSW', 'AU-QLD-BNE'). */
+    jurisdiction?:         string;
     /** Salaried employee (outside the EBA per cl 2.2). */
     is_salaried?:          boolean;
     pay_basis?:            string | null;

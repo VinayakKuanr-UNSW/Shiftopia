@@ -6,6 +6,7 @@ import { Shift } from '../../../shift.entity';
 import type { AwardContext } from './award-context';
 import { resolveShiftAllowances } from './shift-allowances';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import { getOrganizationJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
 
 /**
  * Dispatcher for cost estimation.
@@ -317,6 +318,7 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     priorOrdinaryHoursThisWeek: shift.priorOrdinaryHoursThisWeek,
     higherDutiesLevel: pay.higherDutiesLevel,
     is_training_shift: shift.is_training,
+    jurisdiction: shift.jurisdiction ?? shift.organizations?.jurisdiction ?? getOrganizationJurisdiction(shift.organization_id),
   } as any);
 
   // Cache the result if no override was used

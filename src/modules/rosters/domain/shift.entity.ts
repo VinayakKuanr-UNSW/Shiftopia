@@ -173,7 +173,7 @@ export interface Shift {
     adjusted_start_is_manual?: boolean;
     adjusted_end_is_manual?: boolean;
 
-    organizations?: { id: string; name: string } | null;
+    organizations?: { id: string; name: string; jurisdiction?: string } | null;
     departments?: { id: string; name: string } | null;
     sub_departments?: { id: string; name: string } | null;
     roles?: { id: string; name: string } | null;

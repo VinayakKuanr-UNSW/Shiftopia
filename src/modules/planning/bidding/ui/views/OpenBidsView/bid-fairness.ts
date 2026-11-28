@@ -1,3 +1,5 @@
+import { isPublicHolidayISO } from '@/modules/core/lib/holidays';
+import { resolveJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
 import {
     categoryMinutes,
     effectiveDebtsByEmployee,
@@ -16,6 +18,8 @@ interface ShiftWindow {
     startTime: string;
     endTime: string;
     unpaidBreak?: number;
+    organizationId?: string | null;
+    jurisdiction?: string | null;
 }
 
 const toMinutes = (hhmm: string): number => {
@@ -35,7 +39,17 @@ export function orderBidsByFairness<T extends { employee_id: string }>(
     const s0 = toMinutes(shift.startTime);
     let s1 = toMinutes(shift.endTime);
     if (s1 <= s0) s1 += 1440;
-    const minutes = categoryMinutes(shift.date, shift.startTime, shift.endTime, Math.max(0, s1 - s0 - (shift.unpaidBreak ?? 0)));
+    const jurisdiction = resolveJurisdiction({
+        jurisdiction: shift.jurisdiction,
+        organizationId: shift.organizationId,
+    });
+    const minutes = categoryMinutes(
+        shift.date,
+        shift.startTime,
+        shift.endTime,
+        Math.max(0, s1 - s0 - (shift.unpaidBreak ?? 0)),
+        (d) => isPublicHolidayISO(d, jurisdiction),
+    );
     const debts = effectiveDebtsByEmployee(standings);
     const cost = new Map(bids.map(b => [b.employee_id, shiftFairnessPenaltyCents(debts.get(b.employee_id), minutes)]));
     return [...bids].sort((a, b) => (cost.get(a.employee_id) ?? 0) - (cost.get(b.employee_id) ?? 0));

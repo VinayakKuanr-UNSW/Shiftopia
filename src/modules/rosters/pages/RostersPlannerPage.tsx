@@ -73,6 +73,7 @@ import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
 import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPrefetch';
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { JurisdictionProvider, useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { soleOrgId, soleId, orgIdOnceSynced } from '@/platform/auth/scope-narrowing';
 import {
   preflightPublish,
@@ -1123,8 +1124,14 @@ const NewRostersPage: React.FC = () => {
       is_flexible: (e as any).is_flexible ?? false,
     })), [employees]);
 
+  const plannerJurisdiction = useJurisdiction({
+    organizationId: selectedOrganizationId || undefined,
+    organizationIds: scope.org_ids,
+  });
+
   // ==================== RENDER ====================
   return (
+    <JurisdictionProvider jurisdiction={plannerJurisdiction}>
     <ShiftEditingPresenceProvider>
     {/* The shell's gutter also clears the mobile bottom nav. */}
     <PageLayout>
@@ -1256,6 +1263,7 @@ const NewRostersPage: React.FC = () => {
         {activeMode === 'people' && (
           <PeopleModeGrid
             employees={paginatedEmployees}
+            organizationId={selectedOrganizationId || undefined}
             searchTerm={employeeSearchInput}
             onSearchChange={setEmployeeSearchInput}
             onAssignShift={handleDndAssign}
@@ -1495,6 +1503,7 @@ const NewRostersPage: React.FC = () => {
 
     </PageLayout>
     </ShiftEditingPresenceProvider>
+    </JurisdictionProvider>
   );
 };
 

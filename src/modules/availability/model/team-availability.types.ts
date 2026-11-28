@@ -276,6 +276,10 @@ export interface RawTeamShift {
     unpaidBreakMinutes: number;
     /** `shifts.target_employment_type` (FT | PT | Casual): fairness counts Casual shifts only. */
     targetEmploymentType: string | null;
+    /** Organization owning this shift (used for public-holiday jurisdiction lookup). */
+    organizationId?: string | null;
+    /** Resolved public-holiday jurisdiction for this shift's organization. */
+    jurisdiction?: string | null;
 }
 
 export interface RawLeaveDay {

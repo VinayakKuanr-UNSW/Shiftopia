@@ -48,6 +48,8 @@ import {
     type FairnessMetric,
 } from '@/modules/rosters/domain/fairness-ledger';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { resolveJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
+import { fetchOrganizationJurisdictions } from '@/modules/core/lib/organizationJurisdiction';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import type {
     OptimizeRequest,
@@ -558,6 +560,7 @@ export function estimateGreedyFallbackCost(
     emp: EmployeeMeta,
     empDet: Partial<OptimizerEmployee> | undefined,
     priorOrdinaryHoursThisWeek: number | undefined,
+    jurisdiction?: string,
 ): number {
     // cl 36.1 vs Sch.3 §3.2/§5.3: the unpaid meal break is
     // deducted for general staff, but Security meal breaks are
@@ -605,6 +608,10 @@ export function estimateGreedyFallbackCost(
             ? `LEVEL_${empDet.level}`
             : extractLevel(shift.roleName),
         priorOrdinaryHoursThisWeek,
+        jurisdiction: jurisdiction ?? resolveJurisdiction({
+            jurisdiction: shift.jurisdiction,
+            organizationId: shift.organization_id,
+        }),
     }).totalCost;
 }
 
@@ -689,6 +696,8 @@ interface AutoSchedulerInput {
      * The ledger is recomputed nightly from approved billables, never here.
      */
     organizationId?: string;
+    /** Optional public-holiday jurisdiction override for the solve (resolved from orgId when omitted). */
+    jurisdiction?: string;
     /** B4 — when true, the solver also returns Pareto "what-if" alternatives
      *  (cheapest / most-balanced) for the trade-off explorer. Adds solve time,
      *  so the UI requests it explicitly. */
@@ -753,6 +762,8 @@ async function greedyFallback(
     windowObligation?: ReadonlyMap<string, number>,
     /** Casual employees' confidence-weighted ledger debts — the solver's `fairness_debts`. */
     fairnessDebts?: ReadonlyMap<string, Partial<Record<FairnessMetric, number>>>,
+    /** Public-holiday jurisdiction resolver per shift (matches the optimizer's day typing). */
+    jurisdictionFor?: (shift: ShiftMeta) => string,
 ): Promise<ValidatedProposal[]> {
     // Resolve strategy once here with the same defaults used when building
     // the Python optimizer request (see OptimizeRequest construction below).
@@ -784,6 +795,9 @@ async function greedyFallback(
 
     for (const shift of shifts) {
         let assigned = false;
+        const shiftJurisdiction = jurisdictionFor
+            ? jurisdictionFor(shift)
+            : resolveJurisdiction({ jurisdiction: shift.jurisdiction, organizationId: shift.organization_id });
         // The ledger's own category split (Sat/Sun/PH/night 22:00–06:00), so the
         // fallback prices this shift exactly as the solver's SC-11/SC-11b do.
         const shiftMinutes = categoryMinutes(
@@ -791,6 +805,7 @@ async function greedyFallback(
             shift.start_time,
             shift.end_time,
             Math.max(0, durationMinutes(shift.start_time, shift.end_time) - (shift.unpaid_break_minutes ?? 0)),
+            (d) => getShiftDayType(d, shiftJurisdiction).isPublicHoliday,
         );
 
         // Score each employee for this shift
@@ -1203,6 +1218,17 @@ export class AutoSchedulerController {
 
         console.debug('[AutoScheduler] Scaling limits for %f week(s) (%d days)', weekScale.toFixed(2), diffDays);
 
+        const orgJurisdictions = await fetchOrganizationJurisdictions([
+            input.organizationId,
+            ...futureShifts.map(s => s.organization_id),
+        ]);
+        const jurisdictionFor = (s: ShiftMeta): string =>
+            s.jurisdiction
+            ?? (s.organization_id ? orgJurisdictions.get(s.organization_id) : undefined)
+            ?? input.jurisdiction
+            ?? (input.organizationId ? orgJurisdictions.get(input.organizationId) : undefined)
+            ?? resolveJurisdiction({ organizationId: s.organization_id ?? input.organizationId });
+
         const optimizerShifts: OptimizerShift[] = futureShifts.map(s => {
             // Day-type flags (audit F-01). These were declared on OptimizerShift and
             // read by the solver — `_penalty_day` for the cl 41 loadings, and
@@ -1214,7 +1240,8 @@ export class AutoSchedulerController {
             // Resolved via the app-wide holiday helper — never a local literal set
             // and never `new Date(dateStr)`, which parses as UTC midnight and rolls
             // the day for any viewer west of UTC.
-            const dayType = getShiftDayType(s.shift_date);
+            const shiftJur = jurisdictionFor(s);
+            const dayType = getShiftDayType(s.shift_date, shiftJur);
             return {
                 id: s.id,
                 shift_date: s.shift_date,
@@ -1239,7 +1266,7 @@ export class AutoSchedulerController {
                 is_public_holiday: dayType.isPublicHoliday,
                 // A cross-midnight shift's minutes after 00:00 fall on the next
                 // day; the solver's fairness split needs to know if that is a PH.
-                is_public_holiday_next_day: getShiftDayType(shiftDate(s.shift_date, 1)).isPublicHoliday,
+                is_public_holiday_next_day: getShiftDayType(shiftDate(s.shift_date, 1), shiftJur).isPublicHoliday,
             };
         });
 
@@ -1631,7 +1658,7 @@ export class AutoSchedulerController {
                 const validationStart = performance.now();
                 // Past shifts are excluded from greedy too — appended
                 // back as failed proposals so they stay visible in the UI.
-                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes, debtsMap);
+                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes, debtsMap, jurisdictionFor);
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -1667,7 +1694,7 @@ export class AutoSchedulerController {
                 usedFallback = true;
                 optimizerStatus = 'UNKNOWN';
                 const validationStart = performance.now();
-                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes, debtsMap);
+                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes, debtsMap, jurisdictionFor);
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -1745,7 +1772,7 @@ export class AutoSchedulerController {
                 // return dollars, so no unit conversion is needed.
                 if (usedFallback && shift && emp) {
                     p.optimizerCost = estimateGreedyFallbackCost(
-                        shift, emp, employeeDetails.get(emp.id), fallbackPriorOrdinaryMap.get(p.shiftId),
+                        shift, emp, employeeDetails.get(emp.id), fallbackPriorOrdinaryMap.get(p.shiftId), jurisdictionFor(shift),
                     );
                 }
 

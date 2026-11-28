@@ -58,7 +58,7 @@ export const biddingApi = {
             .select(`
                 *,
                 last_dropped_by,
-                organizations(id, name),
+                organizations(id, name, jurisdiction),
                 departments(id, name),
                 sub_departments(id, name),
                 roles(id, name),

@@ -48,6 +48,8 @@ import {
     type FatigueBand,
 } from '@/modules/rosters/domain/projections/utils/fatigue';
 import { computeUtilizationPct } from '@/modules/rosters/domain/projections/utils/workload';
+import { isPublicHolidayISO } from '@/modules/core/lib/holidays';
+import { resolveJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
 import {
     SC11_COEFF_PER_HOUR2,
     categoryMinutes,
@@ -221,7 +223,17 @@ export function dayFairnessContribution(
     for (const s of casual) {
         // The ledger's own split, so the public-holiday source and the night
         // window are whichever ones the ledger uses.
-        const m = categoryMinutes(s.shiftDate, s.startTime, s.endTime, s.netMinutes);
+        const jurisdiction = resolveJurisdiction({
+            jurisdiction: s.jurisdiction,
+            organizationId: s.organizationId,
+        });
+        const m = categoryMinutes(
+            s.shiftDate,
+            s.startTime,
+            s.endTime,
+            s.netMinutes,
+            (d) => isPublicHolidayISO(d, jurisdiction),
+        );
         hours.saturday_hours += m.saturday / 60;
         hours.sunday_hours += m.sunday / 60;
         hours.public_holiday_hours += m.public_holiday / 60;

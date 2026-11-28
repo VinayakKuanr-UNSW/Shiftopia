@@ -226,11 +226,12 @@ export function validateTemplateApplication(
     placed: ReadonlyArray<PlacedTemplateShift>,
     startDate: string,
     endDate: string,
+    jurisdiction?: string,
 ): TemplateApplicationFailure[] {
     const failures: TemplateApplicationFailure[] = [];
 
     for (const item of planTemplateApplication(placed, startDate, endDate)) {
-        const { isSunday, isPublicHoliday } = getShiftDayType(item.date);
+        const { isSunday, isPublicHoliday } = getShiftDayType(item.date, jurisdiction);
         if (!isSunday && !isPublicHoliday) continue;
 
         const shift = item.shift;
@@ -248,6 +249,7 @@ export function validateTemplateApplication(
             is_security:              isSecurityRoleName(shift.roleName),
             is_sunday:                isSunday,
             is_public_holiday:        isPublicHoliday,
+            jurisdiction,
         });
         if (!result.blocking) continue;
 

@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { isSydneyToday } from '@/modules/core/lib/date.utils';
 import { getPublicHolidayName, isPublicHoliday } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { getWeekDays } from '@/modules/core/lib/date/week';
 
 /**
@@ -34,6 +35,9 @@ interface WeekStripProps {
   /** Extra content under the date number, per column. */
   renderMeta?: (date: Date) => React.ReactNode;
 
+  /** Public-holiday jurisdiction (defaults to active org jurisdiction, else AU-NSW). */
+  jurisdiction?: string;
+
   className?: string;
   columnClassName?: string;
   /** Accessible name for the strip. */
@@ -47,10 +51,12 @@ export function WeekStrip({
   selected,
   leadingGutterWidth,
   renderMeta,
+  jurisdiction: jurisdictionProp,
   className,
   columnClassName,
   'aria-label': ariaLabel,
 }: WeekStripProps) {
+  const jurisdiction = useJurisdiction({ jurisdiction: jurisdictionProp });
   const days = React.useMemo(
     () => daysProp ?? getWeekDays(date ?? new Date()),
     [daysProp, date],
@@ -68,7 +74,7 @@ export function WeekStrip({
 
       {days.map((day) => {
         const isToday = isSydneyToday(day);
-        const holidayName = isPublicHoliday(day) ? getPublicHolidayName(day) : null;
+        const holidayName = isPublicHoliday(day, jurisdiction) ? getPublicHolidayName(day, jurisdiction) : null;
         const isSelected = selected ? format(selected, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd') : false;
 
         const body = (

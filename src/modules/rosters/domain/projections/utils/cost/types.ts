@@ -188,5 +188,11 @@ export interface CostCalculatorOptions {
    * falls back to `ICC_SYDNEY_EA_LOADINGS`.
    */
   loadings?: import('./loadings').RateCardLoadings;
+
+  /**
+   * Public-holiday jurisdiction for this shift (e.g. 'AU-NSW', 'AU-QLD-BNE').
+   * Overrides `ctx.jurisdiction`; omitted ⇒ falls back to `DEFAULT_JURISDICTION`.
+   */
+  jurisdiction?: string;
 }
 

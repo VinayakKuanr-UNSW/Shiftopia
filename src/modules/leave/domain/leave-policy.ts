@@ -263,6 +263,8 @@ interface CertificateContext {
   rosteredDates?: ReadonlySet<string>;
   /** Their OTHER pending or approved leave (this request excluded). */
   otherLeave?: ReadonlyArray<{ startDate: string; endDate: string }>;
+  /** Public-holiday jurisdiction for the employee's organization (e.g. 'AU-NSW', 'AU-QLD-BNE'). */
+  jurisdiction?: string;
 }
 
 /**
@@ -340,7 +342,8 @@ export function computeCertificateAdjacency(
 
   return {
     adjacentToWeekend: isWeekend(dayBefore) || isWeekend(dayAfter),
-    adjacentToPublicHoliday: isPublicHoliday(dayBefore) || isPublicHoliday(dayAfter),
+    adjacentToPublicHoliday:
+      isPublicHoliday(dayBefore, context.jurisdiction) || isPublicHoliday(dayAfter, context.jurisdiction),
     adjacentToRosteredDayOff: isRosteredDayOff(dayBefore) || isRosteredDayOff(dayAfter),
     adjacentToOtherLeave: touchesOtherLeave,
   };

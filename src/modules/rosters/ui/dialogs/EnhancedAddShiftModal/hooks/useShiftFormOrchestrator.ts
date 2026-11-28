@@ -32,6 +32,7 @@ import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx, type ShiftOpResult } from '@/modules/rosters/domain/shift-ops.contract';
 import { formatInTimezone, parseZonedDateTime, todayISO } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
 import { calculateShiftLength, defaultShiftLevel, isDateInPast, isShiftStarted, newShiftStartRefusal } from '../utils';
@@ -302,6 +303,11 @@ export function useShiftFormOrchestrator({
 
     const selectedRemLevel = remunerationLevels.find(r => r.level_number === watchRemLevel);
 
+    const shiftJurisdiction = useJurisdiction({
+        jurisdiction: existingShift?.organizations?.jurisdiction,
+        organizationId: resolvedContext.organizationId ?? existingShift?.organization_id ?? safeContext.organizationId,
+    });
+
     // ── Shift shape compliance ───────────────────────────────────────────────
     const shape = useMemo(() => evaluateShiftShape({
         shift_date: watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : todayISO(),
@@ -316,11 +322,12 @@ export function useShiftFormOrchestrator({
         target_employment_type: watchTargetEmploymentType || 'Casual',
         target_requires_flexible: watchTargetRequiresFlexible ?? false,
         is_security: isSecurityShift,
+        jurisdiction: shiftJurisdiction,
     }), [
         watchShiftDate, watchStart, watchEnd, resolvedBreaks, isSecurityShift,
         unpaidBreak, watchPaidBreak, watchIsTraining,
         watchTargetEmploymentType, watchTargetRequiresFlexible,
-        watchV8RoleId, roles,
+        watchV8RoleId, roles, shiftJurisdiction,
     ]);
 
     // Retained for the step-1 length readout. `minShiftHours` is now derived
@@ -330,6 +337,7 @@ export function useShiftFormOrchestrator({
         if (watchTargetEmploymentType === 'FT') return DEFAULT_SHAPE_CONFIG.ft_min_ordinary_day_minutes / 60;
         const { isSunday, isPublicHoliday: isPH } = getShiftDayType(
             watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : '',
+            shiftJurisdiction,
         );
         return requiredMinEngagementMinutes({
             target: watchTargetEmploymentType || 'Casual',
@@ -341,6 +349,7 @@ export function useShiftFormOrchestrator({
     }, [
         watchIsTraining, watchShiftDate,
         watchTargetEmploymentType, watchTargetRequiresFlexible,
+        shiftJurisdiction,
     ]);
 
     /** Blocking shape findings only — what the form renders and what gates Save. */

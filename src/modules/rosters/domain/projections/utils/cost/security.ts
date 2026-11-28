@@ -1,3 +1,4 @@
+import { DEFAULT_JURISDICTION } from '@/modules/core/lib/holidays';
 import {
   isPublicHolidayISO, SATURDAY, SUNDAY, ZERO_COST_BREAKDOWN,
 } from './constants';
@@ -149,14 +150,16 @@ export function estimateDetailedShiftCost(
   const finalEffectiveRate = (previousWage != null && previousWage > effectiveRate) ? previousWage : effectiveRate;
 
   // ── Date facts (Phase 3) ───────────────────────────────────────────────
+  const jurisdiction = options.jurisdiction ?? ctx?.jurisdiction ?? DEFAULT_JURISDICTION;
+  const canUseCtx = !!ctx && (!options.jurisdiction || options.jurisdiction === (ctx.jurisdiction ?? DEFAULT_JURISDICTION));
   let isHoliday: boolean;
   let shiftDay: number;
-  if (ctx) {
-    const facts = getDateFacts(ctx, shift_date);
+  if (canUseCtx) {
+    const facts = getDateFacts(ctx!, shift_date);
     isHoliday = facts.isPublicHoliday;
     shiftDay = facts.dayOfWeek;
   } else {
-    isHoliday = isPublicHolidayISO(shift_date);
+    isHoliday = isPublicHolidayISO(shift_date, jurisdiction);
     shiftDay = new Date(shift_date + 'T00:00:00').getDay();
   }
 
@@ -192,7 +195,9 @@ export function estimateDetailedShiftCost(
   let nextIsHoliday = false;
   if (ordinaryEndMins > 1440 || otEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
-    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
+    nextIsHoliday = canUseCtx
+      ? getDateFacts(ctx!, nextStr).isPublicHoliday
+      : isPublicHolidayISO(nextStr, jurisdiction);
   }
 
   interface Seg { fromMins: number; toMins: number; day: number; isHoliday: boolean; }

@@ -4,6 +4,7 @@ import { getSydneyNow, isSydneyToday } from '@/modules/core/lib/date.utils';
 import { WeekStrip } from '@/modules/core/ui/calendar';
 import { cn } from '@/modules/core/lib/utils';
 import { getPublicHolidayName, isPublicHoliday } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 
 export const HOUR_HEIGHT = 48;
 const TIME_LABEL_WIDTH = 56;
@@ -12,9 +13,12 @@ const HEADER_HEIGHT = 64;
 interface TimeGridProps {
   days: Date[];
   renderShifts: (day: Date) => React.ReactNode;
+  /** Public-holiday jurisdiction (defaults to active org jurisdiction, else AU-NSW). */
+  jurisdiction?: string;
 }
 
-const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
+const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts, jurisdiction: jurisdictionProp }) => {
+  const jurisdiction = useJurisdiction({ jurisdiction: jurisdictionProp });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(getSydneyNow());
 
@@ -49,7 +53,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
       {/* Day axis comes from the shared `WeekStrip` so the columns, the today
           marker and the NSW holiday marking match every other calendar. */}
       <div className="flex-shrink-0 border-b border-border bg-muted" style={{ height: HEADER_HEIGHT }}>
-        <WeekStrip days={days} leadingGutterWidth={TIME_LABEL_WIDTH} aria-label="Days shown" />
+        <WeekStrip days={days} leadingGutterWidth={TIME_LABEL_WIDTH} jurisdiction={jurisdiction} aria-label="Days shown" />
       </div>
 
       {/* ===== SCROLLABLE GRID AREA ===== */}
@@ -78,7 +82,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
             {/* Day columns with grid cells */}
             {days.map((day) => {
               const isTodayCol = isSydneyToday(day);
-              const holidayName = isPublicHoliday(day) ? getPublicHolidayName(day) : null;
+              const holidayName = isPublicHoliday(day, jurisdiction) ? getPublicHolidayName(day, jurisdiction) : null;
               return (
                 <div
                   key={day.toISOString()}

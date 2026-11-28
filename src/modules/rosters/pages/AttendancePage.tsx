@@ -37,6 +37,7 @@ import {
   isShiftFinished as isShiftFinishedForBillable,
 } from '@/modules/timesheets/domain/billable-time';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { resolveJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
 import { Button } from '@/modules/core/ui/primitives/button';
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -183,11 +184,15 @@ function shiftToTimesheetRow(shift: Shift, profileEmploymentType: string | null)
     ? shift.billable_unpaid_break_minutes
     : (shift.actual_unpaid_break_minutes ?? 0);
   const rawNetMins = calculateNetMinutes(resolvedStart, resolvedEnd, unpaidBreakForNet);
+  const shiftJurisdiction = resolveJurisdiction({
+    jurisdiction: shift.organizations?.jurisdiction,
+    organizationId: shift.organization_id,
+  });
   const isSecurityRoleForFloor = isSecurityRoleName(shift.roles?.name);
   const floored = rawNetMins !== null
     ? applyMinEngagementFloor(rawNetMins, {
         isTraining: shift.is_training === true,
-        ...getShiftDayType(shift.shift_date),
+        ...getShiftDayType(shift.shift_date, shiftJurisdiction),
         employmentType,
         isSecurityRole: isSecurityRoleForFloor,
       })
@@ -197,6 +202,8 @@ function shiftToTimesheetRow(shift: Shift, profileEmploymentType: string | null)
     date: shift.shift_date,
     employeeId: shift.assigned_employee_id || '',
     employee: shift.assigned_profiles ? `${shift.assigned_profiles.first_name || ''} ${shift.assigned_profiles.last_name || ''}`.trim() : 'Unknown',
+    organizationId: shift.organization_id ?? undefined,
+    organizationJurisdiction: shiftJurisdiction,
     organization: shift.organizations?.name || '',
     department: shift.departments?.name || '',
     subDepartment: shift.sub_departments?.name || '',
