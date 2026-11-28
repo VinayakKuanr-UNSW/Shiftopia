@@ -153,6 +153,7 @@ describe('AutoSchedulerController in CASUAL mode', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.setSystemTime(new Date('2026-11-08T00:00:00Z'));
         controller = new AutoSchedulerController();
         mockOptimize.mockResolvedValue({
             status: 'OPTIMAL',
@@ -173,6 +174,7 @@ describe('AutoSchedulerController in CASUAL mode', () => {
     });
 
     afterEach(() => {
+        vi.useRealTimers();
         vi.restoreAllMocks();
     });
 
