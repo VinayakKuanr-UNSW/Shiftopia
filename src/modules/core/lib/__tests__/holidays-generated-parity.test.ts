@@ -3,9 +3,12 @@ import Holidays from 'date-holidays';
 import {
   getPublicHolidayName,
   isPublicHolidayISO,
+  jurisdictionLineage,
   PUBLIC_HOLIDAY_YEAR_RANGE,
 } from '../holidays';
-import { HOLIDAY_NAMES, PACKED_BY_YEAR } from '../holidays.generated';
+import { HOLIDAY_NAMES, PACKED_BY_JURISDICTION } from '../holidays.generated';
+
+const PACKED_BY_YEAR = PACKED_BY_JURISDICTION['AU-NSW'];
 
 /**
  * `holidays.generated.ts` is baked from `date-holidays` at build time so the
@@ -86,13 +89,81 @@ describe('generated NSW holiday table is faithful to date-holidays', () => {
     expect(isPublicHolidayISO('2026-09-06')).toBe(false);
   });
 
-  it('interns every name index the packed rows reference', () => {
-    for (const packed of Object.values(PACKED_BY_YEAR)) {
-      for (const entry of packed.split(',').filter(Boolean)) {
-        const idx = Number(entry.split(':')[1]);
-        expect(HOLIDAY_NAMES[idx]).toBeTypeOf('string');
+  it('interns every name index the packed rows reference, in every jurisdiction', () => {
+    for (const byYear of Object.values(PACKED_BY_JURISDICTION)) {
+      for (const packed of Object.values(byYear)) {
+        for (const entry of packed.split(',').filter(Boolean)) {
+          const idx = Number(entry.split(':')[1]);
+          expect(HOLIDAY_NAMES[idx]).toBeTypeOf('string');
+        }
       }
     }
+  });
+});
+
+describe('Queensland (AU-QLD) is date-holidays AU/QLD, less Christmas Eve', () => {
+  const qld = new Holidays('AU', 'QLD');
+
+  it('matches the library, both ways, for every year', () => {
+    const mismatches: string[] = [];
+    for (let year = min; year <= max; year++) {
+      const expected = new Set(
+        qld.getHolidays(year)
+          .filter((e) => e.type === 'public' && e.name !== 'Christmas Eve')
+          .map((e) => e.date.slice(0, 10))
+          .filter((k) => Number(k.slice(0, 4)) === year),
+      );
+      for (const key of expected) if (!isPublicHolidayISO(key, 'AU-QLD')) mismatches.push(`${key} missing`);
+      for (const entry of (PACKED_BY_JURISDICTION['AU-QLD'][String(year)] ?? '').split(',').filter(Boolean)) {
+        const key = `${year}-${entry.slice(0, 2)}-${entry.slice(2, 4)}`;
+        if (!expected.has(key)) mismatches.push(`${key} is in the table but not a Queensland public holiday`);
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it('leaves Christmas Eve out (observed from 6pm only) and keeps Queensland, not NSW, Labour Day', () => {
+    expect(isPublicHolidayISO('2026-12-24', 'AU-QLD')).toBe(false);
+    expect(isPublicHolidayISO('2026-05-04', 'AU-QLD')).toBe(true);  // QLD Labour Day
+    expect(isPublicHolidayISO('2026-05-04', 'AU-NSW')).toBe(false);
+    expect(isPublicHolidayISO('2026-10-05', 'AU-NSW')).toBe(true);  // NSW Labour Day
+  });
+});
+
+describe('Brisbane (AU-QLD-BNE) adds the Ekka to Queensland', () => {
+  /** Written independently of the generator: the Wednesday after the first Friday on or after 5 August. */
+  function ekka(year: number): string {
+    for (let day = 5; day <= 11; day++) {
+      const d = new Date(Date.UTC(year, 7, day));
+      if (d.getUTCDay() === 5) return new Date(Date.UTC(year, 7, day + 5)).toISOString().slice(0, 10);
+    }
+    throw new Error('unreachable');
+  }
+
+  it('reproduces the gazetted Ekka days', () => {
+    expect(['2024-08-14', '2025-08-13', '2026-08-12'].every((d) => isPublicHolidayISO(d, 'AU-QLD-BNE'))).toBe(true);
+    expect(getPublicHolidayName(new Date(2026, 7, 12), 'AU-QLD-BNE')).toBe('Royal Queensland Show (Ekka)');
+  });
+
+  it('holds exactly one Ekka a year from 2024, and nothing of its own besides', () => {
+    const mismatches: string[] = [];
+    for (let year = min; year <= max; year++) {
+      const own = (PACKED_BY_JURISDICTION['AU-QLD-BNE'][String(year)] ?? '').split(',').filter(Boolean)
+        .map((e) => `${year}-${e.slice(0, 2)}-${e.slice(2, 4)}`);
+      const expected = year >= 2024 ? [ekka(year)] : [];
+      if (own.join() !== expected.join()) mismatches.push(`${year}: ${own.join() || '-'} != ${expected.join() || '-'}`);
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it('inherits every Queensland day, and the Ekka is not a holiday elsewhere in Queensland', () => {
+    expect(isPublicHolidayISO('2026-05-04', 'AU-QLD-BNE')).toBe(true);
+    expect(isPublicHolidayISO('2026-08-12', 'AU-QLD')).toBe(false);
+  });
+
+  it('resolves the lineage nearest first, and refuses an unknown jurisdiction', () => {
+    expect(jurisdictionLineage('AU-QLD-BNE')).toEqual(['AU-QLD-BNE', 'AU-QLD', 'AU']);
+    expect(() => isPublicHolidayISO('2026-01-01', 'AU-VIC')).toThrow(/No public-holiday table/);
   });
 });
 

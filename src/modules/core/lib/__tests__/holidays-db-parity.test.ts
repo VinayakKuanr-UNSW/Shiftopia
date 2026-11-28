@@ -2,22 +2,24 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { isPublicHolidayISO } from '../holidays';
+import { PACKED_BY_JURISDICTION } from '../holidays.generated';
 
 /**
- * The browser and the database each keep a public-holiday table: the client
+ * The browser and the database each keep public-holiday tables: the client
  * prices and checks shifts off `holidays.generated.ts`, while the SQL cost
  * engine, fairness ledger, day-typed shape rules and TOIL read
  * `public.public_holidays`. If they disagree, the estimate a manager sees and
  * the cost the database records disagree on the same shift.
  *
- * Nothing in the app writes `public_holidays`; its rows arrive by migration and
- * are captured from the live database into `supabase/seeds/reference.sql` by
+ * Nothing in the app writes `public_holidays`; its rows are captured from the
+ * live database into `supabase/seeds/reference.sql` by
  * `scripts/db/reference-seed.sql`. So the seed is the database's table, and this
- * compares it, day by day, with the client's over every year the database covers.
+ * compares it with the client's, jurisdiction by jurisdiction and day by day,
+ * over every year the database covers. Both sides hold each jurisdiction's OWN
+ * days; a lookup adds the parents' (AU-QLD-BNE inherits AU-QLD).
  *
- * If this fails, fix whichever side is wrong — a new NSW holiday needs both a
- * migration and `npm run gen:holidays` — then regenerate the seed.
+ * If this fails, fix whichever side is wrong — a new holiday needs both the
+ * database rows and `npm run gen:holidays` — then regenerate the seed.
  */
 
 // From a string, not `new URL(…)`: the jsdom environment replaces the global URL.
@@ -34,32 +36,36 @@ function seededHolidays(): Array<{ date: string; jurisdiction: string }> {
         .map((r) => ({ date: r.holiday_date, jurisdiction: r.jurisdiction }));
 }
 
-describe('database public_holidays agrees with the client holiday table', () => {
+/** The client's OWN days for one jurisdiction in one year (no parents). */
+function clientOwnDays(jurisdiction: string, year: number): Set<string> {
+    const packed = PACKED_BY_JURISDICTION[jurisdiction]?.[String(year)] ?? '';
+    return new Set(packed.split(',').filter(Boolean)
+        .map((e) => `${year}-${e.slice(0, 2)}-${e.slice(2, 4)}`));
+}
+
+describe('database public_holidays agrees with the client holiday tables', () => {
     const rows = seededHolidays();
 
     it('reads the seeded rows (guards against an empty parse)', () => {
         expect(rows.length).toBeGreaterThan(100);
     });
 
-    // AU-QLD (BCEC, 2026-11-26) is in the database but not yet in the client table,
-    // which still answers for NSW alone. Teaching the client per-jurisdiction
-    // holidays is tracked in docs/architecture/multi-organization.md; until then a
-    // jurisdiction outside this list fails here rather than slipping past.
-    it('holds the known jurisdictions only', () => {
-        expect([...new Set(rows.map((r) => r.jurisdiction))].sort()).toEqual(['AU-NSW', 'AU-QLD']);
+    it('holds days only for jurisdictions the client has a table for', () => {
+        const known = new Set(Object.keys(PACKED_BY_JURISDICTION));
+        const unknown = [...new Set(rows.map((r) => r.jurisdiction))].filter((j) => !known.has(j));
+        expect(unknown).toEqual([]);
     });
 
-    it('marks the same NSW days as public holidays, in both directions', () => {
-        const nsw = rows.filter((r) => r.jurisdiction === 'AU-NSW');
-        const seeded = new Set(nsw.map((r) => r.date));
-        const years = nsw.map((r) => Number(r.date.slice(0, 4)));
+    it('marks the same days, in both directions, in every jurisdiction the database holds', () => {
         const mismatches: string[] = [];
-
-        for (let year = Math.min(...years); year <= Math.max(...years); year++) {
-            for (let d = new Date(Date.UTC(year, 0, 1)); d.getUTCFullYear() === year; d.setUTCDate(d.getUTCDate() + 1)) {
-                const iso = d.toISOString().slice(0, 10);
-                const inDb = seeded.has(iso);
-                if (inDb !== isPublicHolidayISO(iso)) mismatches.push(`${iso}: database ${inDb}, client ${!inDb}`);
+        for (const jurisdiction of new Set(rows.map((r) => r.jurisdiction))) {
+            const own = rows.filter((r) => r.jurisdiction === jurisdiction);
+            const seeded = new Set(own.map((r) => r.date));
+            const years = own.map((r) => Number(r.date.slice(0, 4)));
+            for (let year = Math.min(...years); year <= Math.max(...years); year++) {
+                const client = clientOwnDays(jurisdiction, year);
+                for (const d of client) if (!seeded.has(d)) mismatches.push(`${jurisdiction} ${d}: client only`);
+                for (const d of seeded) if (d.startsWith(String(year)) && !client.has(d)) mismatches.push(`${jurisdiction} ${d}: database only`);
             }
         }
         expect(mismatches).toEqual([]);

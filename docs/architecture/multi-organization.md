@@ -47,7 +47,9 @@ it: why the code looks the way it does is the point of this file.
 | H3 | A date can be a holiday in several jurisdictions: the key is `(holiday_date, jurisdiction)`. | Assumed (forced by H2) | `20261125193848_public_holidays_multi_jurisdiction` |
 | H4 | TOIL absence credit counts only holidays of the jurisdictions where the person holds a Full-Time or Part-Time contract that week. | Assumed | same migration |
 | H5 | The client holiday table (`core/lib/holidays.ts`, 29 importers: pay, compliance, leave, calendars, the AutoScheduler) answers for NSW only. Until it is per-jurisdiction, `holidays-db-parity.test.ts` compares NSW day by day and pins the set of jurisdictions to `AU-NSW, AU-QLD`. | Verified 2026-11-26 — interim |
-| H6 | **Ekka** (Royal Queensland Show day) is a public holiday in Brisbane only, so it needs a jurisdiction below the state. See §5. | Open → design below | — |
+| H6 | **Ekka** (Royal Queensland Show day) is a public holiday in Brisbane only, held on its own jurisdiction `AU-QLD-BNE` under `AU-QLD` (§5). 17 rows, 2024–2040. | Built 2026-11-28 | `20261127235949_jurisdictions_hierarchy` + seed |
+| H7 | The shift-shape trigger and template application used to call `shift_day_typed_shortfall` without a jurisdiction (so `'AU-NSW'`); both now pass the shift's organization's jurisdiction, and the function has no default. | Built 2026-11-28 | same migration |
+| H8 | Until BCEC's instrument is known (B6), its shifts are checked with the ICC Sydney EA's day-typed rules, so a refusal cites "ICC EBA cl 56.2". | Assumed — interim |
 
 ## 4. Pay: rate cards
 
@@ -113,9 +115,9 @@ wages. Names and behaviour are ours.
 
 | ID | Statement | Tag |
 |---|---|---|
-| J1 | Jurisdictions become a lookup table with a parent: `AU-QLD-BNE` (Brisbane) under `AU-QLD`. A holiday applies to its jurisdiction and every jurisdiction under it; an organization names its most specific one. Ordinary foreign keys then replace the CHECK on `organizations.jurisdiction`, which calls a function that reads `public_holidays`. | Assumed |
-| J2 | BCEC's jurisdiction becomes `AU-QLD-BNE`. | Assumed |
-| J3 | Ekka is the Wednesday of the Royal Queensland Show, which starts on the first Friday of August, or the second Friday when the first falls before 5 August. This reproduces the gazetted dates for 2024–2026 (14 Aug 2024, 13 Aug 2025, 12 Aug 2026). Later years are derived from the rule; the Queensland government can move the day (it did in 2021 and 2022), so check each year when it is gazetted. | Assumed |
+| J1 | `public.jurisdictions` with a parent: `AU` → `AU-NSW`, `AU-QLD` → `AU-QLD-BNE`. A holiday applies to its jurisdiction and every jurisdiction under it (`jurisdiction_lineage`); an organization names its most specific one. Foreign keys replaced the CHECK that called `jurisdiction_is_known()`. National days stay on the state rows; `AU` holds none. | Built 2026-11-28 |
+| J2 | BCEC's jurisdiction is `AU-QLD-BNE`. | Built 2026-11-28 |
+| J3 | Ekka is the Wednesday of the Royal Queensland Show, which starts on the first Friday of August, or the second Friday when the first falls before 5 August. This reproduces the gazetted dates for 2024–2026 (14 Aug 2024, 13 Aug 2025, 12 Aug 2026). Later years are derived from the rule; the Queensland government can move the day (it did in 2021 and 2022), so check each year when it is gazetted. | Assumed — built (DB 2024–2040, client 2024–2075) |
 
 ## 6. Choosing an organization in the app
 
