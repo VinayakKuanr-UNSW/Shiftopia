@@ -372,8 +372,11 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
 
   // NO_RATE_CARD: the organization has no published card covering this date.
   // EBA pay cannot be computed — say so rather than price it at someone
-  // else's rates. Salaried pay is outside the EA and needs no card.
-  if (input.rateCards && input.payBasis !== 'salary' && !resolveCardOn(input.rateCards, input.shiftDate)) {
+  // else's rates. Salaried pay is outside the EA and needs no card; so is a
+  // TOIL payout whose rate is already resolved (a salary's hourly equivalent,
+  // or the card's own rate on that date).
+  const rateResolved = input.isToilPayout && input.rate != null;
+  if (input.rateCards && input.payBasis !== 'salary' && !rateResolved && !resolveCardOn(input.rateCards, input.shiftDate)) {
     return { ...NOT_WORKED(input), unpriced: true };
   }
 
