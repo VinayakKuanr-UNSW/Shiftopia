@@ -111,6 +111,22 @@ export function allowsShiftWriteAt(
     });
 }
 
+/**
+ * May this person manage pay rate cards IN THIS ORGANIZATION (roll a card
+ * forward, publish or discard a draft)? Mirrors rbac_permissions for
+ * payroll.manage: zeta at ORG scope, so only a zeta contract in that same
+ * organization counts — Administrator elsewhere is not enough (T3).
+ */
+export function allowsPayrollManageIn(
+    certificates: readonly AccessCertificate[] | undefined,
+    organizationId: string | null | undefined,
+): boolean {
+    if (!organizationId) return false;
+    return (certificates ?? []).some(
+        (c) => c.isActive !== false && c.accessLevel === 'zeta' && c.organizationId === organizationId,
+    );
+}
+
 /** Personal suite: anyone with an active contract (every access level sits on one). */
 export function hasPersonalSuite(h: AccessHolding): boolean {
     return h.xLevel !== null || h.hasContract;

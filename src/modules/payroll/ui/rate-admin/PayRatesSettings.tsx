@@ -7,11 +7,13 @@
  *   - Base Rates: enhanced searchable table with detail drawer
  *   - Allowances: card-based allowance display
  *   - Apprentices & Trainees: visual cards + reference matrices
- *   - Versions: one rate card per period, as a timeline
+ *   - Versions: the organization's rate cards by period, drafts included for
+ *     payroll.manage; roll a card forward, review a draft, publish or discard it
  *   - Settings: date resolver + architecture note (original features)
  *
- * READ-ONLY. A new period's card is made through the rate-card API
- * (roll_rate_card_forward → publish_rate_card), not on this screen.
+ * The other tabs read the PUBLISHED cards only. Changes go through the
+ * rate-card API (roll_rate_card_forward → publish_rate_card / discard_rate_card)
+ * on the Versions tab.
  */
 
 import { PageState } from '@/modules/core/ui/components/PageState';
@@ -31,6 +33,7 @@ import { resolveTraineeRateSet } from '@/modules/rosters/domain/projections/util
 import AwardDashboardHeader from './components/AwardDashboardHeader';
 import AwardHealthPanel from './components/AwardHealthPanel';
 import VersionTimeline from './components/VersionTimeline';
+import RateCardPeriods from './components/RateCardPeriods';
 import BaseRatesSection from './components/BaseRatesSection';
 import AllowancesSection from './components/AllowancesSection';
 import ApprenticeCards from './components/ApprenticeCards';
@@ -189,11 +192,7 @@ export const PayRatesSettings: React.FC = () => {
 
         {/* ── Versions ──────────────────────────────────────────────────── */}
         <TabsContent value="versions" className="mt-8 space-y-8">
-          <VersionTimeline
-            schedule={schedule}
-            inForceFrom={inForceToday?.effectiveFrom ?? null}
-            onSelectVersion={showVersion}
-          />
+          <RateCardPeriods />
         </TabsContent>
 
         {/* ── Settings ──────────────────────────────────────────────────── */}
@@ -209,8 +208,8 @@ export const PayRatesSettings: React.FC = () => {
               These are your organization's published pay rate cards — one per period
               (<span className="font-semibold text-foreground">pay_rate_cards</span>, with their
               <span className="font-semibold text-foreground"> eba_rate</span> / <span className="font-semibold text-foreground">eba_allowance</span> lines).
-              This screen is read-only: an Administrator rolls a card forward into a draft and publishes it
-              through the rate-card API.
+              An Administrator rolls a card forward into a draft, reviews it and publishes it on the
+              Versions tab.
             </p>
           </div>
 

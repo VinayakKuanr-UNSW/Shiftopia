@@ -1,5 +1,6 @@
 -- Reference data for local and CI databases (no personal data).
 -- GENERATED from production by scripts/db/rebaseline-from-prod.sh on 2026-11-28 — do not edit by hand.
+SELECT set_config('pay.rate_card_lock', 'off', false);  -- published rate-card lines are seeded after their card
 
 -- public.jurisdictions
 INSERT INTO public.jurisdictions (code, name, parent_code, created_at) SELECT code, name, parent_code, created_at FROM jsonb_populate_record(NULL::public.jurisdictions, '{"code": "AU-NSW", "name": "New South Wales", "created_at": "2026-11-27T23:59:49.48285+00:00", "parent_code": "AU"}') ON CONFLICT DO NOTHING;
