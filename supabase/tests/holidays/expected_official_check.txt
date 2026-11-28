@@ -1,0 +1,12 @@
+clean 2026 + skip 2023: checked=1 matched=13 off_only=0 tbl_only=0 name_diff=0 notified=0 skipped=["AU-NSW 2023"]
+AU-NSW 2026 all gazetted: t
+diff run: matched=12 off_only=1 tbl_only=1 name_diff=1 notified=1
+proclaimed day inserted as gazetted: t, shift repriced: 259.12 -> 647.80
+table_only kept and demoted to rule: t
+ICC Administrator notified once: 1
+re-run idempotent: off_only=0 tbl_only=1 notified=0 first_seen_preserved=t
+unknown jurisdiction: refused (22023)
+wrong holiday year: refused (22023)
+authenticated reads checks=1 discrepancies=2
+RPC grants: anon=f authenticated=f service_role=t
+anon table select: checks=f discrepancies=f
