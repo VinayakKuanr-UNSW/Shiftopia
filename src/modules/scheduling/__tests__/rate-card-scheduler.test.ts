@@ -132,3 +132,12 @@ describe('the solver prices from the organization\'s card', () => {
         expect(req.employees[0].hourly_rate).toBe(27.71);
     });
 });
+
+describe('a card without the employee\'s level', () => {
+    it('stops the run with an actionable message instead of crashing or sending NaN', async () => {
+        const noLevel2 = { ...CUSTOM, rateSet: { ...CUSTOM.rateSet, wageRates: { LEVEL_1: CUSTOM.rateSet.wageRates.LEVEL_1 } as typeof CUSTOM.rateSet.wageRates, defaultRate: Number.NaN } };
+        h.fetchCards.mockResolvedValue(new Map([['org-b', [noLevel2]]]));
+        await expect(run('org-b')).rejects.toThrow(/BCEC-EA has no rate for FT's classification \(Level 2\)/);
+        expect(mockOptimize).not.toHaveBeenCalled();
+    });
+});

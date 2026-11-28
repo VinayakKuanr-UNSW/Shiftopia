@@ -125,6 +125,11 @@ export interface PeriodGrossPay {
   grossPay: number;
   paidHours: number;
   shiftCount: number;
+  /**
+   * Shifts with no published rate card covering their date (NO_RATE_CARD):
+   * counted at $0, so this period's pay is incomplete. Absent when none.
+   */
+  unpricedShiftCount?: number;
   /** Total hours worked on salaried shifts in the period. */
   salariedHours?: number;
   /** Hours worked beyond contracted weekly hours for salaried staff (given as TIL, not cash overtime). */

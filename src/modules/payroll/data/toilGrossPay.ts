@@ -84,6 +84,7 @@ export function payoutInputFromEntry(
         employeeId: entry.employee_id,
         organizationId: contract?.organization_id ?? undefined,
         rateCards,
+        payBasis: contract?.pay_basis === 'salary' ? 'salary' : undefined,
         shiftDate: date,
         netMinutes: Math.abs(Number(entry.minutes) || 0),
         rate,

@@ -907,7 +907,7 @@ export async function getPeriodGrossPay(
           orgIds: bounds.orgIds,
           deptIds: bounds.deptIds,
           subDeptIds: bounds.subDeptIds,
-        });
+        }, rateCardCache);
   const leaveSchedules = await rateCardCache.get(rawLeaveInputs.map((i) => i.organizationId ?? ''));
   const leaveInputs = rawLeaveInputs.map((i) => ({ ...i, rateCards: leaveSchedules.get(i.organizationId ?? '') ?? [] }));
   // Collision rule per employee+date: a shift priced from REAL attendance

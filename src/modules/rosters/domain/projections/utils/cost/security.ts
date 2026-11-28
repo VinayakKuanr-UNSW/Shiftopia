@@ -124,6 +124,8 @@ export function estimateDetailedShiftCost(
       resolveSecurityRate(rateSet, options.classificationLevel, isFullTimeType, isCasualType)
       ?? rateSet.defaultRate;
   }
+  // On a card, a rate the card cannot supply is unpriced — not a priced $0.
+  if (pricing.cardCode && !Number.isFinite(effectiveRate)) return UNPRICED_COST_BREAKDOWN;
 
   // ── Higher duties (cl 29) — same MAX semantics as the Standard engine ─────
   // The nominated higher grade resolves through the SAME security rate path

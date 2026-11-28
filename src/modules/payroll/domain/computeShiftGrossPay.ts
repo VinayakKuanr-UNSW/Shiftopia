@@ -522,6 +522,9 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
   };
 
   const b = estimateDetailedShiftCost(opts);
+  // The card covers the date but cannot price this shift (a level or
+  // Schedule 5 set it lacks): unpriced, like no card at all.
+  if (b.unpriced) return { ...NOT_WORKED(input), unpriced: true };
 
   if (isLeave) {
     const lines: EarningsLine[] = [];

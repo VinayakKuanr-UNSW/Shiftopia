@@ -155,3 +155,32 @@ describe('two organizations side by side (multi-organization proof)', () => {
     expect(orphan.scheduled).toEqual({ kind: 'no_rate_card' });
   });
 });
+
+describe('review fixes: nothing unpriced is hidden or priced at ICC\'s rates', () => {
+  it('a salaried TOIL payout is outside the EA and needs no card', () => {
+    const entry = { id: 't2', employee_id: 'e2', entry_type: 'payout', minutes: 120, effective_date: '2026-07-10' };
+    const salaried = { pay_basis: 'salary', annual_salary: 104000, contracted_weekly_hours: 40, employment_status: 'Full-Time', organization_id: 'org-b' };
+    const pay = computeShiftGrossPay(payoutInputFromEntry(entry, salaried, []));
+    expect(pay.unpriced).toBeUndefined();
+    expect(pay.grossPay).toBe(105.26); // 2h × $104,000 / 52 / 38 (a full-time week)
+  });
+
+  it('a trainee on a card without a Schedule 5 schedule is unpriced, not priced at ICC\'s', () => {
+    const input = { ...mapShiftRowToGrossPayInput(row(), window('09:00', '17:00', 450), [CUSTOM])!, is_trainee: true, trainee_category: 'junior' as const };
+    expect(computeShiftGrossPay(input).unpriced).toBe(true);
+  });
+
+  it('a level the card does not carry is unpriced, not a priced $0', () => {
+    const input = mapShiftRowToGrossPayInput(row({ remuneration_level: 6, remuneration_levels: { level_number: 6, level_name: 'Level 6' } }), window('09:00', '17:00', 450), [{ ...CUSTOM, rateSet: { ...CUSTOM.rateSet, defaultRate: Number.NaN } }])!;
+    expect(computeShiftGrossPay(input).unpriced).toBe(true);
+  });
+
+  it('the period says how many shifts are unpriced', async () => {
+    const { computeEmployeePeriodGrossPay } = await import('../domain/aggregatePeriodGrossPay');
+    const priced = mapShiftRowToGrossPayInput(row({ id: 'p' }), window('09:00', '17:00', 450), [CUSTOM])!;
+    const unpriced = mapShiftRowToGrossPayInput(row({ id: 'u', shift_date: '2026-07-07' }), window('09:00', '17:00', 450), [])!;
+    const period = computeEmployeePeriodGrossPay('e1', [priced, unpriced], { periodStart: '2026-07-06', periodEnd: '2026-07-12' });
+    expect(period.unpricedShiftCount).toBe(1);
+    expect(computeEmployeePeriodGrossPay('e1', [priced], { periodStart: '2026-07-06', periodEnd: '2026-07-12' }).unpricedShiftCount).toBeUndefined();
+  });
+});

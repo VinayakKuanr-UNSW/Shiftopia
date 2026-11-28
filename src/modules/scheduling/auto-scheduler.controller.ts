@@ -1986,8 +1986,15 @@ export class AutoSchedulerController {
                 ? (`LEVEL_${det.level}` as keyof typeof windowRateSet.wageRates)
                 : null;
             const scheduleRate = levelKey
-                ? (isCasual ? windowRateSet.wageRates[levelKey].casual : windowRateSet.wageRates[levelKey].permanent)
+                ? (isCasual ? windowRateSet.wageRates[levelKey]?.casual : windowRateSet.wageRates[levelKey]?.permanent) ?? null
                 : null;
+            const hourlyRate = securityRate ?? scheduleRate ?? windowRateSet.defaultRate;
+            if (!Number.isFinite(hourlyRate)) {
+                throw new Error(
+                    `${windowCard?.code ?? 'The rate card'} has no rate for ${e.name}'s classification` +
+                    (det?.level ? ` (Level ${det.level})` : '') + '. Add it in Payroll → Pay Rates, then run the AutoScheduler again.',
+                );
+            }
 
             return {
                 id: e.id,
@@ -1996,7 +2003,7 @@ export class AutoSchedulerController {
                 contracted_role_ids: e.contracted_role_ids ?? [],
                 is_security_role: isSecurityEmployee,
 
-                hourly_rate: securityRate ?? scheduleRate ?? windowRateSet.defaultRate,
+                hourly_rate: hourlyRate,
                 contract_weekly_minutes: isFPT
                     ? fptContractWeekly
                     : isPT

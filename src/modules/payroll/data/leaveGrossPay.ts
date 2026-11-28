@@ -19,6 +19,7 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import type { RateCardScheduleCache } from './ebaRates.read.api';
 import { isPublicHolidayISO } from '@/modules/core/lib/holidays';
 import type { GrossPayShiftInput } from '../domain/computeShiftGrossPay';
 import type { CostCalculatorOptions } from '../../rosters/domain/projections/utils/cost/types';
@@ -493,7 +494,7 @@ interface LeaveFetchBounds {
   subDeptIds?: string[];
 }
 
-export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<GrossPayShiftInput[]> {
+export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds, rateCardCache?: RateCardScheduleCache): Promise<GrossPayShiftInput[]> {
   const { data: leaves, error } = await (supabase as any)
     .from('leave_requests')
     .select('id, employee_id, leave_type, start_date, end_date, status, election_mode, requested_hours')
@@ -513,12 +514,20 @@ export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<
   const ctxById = await resolveLeaveContexts(employeeIds, bounds);
   const rosterByEmp = await fetchRosteredMinutes(employeeIds, bounds);
 
-  const isHoliday = (ymd: string) => isPublicHolidayISO(ymd);
+  // Each person's organization types its own public holidays (its rate cards
+  // carry the jurisdiction); without them, the default (AU-NSW).
+  const schedules = rateCardCache
+    ? await rateCardCache.get([...ctxById.values()].map((c) => c.organizationId ?? ''))
+    : null;
+  const jurisdictionOf = (orgId?: string) => schedules?.get(orgId ?? '')?.find((c) => c.jurisdiction)?.jurisdiction;
+  let isHoliday = (ymd: string) => isPublicHolidayISO(ymd);
   const out: GrossPayShiftInput[] = [];
   const phSeen = new Set<string>(); // employee:date — overlapping requests must not double-pay a PH
   for (const req of approved) {
     const ctx = ctxById.get(req.employee_id);
     if (!ctx) continue; // no resolvable contract/rate — skip rather than guess.
+    const jurisdiction = jurisdictionOf(ctx.organizationId);
+    isHoliday = (ymd: string) => isPublicHolidayISO(ymd, jurisdiction);
     const flags = leaveTypeToFlags(req.leave_type, req.election_mode)!; // non-null: filtered above
     if (flags.isToilLeave) {
       // Hours, not days: each day carries its share of the request. No separate

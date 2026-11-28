@@ -260,6 +260,10 @@ export function estimateDetailedShiftCost(
       if (floorHourly > baseRate) baseRate = floorHourly;
     }
   }
+  else if (options.is_trainee && pricing.cardCode && !pricing.trainee) {
+    // The card has no Schedule 5 schedule: never price a trainee at ICC's.
+    return UNPRICED_COST_BREAKDOWN;
+  }
   else if (options.is_trainee) {
     baseRate = getTraineeBaseRate({
       category: options.trainee_category || 'junior',
@@ -286,7 +290,9 @@ export function estimateDetailedShiftCost(
   const loadings = pricing.loadings;
   const casualMult = 1 + loadings.casualLoading;
   const ordinaryRate = isCasual ? baseRate / casualMult : baseRate;
-  if (isNaN(ordinaryRate)) return ZERO_RESULT;
+  // On a card, a rate the card cannot supply (no such level, no Level 1 default)
+  // is unpriced — not a priced $0.
+  if (isNaN(ordinaryRate)) return pricing.cardCode ? UNPRICED_COST_BREAKDOWN : ZERO_RESULT;
 
   // ── Net minutes calculation (Pure integer arithmetic) ──────────────────
   // `netMinutes` is the ONE source of truth here — every caller (confirmed
