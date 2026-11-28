@@ -138,3 +138,29 @@ database then client. Each lands as its own PR through CI.
 
 - Apply the `hr.organizations` drop (`supabase/pending/`) now that the PR #65 frontend is deployed.
 - Retire the `hr.departments / hr.subdepartments` mirrors (Wave 2 review).
+
+## 9. Global expansion (scoped 2026-11-28)
+
+Venues in North America and Europe are being considered. The scope, with evidence and
+the order of work, is [global-expansion-scope.md](global-expansion-scope.md).
+
+| ID | Statement | Tag |
+|---|---|---|
+| B5 | BCEC's timezone is `Australia/Brisbane` (no daylight saving). `shifts.timezone` defaults to `Australia/Sydney` and organizations have no timezone, so a BCEC shift would be an hour wrong from October to April. No BCEC shift exists yet. | Verified 2026-11-28 — fix with §3.1 of the scope |
+| J4 | Fix 2 (jurisdictions table, Ekka) is built but **not applied**, and is paused: jurisdiction codes must follow ISO 3166-2 (digits allowed, e.g. `PT-13`) with country-level parents (`AU`, `US`, `GB`, …) before it goes in. | Assumed |
+| P2 | Revisit: per-agreement code paths do not scale to dozens of collective agreements; a rule-set catalogue (values per agreement) is proposed. For this run: keep rules as code, behind a rule-set interface the engines call by name (G5). | Decided 2026-11-28 (this run) |
+| G0 | **This run builds for Australia only** (APAC scope, no other APAC country). North America and Europe stay scoped, not built. | Decided 2026-11-28 |
+| G1 | Which venue types are in scope (rostering vs hospitality/commercial partnerships). | Deferred (no non-Australian venue this run) |
+| G2 | No operator/group level this run: venue = organization; people at several venues hold a contract at each; the switcher moves between them. | Decided 2026-11-28 (this run) |
+| G3 | One database, Supabase `ap-southeast-1`, for this run (all data is Australian). | Decided 2026-11-28 (follows G0) |
+| G4 | English only this run; dates and numbers in `en-AU`. | Decided 2026-11-28 (follows G0) |
+| G5 | Rules stay code for this run, behind a rule-set seam so a catalogue can replace them later without touching callers. | Decided 2026-11-28 |
+| G6 | AUD only this run; rate cards still carry a currency. | Decided 2026-11-28 (follows G0) |
+| G7 | No non-Australian pilot this run. | Deferred |
+| B6 | BCEC's industrial instrument (its own EA or a modern award) is unknown; BCEC stays unpriced (P4) until its terms and rates are provided. | Decided 2026-11-28 |
+
+### Order of work for this run (supersedes §7)
+
+1. **Fix 2, adjusted:** jurisdictions with ISO 3166-2 codes and a country parent (`AU` → `AU-NSW`, `AU-QLD` → `AU-QLD-BNE`), Ekka, per-jurisdiction client holidays.
+2. **Time foundation:** `organizations.timezone` (BCEC `Australia/Brisbane`), every hardcoded `'Australia/Sydney'` (38 SQL functions, ~45 client files) replaced by the shift's or organization's timezone, scheduled jobs by local time.
+3. **Pay:** the rule-set seam (ICC EA as its first entry), then rate cards.
