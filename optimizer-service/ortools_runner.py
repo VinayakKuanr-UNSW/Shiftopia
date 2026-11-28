@@ -262,6 +262,22 @@ class EmployeeReq(BaseModel):
     initial_effective_minutes: Optional[float] = None
 
 
+class PricingPolicyReq(BaseModel):
+    """The organization's rate-card loadings (pay_rate_card_loadings). Every
+    field defaults to ICC Sydney EA 2025, so an older frontend that sends no
+    policy prices as before. Bounds mirror the table's CHECK constraints."""
+    casual_loading: float = Field(0.25, ge=0, le=1)
+    saturday_loading: float = Field(0.25, ge=0, le=3)
+    sunday_loading: float = Field(0.50, ge=0, le=3)
+    public_holiday_loading: float = Field(1.50, ge=0, le=3)
+    night_loading_mon_thu: float = Field(0.20, ge=0, le=3)
+    night_loading_fri: float = Field(0.25, ge=0, le=3)
+    night_loading_sat_sun: float = Field(0.50, ge=0, le=3)
+    overtime_first_hours: float = Field(3.0, ge=0, le=12)
+    overtime_first_multiplier: float = Field(1.5, ge=1, le=5)
+    overtime_after_multiplier: float = Field(2.0, ge=1, le=5)
+
+
 class ConstraintsReq(BaseModel):
     min_rest_minutes: int = 600
     enforce_role_match: bool = True
@@ -285,6 +301,8 @@ class ConstraintsReq(BaseModel):
     # 'FPT', 'CASUAL', or None/'ALL' for legacy mixed runs). Declared here so
     # Pydantic forwards it across the wire to OptimizerConstraints.
     scheduler_mode: Optional[str] = None
+    # The organization's rate card (see PricingPolicyReq). None = ICC defaults.
+    pricing_policy: Optional[PricingPolicyReq] = None
 
 
 class StrategyReq(BaseModel):

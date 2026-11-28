@@ -115,6 +115,8 @@ const CONSTRAINTS_FIELDS = fieldSet<Required<OptimizerConstraints>>({
     // field missing from either side is dropped without an error.
     split_shift_allowance_cents: 0,
     scheduler_mode: 0,
+    // The organization's rate-card loadings (PricingPolicyReq / PricingPolicy).
+    pricing_policy: 0,
 });
 
 const STRATEGY_FIELDS = fieldSet<Required<OptimizerStrategy>>({

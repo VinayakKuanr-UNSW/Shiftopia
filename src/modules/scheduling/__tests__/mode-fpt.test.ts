@@ -24,6 +24,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The organization's published rate cards (Phase 4): ICC Sydney's.
+vi.mock('@/modules/payroll/data/ebaRates.read.api', async () => (await import('./fixtures/iccRateCards')).iccRateCardsModule);
 vi.mock('@/modules/scheduling/validation/engine/assignment-committer', () => ({
     assignmentCommitter: { commitAtomic: vi.fn(), commit: vi.fn() },
 }));

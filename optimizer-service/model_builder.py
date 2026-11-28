@@ -43,7 +43,7 @@ import logging
 import math
 import time
 from dataclasses import dataclass, field, replace
-from typing import Optional
+from typing import Any, Optional
 
 from ortools.sat.python import cp_model
 
@@ -290,9 +290,58 @@ DAILY_MEAL_BREAK_MIN_MINUTES = 30                # 12h
 # Holiday rates as flat percentages (150% / 175% / 275%) of the ORDINARY
 # (de-loaded) rate — those percentages already include the casual loading, they
 # are not the loaded rate multiplied again by the permanent percentage.
-CASUAL_LOADING = 1.25
-_PERMANENT_PENALTY_MULT = {'public_holiday': 2.50, 'sunday': 1.50, 'saturday': 1.25}
-_CASUAL_PENALTY_MULT = {'public_holiday': 2.75, 'sunday': 1.75, 'saturday': 1.50}
+@dataclass(frozen=True)
+class PricingPolicy:
+    """The organization's rate card numbers the solver prices with
+    (`pay_rate_card_loadings`, sent as `ConstraintsReq.pricing_policy`). Every
+    default is ICC Sydney EA 2025's, so a request without a policy prices
+    exactly as the solver always did. Structure (precedence, the cl 41.4
+    maximum, the cl 43 conclusion-day rule) stays in code; numbers are the card's."""
+    casual_loading: float = 0.25           # cl 12.5(b)
+    saturday_loading: float = 0.25         # cl 41
+    sunday_loading: float = 0.50
+    public_holiday_loading: float = 1.50
+    night_loading_mon_thu: float = 0.20    # cl 43, by the day the shift concludes
+    night_loading_fri: float = 0.25
+    night_loading_sat_sun: float = 0.50
+    overtime_first_hours: float = 3.0      # cl 42.2
+    overtime_first_multiplier: float = 1.5
+    overtime_after_multiplier: float = 2.0
+
+    @property
+    def casual_multiplier(self) -> float:
+        return 1.0 + self.casual_loading
+
+    def penalty_multiplier(self, day: str, casual: bool) -> float:
+        """Multiplier on the ORDINARY (de-loaded) rate for a cl 41 penalty day.
+        The casual percentages include the casual loading (150% = 125% + 25%)."""
+        loading = {'public_holiday': self.public_holiday_loading, 'sunday': self.sunday_loading,
+                   'saturday': self.saturday_loading}[day]
+        return (self.casual_multiplier if casual else 1.0) + loading
+
+    def night_fraction(self, conclusion_weekday: int, casual: bool) -> float:
+        """cl 43 fraction over the ordinary rate (casual: including the casual loading)."""
+        night = (self.night_loading_mon_thu if conclusion_weekday <= 3
+                 else self.night_loading_fri if conclusion_weekday == 4
+                 else self.night_loading_sat_sun)
+        return night + (self.casual_loading if casual else 0.0)
+
+    @property
+    def overtime_tier1_minutes(self) -> int:
+        return int(round(self.overtime_first_hours * 60))
+
+    @property
+    def overtime_tier1_surcharge(self) -> float:
+        return self.overtime_first_multiplier - 1.0
+
+    @property
+    def overtime_tier2_surcharge(self) -> float:
+        return self.overtime_after_multiplier - 1.0
+
+
+ICC_PRICING = PricingPolicy()
+# Kept for readers of the casual loading; the policy is what prices.
+CASUAL_LOADING = ICC_PRICING.casual_multiplier
 
 
 def _penalty_day(shift: 'ShiftInput') -> Optional[str]:
@@ -307,7 +356,8 @@ def _penalty_day(shift: 'ShiftInput') -> Optional[str]:
     return None
 
 
-def _penalty_adjusted_rate(hourly_rate: float, employment_type: str, shift: 'ShiftInput') -> float:
+def _penalty_adjusted_rate(hourly_rate: float, employment_type: str, shift: 'ShiftInput',
+                           policy: PricingPolicy = ICC_PRICING) -> float:
     """Apply the EBA cl 41.1/41.2/41.3 Saturday/Sunday/Public-Holiday loading to
     an employee's hourly rate for `shift`.
 
@@ -323,8 +373,8 @@ def _penalty_adjusted_rate(hourly_rate: float, employment_type: str, shift: 'Shi
     if day is None:
         return hourly_rate
     if employment_type == 'Casual':
-        return (hourly_rate / CASUAL_LOADING) * _CASUAL_PENALTY_MULT[day]
-    return hourly_rate * _PERMANENT_PENALTY_MULT[day]
+        return (hourly_rate / policy.casual_multiplier) * policy.penalty_multiplier(day, casual=True)
+    return hourly_rate * policy.penalty_multiplier(day, casual=False)
 
 
 # EBA cl 43.1/43.2 — night-shift allowance (22:00-06:00), keyed to the day
@@ -336,8 +386,6 @@ def _penalty_adjusted_rate(hourly_rate: float, employment_type: str, shift: 'Shi
 # nightLoadOverBase) reconstruction — the allowance fraction is applied to
 # the DE-LOADED ordinary rate for casuals and the plain rate for FT/PT.
 # Weekday keys are Python's date.weekday() (Mon=0 .. Sun=6).
-_PERMANENT_NIGHT_PCT = {0: 0.20, 1: 0.20, 2: 0.20, 3: 0.20, 4: 0.25, 5: 0.50, 6: 0.50}
-_CASUAL_NIGHT_PCT = {0: 0.45, 1: 0.45, 2: 0.45, 3: 0.45, 4: 0.50, 5: 0.75, 6: 0.75}
 
 
 def _night_minutes(shift: 'ShiftInput') -> int:
@@ -375,13 +423,14 @@ def _conclusion_weekday(shift: 'ShiftInput') -> int:
     return date.weekday()
 
 
-def _night_allowance_rate(hourly_rate: float, employment_type: str, conclusion_weekday: int) -> float:
+def _night_allowance_rate(hourly_rate: float, employment_type: str, conclusion_weekday: int,
+                          policy: PricingPolicy = ICC_PRICING) -> float:
     """Absolute $/hr rate for a night-shift hour (cl 43), inclusive of
     ordinary pay — comparable directly against `_penalty_adjusted_rate`."""
     if employment_type == 'Casual':
-        ordinary = hourly_rate / CASUAL_LOADING
-        return ordinary * (1 + _CASUAL_NIGHT_PCT[conclusion_weekday])
-    return hourly_rate * (1 + _PERMANENT_NIGHT_PCT[conclusion_weekday])
+        ordinary = hourly_rate / policy.casual_multiplier
+        return ordinary * (1 + policy.night_fraction(conclusion_weekday, casual=True))
+    return hourly_rate * (1 + policy.night_fraction(conclusion_weekday, casual=False))
 
 
 def _assignment_cost_cents_with_night(
@@ -389,6 +438,7 @@ def _assignment_cost_cents_with_night(
     employment_type: str,
     shift: 'ShiftInput',
     is_security: bool = False,
+    policy: PricingPolicy = ICC_PRICING,
 ) -> int:
     """Labour cost in cents for the FULL shift: cl 41.1-41.3 Sat/Sun/PH
     loading applies to every paid minute, and the cl 43 night allowance
@@ -406,7 +456,7 @@ def _assignment_cost_cents_with_night(
     # Part-Time & Casual Event Security (Sch 3 §5.2-5.3) retain cl 41 / cl 43.
     if is_security and employment_type == 'FT':
         return int(round((paid_min / 60.0) * hourly_rate * 100))
-    weekend_rate = _penalty_adjusted_rate(hourly_rate, employment_type, shift)
+    weekend_rate = _penalty_adjusted_rate(hourly_rate, employment_type, shift, policy)
     night_min = _night_minutes(shift)
     if night_min <= 0:
         return int(round((paid_min / 60.0) * weekend_rate * 100))
@@ -414,7 +464,7 @@ def _assignment_cost_cents_with_night(
     scale = paid_min / float(shift.duration_minutes)
     paid_night_min = night_min * scale
     paid_non_night_min = max(0.0, paid_min - paid_night_min)
-    night_rate = _night_allowance_rate(hourly_rate, employment_type, _conclusion_weekday(shift))
+    night_rate = _night_allowance_rate(hourly_rate, employment_type, _conclusion_weekday(shift), policy)
     effective_night_rate = max(weekend_rate, night_rate)
     return int(round(
         (paid_non_night_min / 60.0) * weekend_rate * 100
@@ -768,9 +818,15 @@ class OptimizerConstraints:
     # 'FPT', 'CASUAL', or None for legacy mixed runs). Declared BOTH here and on
     # ConstraintsReq so it crosses the Pydantic → dataclass wire boundary intact.
     scheduler_mode: Optional[str] = None
+    # The organization's rate-card loadings (PricingPolicy). Arrives as a dict
+    # from the wire (or None = ICC Sydney EA 2025). Declared BOTH here and on
+    # ConstraintsReq, like every wire field.
+    pricing_policy: Any = None
 
     def __post_init__(self):
         self.scheduler_mode = normalize_scheduler_mode(self.scheduler_mode)
+        if not isinstance(self.pricing_policy, PricingPolicy):
+            self.pricing_policy = PricingPolicy(**(self.pricing_policy or {}))
 
 
 @dataclass
@@ -1897,7 +1953,8 @@ class ScheduleModelBuilder:
     # -- B5: transparency helpers ---------------------------------------------
 
     @staticmethod
-    def _assignment_cost_cents(emp: 'EmployeeInput', shift: 'ShiftInput') -> int:
+    def _assignment_cost_cents(emp: 'EmployeeInput', shift: 'ShiftInput',
+                               policy: PricingPolicy = ICC_PRICING) -> int:
         """Labour cost in cents for emp working shift, incl. day-of-week /
         public-holiday award penalties (EBA cl 41.1/41.2/41.3: PH > Sunday >
         Saturday) and the cl 43 night-shift allowance (MAX, not cumulative,
@@ -1914,13 +1971,15 @@ class ScheduleModelBuilder:
         marginal cost for employees near their contract ceiling.
         """
         return _assignment_cost_cents_with_night(
-            emp.hourly_rate, emp.employment_type, shift, is_security=emp.is_security_role
+            emp.hourly_rate, emp.employment_type, shift, is_security=emp.is_security_role,
+            policy=policy,
         )
 
     def _assignment_rationale(self, emp: 'EmployeeInput', shift: 'ShiftInput') -> dict:
         """Per-assignment 'why this person' factors for the UI."""
         eligible = self._eligibility_map.get(shift.id, [])
-        ranked = sorted(eligible, key=lambda e: self._assignment_cost_cents(e, shift))
+        policy = self.data.constraints.pricing_policy
+        ranked = sorted(eligible, key=lambda e: self._assignment_cost_cents(e, shift, policy))
         cost_rank = next((i + 1 for i, e in enumerate(ranked) if e.id == emp.id), None)
         fairness_debt = round(sum(_casual_debts(emp).values()), 2)
         qual_gap = (emp.level or 0) - (getattr(shift, 'level', 0) or 0)
@@ -3321,6 +3380,7 @@ class ScheduleModelBuilder:
                         emp.employment_type,
                         shift,
                         is_security=emp.is_security_role,
+                        policy=self.data.constraints.pricing_policy,
                     )
 
                     # Apply cost weight (symmetric: 0% -> 0.5x, 50% -> 1.0x, 100% -> 2.0x)
@@ -3475,8 +3535,9 @@ class ScheduleModelBuilder:
         if not self.is_permanent_mode:
             FairnessPlugin.apply(self, _t)
 
-        # -- SC-5: Overtime penalty (EBA cl 42.2 — tiered 150%/200%) -----------
-        OT_TIER1_MINUTES = 180  # 3h, cl 42.2
+        # -- SC-5: Overtime penalty (EBA cl 42.2 — tiered, the card's tiers) ---
+        policy = self.data.constraints.pricing_policy
+        OT_TIER1_MINUTES = policy.overtime_tier1_minutes  # ICC: 3h
         for emp in self.data.employees:
             if emp.min_contract_minutes <= 0:
                 continue
@@ -3492,8 +3553,8 @@ class ScheduleModelBuilder:
             self.model.AddMaxEquality(tier2, [overtime - OT_TIER1_MINUTES, 0])
 
             rate_cents_per_min = emp.hourly_rate / 60.0 * 100
-            tier1_surcharge_cents_per_min = int(round(rate_cents_per_min * 0.5))  # +50% -> 150% total
-            tier2_surcharge_cents_per_min = int(round(rate_cents_per_min * 1.0))  # +100% -> 200% total
+            tier1_surcharge_cents_per_min = int(round(rate_cents_per_min * policy.overtime_tier1_surcharge))  # ICC +50%
+            tier2_surcharge_cents_per_min = int(round(rate_cents_per_min * policy.overtime_tier2_surcharge))  # ICC +100%
 
             if tier1_surcharge_cents_per_min > 0:
                 _t(tier1_surcharge_cents_per_min * tier1, 'cost')
@@ -3894,8 +3955,10 @@ class ScheduleModelBuilder:
             for emp_id, shift_id in pairs:
                 emp = emp_map[emp_id]
                 shift = shift_map[shift_id]
-                paid_mins = net_shift_minutes(shift, emp.is_security_role)
-                cost = (paid_mins / 60.0) * emp.hourly_rate
+                # The priced cost (cl 41 penalties, cl 43 night, Security
+                # annualised) — the same figure the objective's cost tier uses —
+                # not paid hours x the flat rate.
+                cost = self._assignment_cost_cents(emp, shift, self.data.constraints.pricing_policy) / 100.0
                 assignments.append(AssignmentProposal(
                     shift_id=shift_id,
                     employee_id=emp_id,

@@ -316,6 +316,26 @@ export interface OptimizerConstraints {
     split_shift_allowance_cents?: number;
     /** Active employment-mode partition (e.g. 'FT_STANDARD'); null/omitted = mixed pool. */
     scheduler_mode?: SolverSchedulerMode | null;
+    /**
+     * The organization's rate-card loadings the solver prices with
+     * (pay_rate_card_loadings). Omitted ⇒ ICC Sydney EA 2025 defaults, so an
+     * optimizer image newer than this frontend still prices as before.
+     */
+    pricing_policy?: SolverPricingPolicy | null;
+}
+
+/** Numeric loadings the solver's cost model reads (mirrors PricingPolicyReq in ortools_runner.py). */
+export interface SolverPricingPolicy {
+    casual_loading: number;
+    saturday_loading: number;
+    sunday_loading: number;
+    public_holiday_loading: number;
+    night_loading_mon_thu: number;
+    night_loading_fri: number;
+    night_loading_sat_sun: number;
+    overtime_first_hours: number;
+    overtime_first_multiplier: number;
+    overtime_after_multiplier: number;
 }
 
 export interface OptimizeRequest {

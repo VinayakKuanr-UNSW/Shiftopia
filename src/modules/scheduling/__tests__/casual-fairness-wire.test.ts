@@ -11,6 +11,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FairnessStanding } from '@/modules/rosters/domain/fairness-ledger';
 
+// The organization's published rate cards (Phase 4): ICC Sydney's.
+vi.mock('@/modules/payroll/data/ebaRates.read.api', async () => (await import('./fixtures/iccRateCards')).iccRateCardsModule);
 vi.mock('@/modules/scheduling/validation', async (importOriginal) => {
     const original = await importOriginal() as Record<string, unknown>;
     return {

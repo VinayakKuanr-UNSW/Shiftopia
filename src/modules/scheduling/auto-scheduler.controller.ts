@@ -32,6 +32,9 @@ import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/
 import { extractLevel } from '../rosters/domain/projections/utils/cost';
 import { estimateDetailedShiftCost as estimateDetailedShiftCostObj } from '../rosters/domain/projections/utils/cost/index';
 import { resolveRateSet, type RateSet } from '../rosters/domain/projections/utils/cost/rate-schedule';
+import { resolveCardOn, type PricedCard, type RateCardSchedule } from '../rosters/domain/projections/utils/cost/rate-card-resolver';
+import type { RateCardLoadings } from '../rosters/domain/projections/utils/cost/loadings';
+import { fetchPublishedRateCardSchedules } from '../payroll/data/ebaRates.read.api';
 import { calculateFatigueWithRecovery, effectiveMinutes, FATIGUE_BANDS } from '../rosters/domain/projections/utils/fatigue';
 import { calculateUtilization } from '../rosters/domain/projections/utils/fairness';
 import type { ShiftMeta, EmployeeMeta } from './optimizer/solution-parser';
@@ -42,7 +45,7 @@ import {
     toTargetEmploymentType,
 } from '@/modules/core/model/employment.types';
 import type { EmployeeInfo } from '@/modules/scheduling/validation/types';
-import type { AvailabilityOverrideRef, ExistingShiftRef, SchedulerMode, SolverSchedulerMode } from './types';
+import type { AvailabilityOverrideRef, ExistingShiftRef, SchedulerMode, SolverPricingPolicy, SolverSchedulerMode } from './types';
 import { auditor } from './audit/auditor';
 import { rosterFetcher, durationMinutes, shiftDate } from './data/roster-fetcher';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
@@ -104,12 +107,15 @@ function buildSolverConstraints(
     supplied: OptimizeRequest['constraints'] | undefined,
     shifts: OptimizerShift[],
     schedulerMode?: SolverSchedulerMode,
+    card?: PricedCard | null,
 ): OptimizeRequest['constraints'] {
     const earliest = shifts.reduce<string | undefined>(
         (min, s) => (!min || (s.shift_date && s.shift_date < min) ? s.shift_date : min),
         undefined,
     );
-    const rateSet = resolveRateSet(earliest);
+    // The organization's card when there is one (run() refuses an organization
+    // without a card covering the window); the embedded schedule otherwise.
+    const rateSet = card?.rateSet ?? resolveRateSet(earliest);
     return {
         min_rest_minutes: 600,
         relax_constraints: false,
@@ -119,6 +125,23 @@ function buildSolverConstraints(
         // 11.13 is not.
         split_shift_allowance_cents: Math.round(rateSet.allowances.splitShift * 100),
         ...(schedulerMode ? { scheduler_mode: schedulerMode } : {}),
+        ...(card ? { pricing_policy: solverPricingPolicy(card.loadings) } : {}),
+    };
+}
+
+/** The card's loadings as the solver's cost model reads them (PricingPolicyReq). */
+export function solverPricingPolicy(l: RateCardLoadings): SolverPricingPolicy {
+    return {
+        casual_loading: l.casualLoading,
+        saturday_loading: l.saturdayLoading,
+        sunday_loading: l.sundayLoading,
+        public_holiday_loading: l.publicHolidayLoading,
+        night_loading_mon_thu: l.nightLoadingMonThu,
+        night_loading_fri: l.nightLoadingFri,
+        night_loading_sat_sun: l.nightLoadingSatSun,
+        overtime_first_hours: l.overtimeFirstHours,
+        overtime_first_multiplier: l.overtimeFirstMultiplier,
+        overtime_after_multiplier: l.overtimeAfterMultiplier,
     };
 }
 
@@ -625,6 +648,7 @@ export function estimateGreedyFallbackCost(
     emp: EmployeeMeta,
     empDet: Partial<OptimizerEmployee> | undefined,
     priorOrdinaryHoursThisWeek: number | undefined,
+    rateCards?: RateCardSchedule,
 ): number {
     // cl 36.1 vs Sch.3 §3.2/§5.3: the unpaid meal break is
     // deducted for general staff, but Security meal breaks are
@@ -673,6 +697,7 @@ export function estimateGreedyFallbackCost(
             ? `LEVEL_${empDet.level}`
             : extractLevel(shift.roleName),
         priorOrdinaryHoursThisWeek,
+        rateCards,
     }).totalCost;
 }
 
@@ -1891,8 +1916,25 @@ export class AutoSchedulerController {
             }
         }
 
-        // Effective-dated EA rate set for the window (audit F6)
-        const windowRateSet = resolveRateSet(dates[0]);
+        // The organization's published rate card in force at the window's start
+        // prices every candidate: rates, the split-shift allowance and the
+        // solver's pricing policy (keyed on the earliest date, as before). No
+        // card ⇒ refuse rather than price at another organization's — or ICC's
+        // — rates. Without an organization (scoped callers, tests) the embedded
+        // effective-dated schedule still applies.
+        let rateCards: RateCardSchedule | undefined;
+        let windowCard: PricedCard | null = null;
+        if (orgId) {
+            rateCards = (await fetchPublishedRateCardSchedules([orgId])).get(orgId) ?? [];
+            windowCard = resolveCardOn(rateCards, dates[0]);
+            if (!windowCard) {
+                throw new Error(
+                    `No published pay rate card covers ${dates[0]} for this organization. ` +
+                    'Publish one in Payroll → Pay Rates, then run the AutoScheduler again.',
+                );
+            }
+        }
+        const windowRateSet = windowCard?.rateSet ?? resolveRateSet(dates[0]);
 
         const optimizerEmployees: OptimizerEmployee[] = scopedEmployees.map(e => {
             const det = employeeDetails.get(e.id);
@@ -2156,7 +2198,7 @@ export class AutoSchedulerController {
             const optimizeReq: OptimizeRequest = {
                 shifts: optimizerShifts,
                 employees: optimizerEmployees,
-                constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode),
+                constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode, windowCard),
                 // B1 — single-mode: always send the pinned policy (no sliders).
                 strategy: SINGLE_MODE_STRATEGY,
                 solver_params: {
@@ -2268,7 +2310,7 @@ export class AutoSchedulerController {
                 employeeDetails,
                 existingRoster,
                 validationCtx,
-                constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode),
+                constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode, windowCard),
                 budgetSeconds: Math.min(30, Math.max(10, Math.round(solverBudget / 4))),
                 signal: input.signal,
             });
@@ -2293,7 +2335,7 @@ export class AutoSchedulerController {
 
                 if (usedFallback && shift && emp) {
                     p.optimizerCost = estimateGreedyFallbackCost(
-                        shift, emp, employeeDetails.get(emp.id), fallbackPriorOrdinaryMap.get(p.shiftId),
+                        shift, emp, employeeDetails.get(emp.id), fallbackPriorOrdinaryMap.get(p.shiftId), rateCards,
                     );
                 }
 
@@ -2454,7 +2496,7 @@ export class AutoSchedulerController {
                 proposals: result.proposals,
                 optimizerShifts,
                 optimizerEmployees,
-                constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode),
+                constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode, windowCard),
                 capacityCheck,
                 availabilityData,
             });
