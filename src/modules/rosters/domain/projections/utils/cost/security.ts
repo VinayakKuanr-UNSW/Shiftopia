@@ -162,6 +162,8 @@ export function estimateDetailedShiftCost(
     isHoliday = isPublicHolidayISO(shift_date);
     shiftDay = new Date(shift_date + 'T00:00:00').getDay();
   }
+  // The card's organization types its own public holidays (e.g. Brisbane's Ekka).
+  if (pricing.jurisdiction) isHoliday = isPublicHolidayISO(shift_date, pricing.jurisdiction);
 
   // Schedule 3 §3.2 / §5.3: security meal breaks are PAID — price the full span.
   let calculatedMinutes = netMinutes;
@@ -195,7 +197,9 @@ export function estimateDetailedShiftCost(
   let nextIsHoliday = false;
   if (ordinaryEndMins > 1440 || otEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
-    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
+    nextIsHoliday = pricing.jurisdiction
+      ? isPublicHolidayISO(nextStr, pricing.jurisdiction)
+      : ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
   }
 
   interface Seg { fromMins: number; toMins: number; day: number; isHoliday: boolean; }

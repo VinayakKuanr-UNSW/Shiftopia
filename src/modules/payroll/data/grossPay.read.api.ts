@@ -361,7 +361,8 @@ export function mapShiftRowToGrossPayInput(
   // NOT_WORKED short-circuit zeroes pay when there's genuinely no resolved
   // window, independent of this floor. A salaried shift is outside the EA, so
   // it gets no floor — its hours are the hours worked (time in lieu).
-  const { isSunday, isPublicHoliday } = getShiftDayType(row.shift_date);
+  const { isSunday, isPublicHoliday } = getShiftDayType(
+    row.shift_date, (rateCards && resolveCardOn(rateCards, row.shift_date)?.jurisdiction) || undefined);
   const netMinutes = rawNetMinutes === null
     ? 0
     : isSalaried

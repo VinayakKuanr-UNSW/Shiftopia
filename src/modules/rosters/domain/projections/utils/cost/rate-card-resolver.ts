@@ -24,6 +24,8 @@ export interface PricedCard {
   rateSet: RateSet;
   loadings: RateCardLoadings;
   trainee: TraineeRateSet | null;
+  /** The organization's public-holiday jurisdiction (e.g. AU-QLD-BNE); omitted ⇒ the default (AU-NSW). */
+  jurisdiction?: string;
 }
 
 export type RateCardSchedule = readonly PricedCard[];
@@ -37,6 +39,7 @@ export interface PublishedCardInput {
   allowances: ReadonlyArray<{ code: string; amount: number }>;
   loadings: RateCardLoadings | null;
   trainee: { label: string | null; source: string | null; matrix: Record<string, unknown> } | null;
+  jurisdiction?: string | null;
 }
 
 const SECURITY_LEVELS = ['3', '4', '5', '6'] as const;
@@ -95,6 +98,7 @@ export function toPricedCard(card: PublishedCardInput): PricedCard | null {
     trainee: card.trainee
       ? { effectiveFrom: card.validFrom, label: card.trainee.label ?? card.code, source: card.trainee.source ?? '', ...card.trainee.matrix } as TraineeRateSet
       : null,
+    ...(card.jurisdiction ? { jurisdiction: card.jurisdiction } : {}),
   };
 }
 
@@ -118,6 +122,8 @@ export interface Pricing {
   trainee: TraineeRateSet | null;
   /** The card priced from; null on the embedded path. */
   cardCode: string | null;
+  /** Whose public holidays apply; null = the engine's default (AU-NSW). */
+  jurisdiction: string | null;
 }
 
 /**
@@ -132,9 +138,9 @@ export function resolvePricing(
   fallbackLoadings?: RateCardLoadings,
 ): Pricing | null {
   if (!rateCards) {
-    return { rateSet: resolveRateSet(date), loadings: loadings ?? fallbackLoadings ?? ICC_SYDNEY_EA_LOADINGS, trainee: null, cardCode: null };
+    return { rateSet: resolveRateSet(date), loadings: loadings ?? fallbackLoadings ?? ICC_SYDNEY_EA_LOADINGS, trainee: null, cardCode: null, jurisdiction: null };
   }
   const card = resolveCardOn(rateCards, date);
   if (!card) return null;
-  return { rateSet: card.rateSet, loadings: loadings ?? card.loadings, trainee: card.trainee, cardCode: card.code };
+  return { rateSet: card.rateSet, loadings: loadings ?? card.loadings, trainee: card.trainee, cardCode: card.code, jurisdiction: card.jurisdiction ?? null };
 }

@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => {
   const builder: Record<string, any> = {};
   const result = { data: null as unknown, error: null as unknown };
-  for (const m of ['select', 'eq', 'order', 'maybeSingle']) builder[m] = vi.fn(() => builder);
+  for (const m of ['select', 'eq', 'in', 'order', 'maybeSingle']) builder[m] = vi.fn(() => builder);
   builder.then = (resolve: (v: unknown) => void) => resolve(result);
   return { builder, result, from: vi.fn(() => builder), rpc: vi.fn() };
 });
@@ -18,6 +18,7 @@ vi.mock('@/platform/supabase/client', () => ({ supabase: { from: h.from, rpc: h.
 import {
   ICC_SYDNEY_EA_LOADINGS, RATE_CARD_LOADINGS_SELECT,
 } from '@/modules/rosters/domain/projections/utils/cost/loadings';
+import { fetchPublishedRateCardSchedules } from '../data/ebaRates.read.api';
 import {
   bulkAdjustRateCardRates, copyRateCard, createRateCard, deleteRateCardItems, estimateShiftCost,
   getOrganizationJurisdiction, toDbLoadingsPatch, updateRateCardLoadings, updateRateCardMeta, upsertRateCardRates,
@@ -193,5 +194,36 @@ describe('authoring RPCs', () => {
     h.result.data = { jurisdiction: 'AU-QLD-BNE' };
     expect(await getOrganizationJurisdiction('o')).toBe('AU-QLD-BNE');
     expect(h.from).toHaveBeenCalledWith('organizations');
+  });
+});
+
+describe('fetchPublishedRateCardSchedules (what Gross Pay and the AutoScheduler price from)', () => {
+  it('maps each organization\'s published cards, with its jurisdiction; an organization without one gets []', async () => {
+    h.result.data = [{
+      organization_id: 'org-b', code: 'BCEC-EA', valid_from: '2026-07-01', valid_to: null,
+      eba_rate: [
+        { classification: 'LEVEL_1', employment_basis: 'permanent', ordinary_hourly_rate: '30', paid_hourly_rate: '30' },
+        { classification: 'LEVEL_1', employment_basis: 'casual', ordinary_hourly_rate: '30', paid_hourly_rate: '37.50' },
+      ],
+      eba_allowance: [{ code: 'meal', amount: '20' }],
+      eba_trainee_schedule: null,
+      pay_rate_card_loadings: ICC_LOADINGS_ROW,
+      organizations: { jurisdiction: 'AU-QLD-BNE' },
+    }];
+    const out = await fetchPublishedRateCardSchedules(['org-b', 'org-c']);
+    expect(h.from).toHaveBeenCalledWith('pay_rate_cards');
+    expect(h.builder.in).toHaveBeenCalledWith('organization_id', ['org-b', 'org-c']);
+    expect(h.builder.eq).toHaveBeenCalledWith('status', 'published');
+    const [card] = out.get('org-b')!;
+    expect(card).toMatchObject({ code: 'BCEC-EA', validFrom: '2026-07-01', validTo: null, jurisdiction: 'AU-QLD-BNE' });
+    expect(card.rateSet.wageRates).toEqual({ LEVEL_1: { permanent: 30, casual: 37.5 } });
+    expect(card.rateSet.allowances.meal).toBe(20);
+    expect(card.loadings).toEqual(ICC_SYDNEY_EA_LOADINGS);
+    expect(out.get('org-c')).toEqual([]);
+  });
+
+  it('a read error throws — an empty schedule would silently unprice a pay run', async () => {
+    h.result.error = { code: '42P01', message: 'boom' };
+    await expect(fetchPublishedRateCardSchedules(['org-b'])).rejects.toMatchObject({ code: '42P01' });
   });
 });

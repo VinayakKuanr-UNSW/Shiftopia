@@ -32,6 +32,8 @@ and is held to it by a differential test (§4).
 
 ## 2. Rate resolution
 
+> **Rate cards (2026-11-29).** Given `CostCalculatorOptions.rateCards` (or `AwardContext.rateCards`), both engines price from the organization's published card covering the shift date via `rate-card-resolver.ts` — rates, allowances, loadings, Schedule 5 set and public-holiday jurisdiction — and return `unpriced` when no card covers it. Without a schedule they use the embedded `RATE_SCHEDULE` below. Gross Pay and the AutoScheduler always pass a schedule; see multi-organization.md §15.
+
 ```
 shift.actual_hourly_rate            explicit override wins
   ↓ else

@@ -14,6 +14,12 @@ import { computeShiftGrossPay } from '../domain/computeShiftGrossPay';
 import type { GrossPayShiftRow } from '../data/types';
 import { ICC_SYDNEY_EA_LOADINGS } from '@/modules/rosters/domain/projections/utils/cost/loadings';
 import { toPricedCard, type PricedCard } from '@/modules/rosters/domain/projections/utils/cost/rate-card-resolver';
+import { RATE_SCHEDULE } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
+
+/** ICC Sydney's FY2026/27 card (= the embedded set, rate-card-resolver.test.ts). */
+const ICC_CARD_2026: PricedCard = {
+  code: 'ICC-EA-2026-27', validFrom: '2026-07-06', validTo: null, rateSet: RATE_SCHEDULE[1], loadings: ICC_SYDNEY_EA_LOADINGS, trainee: null,
+};
 
 const WEEK = { periodStart: '2026-07-06', periodEnd: '2026-07-12' };
 
@@ -119,5 +125,33 @@ describe('each organization\'s cards are read once per pay run', () => {
     expect(first.get('org-b')).toEqual([CUSTOM]);
     expect(first.get('org-c')).toEqual([]);
     expect([...second.keys()]).toEqual(['org-b']);
+  });
+});
+
+describe('two organizations side by side (multi-organization proof)', () => {
+  // Ekka (Royal Queensland Show day) — Wed 12 Aug 2026: a public holiday in
+  // Brisbane (AU-QLD-BNE), an ordinary Wednesday in Sydney (AU-NSW).
+  const EKKA = '2026-08-12';
+  const BCEC: PricedCard = { ...CUSTOM, jurisdiction: 'AU-QLD-BNE' };
+  const ICC: PricedCard = { ...ICC_CARD_2026, jurisdiction: 'AU-NSW' };
+  const schedules = new Map([['org-bcec', [BCEC]], ['org-icc', [ICC]]]);
+  const shiftAt = (org: string, id: string) => row({ id, organization_id: org, shift_date: EKKA });
+
+  it('each shift is priced on its own organization\'s card and public holidays', () => {
+    const [bcec, icc] = buildShiftPayLedger([shiftAt('org-bcec', 'b1'), shiftAt('org-icc', 'i1')], { periodStart: '2026-08-10', periodEnd: '2026-08-16' }, schedules);
+    const b = bcec.scheduled as Extract<typeof bcec.scheduled, { kind: 'priced' }>;
+    const i = icc.scheduled as Extract<typeof icc.scheduled, { kind: 'priced' }>;
+    // BCEC: casual Level 3 at $40 ($32 ordinary) × (1.25 + 1.5) public holiday, 7.5h = $660.
+    expect(b.amount).toBe(660);
+    expect(b.lines.some((l) => l.code === 'public_holiday' || /holiday/i.test(l.description))).toBe(true);
+    // ICC: an ordinary Wednesday at ICC's own Level 3 casual rate — exactly the embedded engine's price.
+    const embedded = computeShiftGrossPay(mapShiftRowToGrossPayInput(shiftAt('org-icc', 'i1'), window('09:00', '17:00', 450))!).grossPay;
+    expect(i.amount).toBe(embedded);
+    expect(i.amount).toBeLessThan(b.amount);
+  });
+
+  it('neither organization is ever priced on the other\'s card', () => {
+    const [orphan] = buildShiftPayLedger([shiftAt('org-other', 'o1')], { periodStart: '2026-08-10', periodEnd: '2026-08-16' }, schedules);
+    expect(orphan.scheduled).toEqual({ kind: 'no_rate_card' });
   });
 });

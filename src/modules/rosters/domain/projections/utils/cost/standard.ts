@@ -193,6 +193,8 @@ export function estimateDetailedShiftCost(
   const pricing = resolvePricing(shift_date, options.rateCards ?? ctx?.rateCards, options.loadings, ctx?.loadings);
   if (!pricing) return UNPRICED_COST_BREAKDOWN;
   const rateSet = pricing.rateSet;
+  // The card's organization types its own public holidays (e.g. Brisbane's Ekka).
+  if (pricing.jurisdiction) isHoliday = isPublicHolidayISO(shift_date, pricing.jurisdiction);
 
   let baseRate = rate;
 
@@ -413,7 +415,9 @@ export function estimateDetailedShiftCost(
   let nextIsHoliday = false;
   if (shiftEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
-    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
+    nextIsHoliday = pricing.jurisdiction
+      ? isPublicHolidayISO(nextStr, pricing.jurisdiction)
+      : ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
   }
 
   const segments = worked.ordinary.flatMap(([from, to]) =>

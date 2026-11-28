@@ -176,7 +176,8 @@ const PUBLISHED_CARD_SELECT =
   + 'eba_rate(classification, employment_basis, ordinary_hourly_rate, paid_hourly_rate), '
   + 'eba_allowance(code, amount), '
   + 'eba_trainee_schedule(label, source, matrix), '
-  + 'pay_rate_card_loadings(' + RATE_CARD_LOADINGS_SELECT + ')';
+  + 'pay_rate_card_loadings(' + RATE_CARD_LOADINGS_SELECT + '), '
+  + 'organizations(jurisdiction)';
 
 const oneRow = (v: unknown): any => (Array.isArray(v) ? v[0] : v) ?? null;
 
@@ -213,6 +214,7 @@ export async function fetchPublishedRateCardSchedules(orgIds: readonly string[])
         ? { label: trainee.label ?? null, source: trainee.source ?? null,
             matrix: typeof trainee.matrix === 'string' ? JSON.parse(trainee.matrix) : (trainee.matrix ?? {}) }
         : null,
+      jurisdiction: oneRow(c.organizations)?.jurisdiction ?? null,
     });
     if (priced) out.get(String(c.organization_id))?.push(priced);
   }
