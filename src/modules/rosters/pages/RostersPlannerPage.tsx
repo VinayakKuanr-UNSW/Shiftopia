@@ -1088,10 +1088,14 @@ const NewRostersPage: React.FC = () => {
       /* Autoscheduler scope: DRAFT + unassigned shifts that have not
          started — published shifts belong to bidding/offers. Must stay in
          sync with the filter in useAutoScheduler.ts. */
-      .filter((s) =>
-        !s.assigned_employee_id && !s.is_cancelled
-        && (s.is_draft ?? true)
-        && computeTTS(s.shift_date, s.start_time) > 0)
+      .filter((s) => {
+        const isDraft = s.lifecycle_status ? s.lifecycle_status === 'Draft' : (s.is_draft ?? true);
+        return (
+          !s.assigned_employee_id && !s.is_cancelled
+          && isDraft
+          && computeTTS(s.shift_date, s.start_time) > 0
+        );
+      })
       .map((s) => ({
         id: s.id,
         shift_date: s.shift_date,

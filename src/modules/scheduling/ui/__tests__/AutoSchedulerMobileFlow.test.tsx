@@ -226,22 +226,20 @@ describe('AutoSchedulerMobileFlow', () => {
             expect(screen.getByText(/fill as many open shifts as possible/i)).toBeInTheDocument();
         });
 
-        it('switches between All staff, FT Standard, FT Security, Part-Time, Flexi PT, and Casual modes when setMode is supplied', () => {
+        it('switches between FT Standard, FT Security, Part-Time, Flexi PT, and Casual modes when setMode is supplied', () => {
             const setMode = vi.fn();
-            renderFlow({ mode: 'ALL', setMode });
+            renderFlow({ mode: 'FT_STANDARD', setMode });
 
             const ftBtn = screen.getByRole('button', { name: 'FT Standard' });
             const secBtn = screen.getByRole('button', { name: 'FT Security' });
             const ptBtn = screen.getByRole('button', { name: 'Part-Time' });
             const fptBtn = screen.getByRole('button', { name: 'Flexi PT' });
             const casBtn = screen.getByRole('button', { name: 'Casual' });
-            expect(ftBtn).toHaveAttribute('aria-pressed', 'false');
+            expect(ftBtn).toHaveAttribute('aria-pressed', 'true');
             expect(secBtn).toHaveAttribute('aria-pressed', 'false');
             expect(ptBtn).toHaveAttribute('aria-pressed', 'false');
             expect(fptBtn).toHaveAttribute('aria-pressed', 'false');
             expect(casBtn).toHaveAttribute('aria-pressed', 'false');
-            fireEvent.click(ftBtn);
-            expect(setMode).toHaveBeenCalledWith('FT_STANDARD');
             fireEvent.click(secBtn);
             expect(setMode).toHaveBeenCalledWith('FT_SECURITY');
             fireEvent.click(ptBtn);

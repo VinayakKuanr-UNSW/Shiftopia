@@ -447,11 +447,33 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                 label: 'Group',
                 value:
                     str(group) ??
+                    str(shiftData?.group) ??
+                    str(shiftData?.roster_group_name) ??
+                    (() => {
+                        const rawSub = (shiftData as any)?.roster_subgroup;
+                        const sub = Array.isArray(rawSub) ? rawSub[0] : rawSub;
+                        const rawRg = sub?.roster_groups ?? sub?.roster_group;
+                        const rg = Array.isArray(rawRg) ? rawRg[0] : rawRg;
+                        return rg?.name ? str(rg.name) : null;
+                    })() ??
                     (groupType
                         ? GROUP_DISPLAY_NAMES[groupType as keyof typeof GROUP_DISPLAY_NAMES] ?? groupType
                         : null),
             },
-            subGroup: { label: 'Sub-Group', value: str(subGroup) ?? str(shiftData?.sub_group_name) },
+            subGroup: {
+                label: 'Sub-Group',
+                value:
+                    str(subGroup) ??
+                    str(shiftData?.sub_group_name) ??
+                    str(shiftData?.subGroupName) ??
+                    str(shiftData?.subGroup) ??
+                    str(shiftData?.roster_subgroup_name) ??
+                    (() => {
+                        const rawSub = (shiftData as any)?.roster_subgroup;
+                        const sub = Array.isArray(rawSub) ? rawSub[0] : rawSub;
+                        return sub?.name ? str(sub.name) : null;
+                    })(),
+            },
             role: { label: 'Role', value: str(role) ?? str(shiftData?.roles?.name) },
             // An unfilled shift is a real state, not a missing value, so it reads
             // "Unassigned" rather than the em-dash used for absent facts — but

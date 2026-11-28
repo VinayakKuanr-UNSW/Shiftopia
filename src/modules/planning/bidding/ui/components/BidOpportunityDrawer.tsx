@@ -137,7 +137,9 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                                     identityGrid
                                     organization={opp.organization}
                                     department={opp.department}
-                                    subDepartment={opp.subGroup}
+                                    subDepartment={opp.subDepartment}
+                                    group={opp.group}
+                                    subGroup={opp.subGroupName}
                                     role={opp.role}
                                     shiftDate={opp.date}
                                     startTime={opp.startTime}

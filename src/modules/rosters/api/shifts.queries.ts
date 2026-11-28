@@ -1408,6 +1408,7 @@ export const shiftsQueries = {
                     departments(name),
                     sub_departments(name),
                     roles(name, remuneration_level),
+                    roster_subgroup:roster_subgroups(name, roster_groups(name, external_id)),
                     assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                     shift_bids(id, status)
                 `)

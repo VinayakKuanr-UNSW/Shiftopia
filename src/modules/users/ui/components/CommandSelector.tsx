@@ -201,7 +201,7 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                                             No {label.toLowerCase()} found.
                                         </CommandEmpty>
                                     )}
-                                    <CommandGroup heading={label} className="px-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+                                    <CommandGroup heading={label} className="px-1 [&_[cmdk-group-heading]]:text-sm [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
                                         {filteredOptions.map((option) => {
                                             const isSelected = option.id === value;
                                             return (
@@ -213,7 +213,7 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                                                         setOpen(false);
                                                     }}
                                                     className={cn(
-                                                        "flex items-center gap-3 px-3.5 py-2.5 rounded-xl mb-1 cursor-pointer transition-all",
+                                                        "flex items-center gap-3 px-4 py-3 rounded-xl mb-1 cursor-pointer transition-all",
                                                         "aria-selected:bg-primary aria-selected:text-primary-foreground group"
                                                     )}
                                                 >
@@ -221,7 +221,7 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                                                     <div className={cn(
                                                         "w-5 h-5 rounded-full border flex items-center justify-center transition-all shrink-0",
                                                         isSelected 
-                                                            ? "bg-primary border-primary text-primary-foreground group-aria-selected:bg-white group-aria-selected:border-white group-aria-selected:text-primary" 
+                                                            ? "bg-white border-white text-primary" 
                                                             : "border-muted-foreground/30 group-aria-selected:border-white/40"
                                                     )}>
                                                         {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -234,7 +234,7 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                                                     )}
 
                                                     <div className="flex flex-col flex-1 min-w-0 text-left">
-                                                        <span className="font-semibold text-xs sm:text-sm truncate">
+                                                        <span className="font-semibold text-sm sm:text-base truncate">
                                                             {option.name}
                                                         </span>
                                                         {(option.subtitle || option.description) && (

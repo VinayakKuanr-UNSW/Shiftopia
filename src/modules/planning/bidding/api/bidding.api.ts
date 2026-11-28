@@ -61,8 +61,8 @@ export const biddingApi = {
                 organizations(id, name, jurisdiction),
                 departments(id, name),
                 sub_departments(id, name),
-                roles(id, name),
-                remuneration_levels(level_number, level_name)
+                roles(id, name, remuneration_level),
+                roster_subgroup:roster_subgroups(name, roster_groups(name, external_id))
             `)
             // S5 exactly as get_shift_fsm_state defines it: published, unassigned, not cancelled
             .eq('lifecycle_status', 'Published')
@@ -106,8 +106,8 @@ export const biddingApi = {
                     organizations(name),
                     departments(name),
                     sub_departments(name),
-                    roles(name),
-                    remuneration_levels(level_name)
+                    roles(name, remuneration_level),
+                    roster_subgroup:roster_subgroups(name, roster_groups(name, external_id))
                 )
             `)
             .eq('employee_id', userId)

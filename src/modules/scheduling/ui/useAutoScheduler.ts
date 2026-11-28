@@ -52,38 +52,32 @@ export interface SchedulerModeOption {
 
 export const SCHEDULER_MODE_OPTIONS: readonly SchedulerModeOption[] = [
     {
-        value: 'ALL',
-        label: 'All Staff (Mixed)',
-        shortLabel: 'All staff',
-        description: 'Mixed pool across Full-Time, Part-Time, Security, and Casual staff.',
-    },
-    {
         value: 'FT_STANDARD',
-        label: 'Full-Time (Standard)',
+        label: 'Full-Time Standard',
         shortLabel: 'FT Standard',
         description: 'ICC EBA cl 35.1: 38h/wk cycle, 7.6–12h/day net, paired days off, no casuals or Security.',
     },
     {
         value: 'FT_SECURITY',
-        label: 'Full-Time (Security)',
+        label: 'Full-Time Security',
         shortLabel: 'FT Security',
         description: 'ICC EBA Sch 3: 42h/wk 8-week even-time cycle, paid 30m meal break, annualised rate.',
     },
     {
         value: 'PT',
-        label: 'Part-Time (Regular)',
+        label: 'Part-Time Regular',
         shortLabel: 'Part-Time',
         description: 'ICC EBA cl 12.3 & 35.2 / Sch 3 §5.2: predetermined <38h/wk contract, 3h min (4h PH), split shifts allowed (≤12h net spread).',
     },
     {
         value: 'FPT',
-        label: 'Part-Time (Flexible)',
+        label: 'Part-Time Flexible',
         shortLabel: 'Flexi PT',
         description: 'ICC EBA cl 12.4 & 35.3: min 624h/yr (avg ≤38h/wk), 3h min (2h training, 4h Sun/PH), max 10 consecutive days.',
     },
     {
         value: 'CASUAL',
-        label: 'Casual Team Members',
+        label: 'Casual',
         shortLabel: 'Casual',
         description: 'ICC EBA cl 12.5 & 35.4: 25% loading, 3h min (2h training, 4h Sun/PH, 4h Sec), max 2 engagements/day, fairness ledger.',
     },
@@ -145,7 +139,7 @@ interface UseAutoSchedulerOptions {
      * on "Please select both start and end dates".
      */
     initialRange?: { startDate: string; endDate: string };
-    /** Initial employment-mode partition (defaults to 'ALL'). */
+    /** Initial employment-mode partition (defaults to 'FT_STANDARD'). */
     initialMode?: SchedulerMode;
 }
 
@@ -175,6 +169,7 @@ interface ScopeCandidate {
     assigned_employee_id?: string | null;
     is_cancelled?: boolean | null;
     is_draft?: boolean | null;
+    lifecycle_status?: string | null;
 }
 
 /**
@@ -189,8 +184,9 @@ export function summariseScope(shifts: readonly ScopeCandidate[]): ScopeBreakdow
         // Cancelled shifts are not shifts anyone is counting.
         if (s.is_cancelled) return acc;
         acc.total += 1;
+        const isDraft = s.lifecycle_status ? s.lifecycle_status === 'Draft' : (s.is_draft ?? true);
         if (s.assigned_employee_id) acc.assigned += 1;
-        else if (!(s.is_draft ?? true)) acc.published += 1;
+        else if (!isDraft) acc.published += 1;
         else if (computeTTS(s.shift_date, s.start_time) <= 0) acc.alreadyStarted += 1;
         else acc.eligible += 1;
         return acc;
@@ -238,7 +234,7 @@ export function useAutoScheduler({
     organizationId,
     queryFilters,
     initialRange,
-    initialMode = 'ALL',
+    initialMode = 'FT_STANDARD',
 }: UseAutoSchedulerOptions) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -321,10 +317,15 @@ export function useAutoScheduler({
         // shifts are in the bidding/offer pipeline. The controller re-checks
         // the start time at run time in case a shift starts meanwhile.
         return rawShifts
-            .filter((s) =>
-                !s.assigned_employee_id && !s.is_cancelled
-                && (s.is_draft ?? true)
-                && computeTTS(s.shift_date, s.start_time) > 0)
+            .filter((s) => {
+                const isDraft = s.lifecycle_status ? s.lifecycle_status === 'Draft' : (s.is_draft ?? true);
+                return (
+                    !s.assigned_employee_id
+                    && !s.is_cancelled
+                    && isDraft
+                    && computeTTS(s.shift_date, s.start_time) > 0
+                );
+            })
             .map((s) => ({
                 id: s.id,
                 shift_date: s.shift_date,
@@ -670,7 +671,9 @@ export function useAutoScheduler({
                             ? 'Full-Time (Security — ICC EBA Sch 3)'
                             : result.mode === 'PT'
                                 ? 'Part-Time (Regular — ICC EBA cl 12.3 & 35.2)'
-                                : 'All Staff (Mixed)',
+                                : result.mode === 'FPT'
+                                    ? 'Part-Time (Flexible — ICC EBA cl 12.4 & 35.3)'
+                                    : 'Casual Team Members (ICC EBA cl 12.5 & 35.4)',
                 ),
                 row('Optimizer status', result.optimizerStatus),
                 '',
@@ -955,9 +958,8 @@ export function useAutoScheduler({
             };
         });
 
-        const aggregateFairness = groups.length > 0
-            ? groups.reduce((acc, g) => acc + g.utilization, 0) / groups.length
-            : 0;
+        const aggregateFairness = result.pillars?.fairness?.score
+            ?? (groups.length > 0 ? groups.reduce((acc, g) => acc + g.utilization, 0) / groups.length : 0);
 
         // Fix 3: average fatigue across employees (each employee's final cumulative
         // fatigue score), not across individual assignments.

@@ -524,3 +524,31 @@ def test_casual_layer3_pricing_and_loadings():
     s_sun = make_casual_shift("s_sun", "2026-11-15", "09:00", "13:00", is_sunday=True)
     cost_sun = _assignment_cost_cents_with_night(emp.hourly_rate, emp.employment_type, s_sun, is_security=False)
     assert cost_sun == 19600
+
+
+def test_casual_fairness_scorecard_counts_zero_hour_candidates():
+    """Scorecard improvement: When 1 shift is assigned to 1 casual while another eligible
+    candidate casual receives 0 shifts, the fairness pillar must penalize the spread
+    instead of reporting 100/100."""
+    shift = make_casual_shift("s1", "2026-11-09", "09:00", "17:00")  # 8h = 480m
+    emp1 = make_casual_employee("cas_1", hourly_rate=20.0)
+    emp2 = make_casual_employee("cas_2", hourly_rate=40.0)  # More expensive, so emp1 wins on cost
+
+    data = OptimizerInput(
+        shifts=[shift],
+        employees=[emp1, emp2],
+        constraints=casual_constraints(),
+    )
+    builder = ScheduleModelBuilder(data)
+    out = builder.build_and_solve()
+
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 1
+    assert out.pillars is not None
+    # Pre-fix: loads = [480], casual_used = 1 -> score was 100, spread 0.
+    # Post-fix: loads = [480, 0], casual_used = 2 -> CV = 1.0 -> score = 0, spread = 480m.
+    fairness = out.pillars["fairness"]
+    assert fairness["employees_used"] == 2
+    assert fairness["spread_minutes"] == 480
+    assert fairness["score"] < 100
+

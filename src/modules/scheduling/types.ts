@@ -13,7 +13,6 @@ import type { TargetEmploymentType } from '@/modules/core/model/employment.types
 
 /**
  * Employment-mode partition for the AutoScheduler (ICC Sydney EBA 2025):
- *   - 'ALL'         — Legacy mixed-pool solve across all employment types
  *   - 'FT_STANDARD' — Standard Non-Security Full-Time (cl 35.1, 12.2, 36-43)
  *   - 'FT_SECURITY' — Full-Time Security (Schedule 3 §3.1 42h/8-week even-time)
  *   - 'PT'          — Standard Part-Time (cl 12.3, 35.2)
@@ -21,14 +20,13 @@ import type { TargetEmploymentType } from '@/modules/core/model/employment.types
  *   - 'CASUAL'      — Casual incl. Casual Event Security (cl 12.5, 35.4, Sch 3 §5)
  */
 export type SchedulerMode =
-    | 'ALL'
     | 'FT_STANDARD'
     | 'FT_SECURITY'
     | 'PT'
     | 'FPT'
     | 'CASUAL';
 
-export type SolverSchedulerMode = Exclude<SchedulerMode, 'ALL'>;
+export type SolverSchedulerMode = SchedulerMode;
 
 // =============================================================================
 // OPTIMIZER REQUEST
@@ -566,7 +564,7 @@ export interface CapacityCheck {
 }
 
 export interface AutoSchedulerResult {
-    /** Employment-mode partition used for this run ('ALL' | 'FT_STANDARD' | ...). */
+    /** Employment-mode partition used for this run ('FT_STANDARD' | 'FT_SECURITY' | ...). */
     mode?: SchedulerMode;
     optimizerStatus: OptimizerStatus;
     solveTimeMs: number;
