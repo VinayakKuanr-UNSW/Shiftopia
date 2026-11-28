@@ -1,0 +1,123 @@
+/**
+ * Gross Pay prices from the organization's PUBLISHED rate cards (Phase 3):
+ * each shift, leave day and TOIL payout from its own organization's card in
+ * force on its date — and NO_RATE_CARD (unpriced) when there is none, never
+ * at another organization's or the embedded ICC rates (multi-organization.md
+ * P4/R4). Seeded-ICC ⇄ embedded parity is pinned in rate-card-resolver.test.ts.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildShiftPayLedger } from '../data/shiftPayLedger';
+import { mapShiftRowToGrossPayInput } from '../data/grossPay.read.api';
+import { createRateCardScheduleCache } from '../data/ebaRates.read.api';
+import { payoutInputFromEntry } from '../data/toilGrossPay';
+import { computeShiftGrossPay } from '../domain/computeShiftGrossPay';
+import type { GrossPayShiftRow } from '../data/types';
+import { ICC_SYDNEY_EA_LOADINGS } from '@/modules/rosters/domain/projections/utils/cost/loadings';
+import { toPricedCard, type PricedCard } from '@/modules/rosters/domain/projections/utils/cost/rate-card-resolver';
+
+const WEEK = { periodStart: '2026-07-06', periodEnd: '2026-07-12' };
+
+/** Another agreement: Level 3 at $32 / $40 casual, a 5h minimum engagement. */
+const CUSTOM: PricedCard = toPricedCard({
+  code: 'BCEC-EA', validFrom: '2026-01-01', validTo: null,
+  rates: [
+    { classification: 'LEVEL_1', employmentBasis: 'permanent', ordinaryHourlyRate: 30, paidHourlyRate: 30 },
+    { classification: 'LEVEL_1', employmentBasis: 'casual', ordinaryHourlyRate: 30, paidHourlyRate: 37.5 },
+    { classification: 'LEVEL_3', employmentBasis: 'permanent', ordinaryHourlyRate: 32, paidHourlyRate: 32 },
+    { classification: 'LEVEL_3', employmentBasis: 'casual', ordinaryHourlyRate: 32, paidHourlyRate: 40 },
+  ],
+  allowances: [],
+  loadings: { ...ICC_SYDNEY_EA_LOADINGS, minEngagementMinutes: 300 },
+  trainee: null,
+})!;
+
+const row = (o: Partial<GrossPayShiftRow> = {}): GrossPayShiftRow => ({
+  id: 's1', organization_id: 'org-b', shift_date: '2026-07-06', start_time: '09:00:00', end_time: '17:00:00',
+  is_overnight: false, lifecycle_status: 'Completed', assignment_status: 'assigned', attendance_status: 'checked_in',
+  actual_start: null, actual_end: null, unpaid_break_minutes: 30, _actualUnpaidBreakMinutes: 30,
+  scheduled_length_minutes: 480, remuneration_level: 3, target_employment_type: 'Casual', assigned_employee_id: 'e1',
+  roles: { id: 'r1', name: 'Attendant' }, remuneration_levels: { level_number: 3, level_name: 'Level 3' },
+  _employmentType: 'casual', _hasActiveContract: true, _timesheet: null,
+  ...o,
+});
+
+const window = (start: string, end: string, minutes: number) => ({
+  startTime: start, endTime: end, rawNetMinutes: minutes, unpaidBreakMinutes: 0, hoursSource: 'scheduled' as const, ignoreNoShow: true,
+});
+
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-01T00:00:00Z')); });
+afterEach(() => vi.useRealTimers());
+
+describe('a shift is priced from its organization\'s card', () => {
+  it('the card\'s rates: 7.5h Monday casual Level 3 at $40 = $300', () => {
+    const input = mapShiftRowToGrossPayInput(row(), window('09:00', '17:00', 450), [CUSTOM])!;
+    expect(input.organizationId).toBe('org-b');
+    const pay = computeShiftGrossPay(input);
+    expect(pay.unpriced).toBeUndefined();
+    expect(pay.grossPay).toBe(300);
+  });
+
+  it('the card\'s minimum engagement: a 2h casual shift is paid 5h, not ICC\'s 3h', () => {
+    const input = mapShiftRowToGrossPayInput(row(), window('09:00', '11:00', 120), [CUSTOM])!;
+    expect(input.netMinutes).toBe(300);
+    expect(computeShiftGrossPay(input).grossPay).toBe(200);
+  });
+
+  it('no card covering the date: unpriced (NO_RATE_CARD), not priced at ICC\'s rates', () => {
+    const pay = computeShiftGrossPay(mapShiftRowToGrossPayInput(row(), window('09:00', '17:00', 450), [])!);
+    expect(pay.unpriced).toBe(true);
+    expect(pay.grossPay).toBe(0);
+    expect(pay.lines).toEqual([]);
+  });
+
+  it('a card that starts after the shift does not price it', () => {
+    const later = { ...CUSTOM, validFrom: '2026-08-01' };
+    expect(computeShiftGrossPay(mapShiftRowToGrossPayInput(row(), window('09:00', '17:00', 450), [later])!).unpriced).toBe(true);
+  });
+
+  it('salaried work is outside the EA and needs no card', () => {
+    const input = { ...mapShiftRowToGrossPayInput(row(), window('09:00', '17:00', 450), [])!, payBasis: 'salary' as const, annualSalary: 90000 };
+    expect(computeShiftGrossPay(input).unpriced).toBeUndefined();
+  });
+});
+
+describe('the ledger says why a shift has no figure', () => {
+  it('a priceable column of a shift without a card reads No rate card', () => {
+    const [r] = buildShiftPayLedger([row()], WEEK, new Map([['org-b', []]]));
+    expect(r.scheduled).toEqual({ kind: 'no_rate_card' });
+    expect(r.billable).toEqual({ kind: 'no_clock' }); // still a missing clock first: nothing to price yet
+  });
+
+  it('with its organization\'s card the same shift is priced', () => {
+    const [r] = buildShiftPayLedger([row()], WEEK, new Map([['org-b', [CUSTOM]]]));
+    expect(r.scheduled?.kind).toBe('priced');
+  });
+});
+
+describe('TOIL payouts follow the same rule', () => {
+  const entry = { id: 't1', employee_id: 'e1', entry_type: 'payout', minutes: 240, effective_date: '2026-07-10' };
+  const contract = { pay_basis: 'eba_level', employment_status: 'Full-Time', remuneration_level: 3, organization_id: 'org-b' };
+
+  it('priced at the card\'s permanent Level 3 rate', () => {
+    const pay = computeShiftGrossPay(payoutInputFromEntry(entry, contract, [CUSTOM]));
+    expect(pay.grossPay).toBe(128); // 4h × $32
+  });
+
+  it('unpriced without a card', () => {
+    expect(computeShiftGrossPay(payoutInputFromEntry(entry, contract, [])).unpriced).toBe(true);
+  });
+});
+
+describe('each organization\'s cards are read once per pay run', () => {
+  it('the cache fetches only organizations it has not seen; an unknown one has no cards', async () => {
+    const fetcher = vi.fn(async (ids: readonly string[]) => new Map(ids.map((id) => [id, id === 'org-b' ? [CUSTOM] : []])));
+    const cache = createRateCardScheduleCache(fetcher);
+    const first = await cache.get(['org-b', 'org-b', 'org-c']);
+    const second = await cache.get(['org-b', '']);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(['org-b', 'org-c']);
+    expect(first.get('org-b')).toEqual([CUSTOM]);
+    expect(first.get('org-c')).toEqual([]);
+    expect([...second.keys()]).toEqual(['org-b']);
+  });
+});

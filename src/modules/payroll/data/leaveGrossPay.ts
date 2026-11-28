@@ -284,6 +284,8 @@ export function publicHolidayDaysInRange(
 /** Resolved per-employee context for pricing a leave day. */
 export interface LeaveEmployeeContext {
   employeeId: string;
+  /** The contract's organization — whose rate cards price the leave. */
+  organizationId?: string;
   employmentType?: CostCalculatorOptions['employmentType'];
   payBasis?: PayBasis;
   annualSalary?: number;
@@ -383,6 +385,7 @@ export function buildLeaveInputs(
       scheduledLengthMinutes: minutes,
       isOvernight: false,
       hoursSource: 'actual' as const,
+      organizationId: ctx.organizationId,
       payBasis: ctx.payBasis,
       annualSalary: ctx.annualSalary,
       contractedWeeklyHours: ctx.contractedWeeklyHours,
@@ -435,6 +438,7 @@ export function buildPublicHolidayInputs(
     // A salaried person's holiday is inside the salary. Without the pay basis
     // the day was priced as an EBA absence ON TOP of the full salary — a week
     // of annual leave with a public holiday paid that day twice.
+    organizationId: ctx.organizationId,
     payBasis: ctx.payBasis,
     annualSalary: ctx.annualSalary,
     contractedWeeklyHours: ctx.contractedWeeklyHours,
@@ -635,7 +639,7 @@ async function resolveLeaveContexts(
   let cQuery = (supabase as any)
     .from('user_contracts')
     .select(
-      'user_id, remuneration_level, contracted_weekly_hours, status, start_date, end_date, employment_status, ' +
+      'user_id, organization_id, remuneration_level, contracted_weekly_hours, status, start_date, end_date, employment_status, ' +
       'pay_basis, annual_salary, ' +
       'is_apprentice, apprentice_type, apprentice_year, has_completed_year_12, ' +
       'is_trainee, trainee_category, trainee_level, trainee_exit_year, trainee_years_out, trainee_aqf_level, trainee_year, ' +
@@ -708,6 +712,7 @@ async function resolveLeaveContexts(
 
     out.set(uid, {
       employeeId: uid,
+      organizationId: c.organization_id ?? undefined,
       employmentType: mapEmploymentType(empTypeById.get(uid)),
       payBasis,
       annualSalary,

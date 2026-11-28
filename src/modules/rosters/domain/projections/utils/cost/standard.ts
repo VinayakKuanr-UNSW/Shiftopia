@@ -1,7 +1,9 @@
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
 import { isPublicHolidayISO, SATURDAY, SUNDAY } from './constants';
-import { ICC_SYDNEY_EA_LOADINGS, type RateCardLoadings } from './loadings';
-import { resolveRateSet, type WageRateTable } from './rate-schedule';
+import { type RateCardLoadings } from './loadings';
+import { type WageRateTable } from './rate-schedule';
+import { resolvePricing } from './rate-card-resolver';
+import { UNPRICED_COST_BREAKDOWN } from './constants';
 import { resolvePaymentMinEngagementMinutes } from './min-engagement-floor';
 import { getTraineeBaseRate } from './trainee_matrix';
 import { getApprenticeMultiplier, SWS_MIN_WEEKLY } from './apprentice_matrix';
@@ -185,9 +187,12 @@ export function estimateDetailedShiftCost(
   // cl 12.4), but the EA is not explicit. Kept as-is until the parties clarify.
   const isPartTime = /part/i.test(employmentType || '');
   
-  // audit Phase 2: rates & allowances are effective-dated — resolve the set in
-  // force on this shift's date so cl 25.1 CPI increases are data, not code.
-  const rateSet = resolveRateSet(shift_date);
+  // Rates, allowances, loadings and the trainee schedule are the organization's
+  // published rate card in force on the shift date (rate-card-resolver.ts);
+  // without a schedule, the embedded effective-dated set (cl 25.1 as data).
+  const pricing = resolvePricing(shift_date, options.rateCards ?? ctx?.rateCards, options.loadings, ctx?.loadings);
+  if (!pricing) return UNPRICED_COST_BREAKDOWN;
+  const rateSet = pricing.rateSet;
 
   let baseRate = rate;
 
@@ -262,7 +267,7 @@ export function estimateDetailedShiftCost(
       aqfLevel: (options.trainee_aqf_level as any) || 3,
       yearOfTraineeship: options.trainee_year || 1,
       isPartTime
-    }, shift_date); // effective-dated (Schedule 5 CPI uplift, cl 25.1)
+    }, shift_date, pricing.trainee ?? undefined); // the card's Schedule 5 set, else effective-dated embedded
 
     if (isPartTime && options.is_training_on_job) {
       baseRate *= 0.8;
@@ -276,7 +281,7 @@ export function estimateDetailedShiftCost(
     baseRate *= getApprenticeMultiplier(options, rateSet);
   }
 
-  const loadings = options.loadings ?? ctx?.loadings ?? ICC_SYDNEY_EA_LOADINGS;
+  const loadings = pricing.loadings;
   const casualMult = 1 + loadings.casualLoading;
   const ordinaryRate = isCasual ? baseRate / casualMult : baseRate;
   if (isNaN(ordinaryRate)) return ZERO_RESULT;

@@ -1,9 +1,10 @@
 import {
-  isPublicHolidayISO, SATURDAY, SUNDAY, ZERO_COST_BREAKDOWN,
+  isPublicHolidayISO, SATURDAY, SUNDAY, ZERO_COST_BREAKDOWN, UNPRICED_COST_BREAKDOWN,
 } from './constants';
-import { ICC_SYDNEY_EA_LOADINGS, type RateCardLoadings } from './loadings';
+import { type RateCardLoadings } from './loadings';
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
-import { resolveRateSet, type RateSet, type WageRateTable } from './rate-schedule';
+import { type RateSet, type WageRateTable } from './rate-schedule';
+import { resolvePricing } from './rate-card-resolver';
 import { resolvePaymentMinEngagementMinutes } from './min-engagement-floor';
 import type { AwardContext } from './award-context';
 import { getDateFacts, parseTimeToMinutes, fastNightMinutes } from './award-context';
@@ -111,7 +112,9 @@ export function estimateDetailedShiftCost(
   if (isLeave && isCasualType && !options.isFdvLeave) return ZERO_COST_BREAKDOWN;
 
   // audit Phase 2: security annualised/ordinary rates are effective-dated.
-  const rateSet = resolveRateSet(shift_date);
+  const pricing = resolvePricing(shift_date, options.rateCards ?? ctx?.rateCards, options.loadings, ctx?.loadings);
+  if (!pricing) return UNPRICED_COST_BREAKDOWN;
+  const rateSet = pricing.rateSet;
 
   let effectiveRate = rate ?? NaN;
   if (!Number.isFinite(effectiveRate) || effectiveRate <= 0) {
@@ -134,7 +137,7 @@ export function estimateDetailedShiftCost(
     }
   }
 
-  const loadings = options.loadings ?? ctx?.loadings ?? ICC_SYDNEY_EA_LOADINGS;
+  const loadings = pricing.loadings;
   const isAnnualised = isSecurityAnnualised(effectiveRate, rateSet.security.annualisedHourly);
   const isCasual = !isAnnualised && isCasualType;
 

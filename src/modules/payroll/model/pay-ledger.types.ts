@@ -34,6 +34,8 @@ export type LedgerCell =
   | { kind: 'in_progress' }
   /** The shift is over but a clock-in or clock-out is missing. */
   | { kind: 'no_clock' }
+  /** No published pay rate card covers the shift date, so it cannot be priced. */
+  | { kind: 'no_rate_card' }
   | { kind: 'no_show' };
 
 /**

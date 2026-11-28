@@ -26,6 +26,7 @@ import { Label } from '@/modules/core/ui/primitives/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/modules/core/ui/primitives/tabs';
 import { cn } from '@/modules/core/lib/utils';
 import { useEbaRates, useTraineeRates } from '../../state/useEbaRates';
+import { rateSetFromCard } from '@/modules/rosters/domain/projections/utils/cost/rate-card-resolver';
 import { resolveEbaRateSetOnDate } from '../../data/ebaRates.read.api';
 import { resolveTraineeRateSet } from '@/modules/rosters/domain/projections/utils/cost/trainee_matrix';
 
@@ -179,7 +180,10 @@ export const PayRatesSettings: React.FC = () => {
 
         {/* ── Apprentices & Trainees ────────────────────────────────────── */}
         <TabsContent value="apprentices" className="mt-8 space-y-10">
-          <ApprenticeCards />
+          <ApprenticeCards rateSet={inForceToday ? rateSetFromCard({
+            code: 'in force', validFrom: inForceToday.effectiveFrom, validTo: null,
+            rates: inForceToday.rates, allowances: inForceToday.allowances, loadings: null, trainee: null,
+          }) : null} />
 
           {/* Detailed trainee matrices */}
           <div className="pt-8 border-t border-border/40">

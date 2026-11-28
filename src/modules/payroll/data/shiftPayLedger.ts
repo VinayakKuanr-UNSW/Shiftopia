@@ -29,6 +29,8 @@ import type {
   ShiftPayLedgerRow,
 } from '../model/pay-ledger.types';
 import type { GrossPayShiftRow } from './types';
+import { createRateCardScheduleCache } from './ebaRates.read.api';
+import type { RateCardSchedule } from '../../rosters/domain/projections/utils/cost/rate-card-resolver';
 import {
   fetchHydratedShiftRows,
   mapShiftRowToGrossPayInput,
@@ -133,6 +135,7 @@ function cellFrom(result: ShiftGrossPay | undefined): LedgerCell {
   if (result.payBasis === 'salary' && !result.isLeave) {
     return { kind: 'salaried', hours: result.salariedHours ?? 0 };
   }
+  if (result.unpriced) return { kind: 'no_rate_card' };
   return { kind: 'priced', amount: result.grossPay, hours: result.paidHours, lines: result.lines };
 }
 
@@ -144,7 +147,10 @@ function cellFrom(result: ShiftGrossPay | undefined): LedgerCell {
 export function buildShiftPayLedger(
   rows: readonly GrossPayShiftRow[],
   bounds: PeriodBounds,
+  schedules?: ReadonlyMap<string, RateCardSchedule>,
 ): ShiftPayLedgerRow[] {
+  // Given, each row prices from its own organization's cards ([] ⇒ unpriced).
+  const cardsFor = (row: GrossPayShiftRow) => (schedules ? (schedules.get(row.organization_id ?? '') ?? []) : undefined);
   const leadInStart = isoWeekKey(bounds.periodStart);
   const queued: Record<LedgerColumn, Map<string, GrossPayShiftInput[]>> = {
     scheduled: new Map(), actual: new Map(), billable: new Map(),
@@ -173,15 +179,15 @@ export function buildShiftPayLedger(
         'scheduled',
       );
       // A no-show was still rostered: the Scheduled figure prices the roster.
-      if (scheduled) queue('scheduled', mapShiftRowToGrossPayInput(row, { ...scheduled, ignoreNoShow: true }));
+      if (scheduled) queue('scheduled', mapShiftRowToGrossPayInput(row, { ...scheduled, ignoreNoShow: true }, cardsFor(row)));
       else cells.scheduled = { kind: 'not_worked_yet' };
 
       const actual = actualWindow(row);
       if ('kind' in actual) cells.actual = actual;
-      else queue('actual', mapShiftRowToGrossPayInput(row, actual));
+      else queue('actual', mapShiftRowToGrossPayInput(row, actual, cardsFor(row)));
 
       const billable = billableOutcome(row);
-      if (billable === 'price') queue('billable', mapShiftRowToGrossPayInput(row));
+      if (billable === 'price') queue('billable', mapShiftRowToGrossPayInput(row, undefined, cardsFor(row)));
       else cells.billable = billable;
     }
 
@@ -264,5 +270,6 @@ export async function getShiftPayLedger(bounds: GrossPayPeriodBounds): Promise<S
     { ...bounds, periodStart: isoWeekKey(bounds.periodStart) },
     { allShifts: true },
   );
-  return buildShiftPayLedger(rows, bounds);
+  const schedules = await createRateCardScheduleCache().get(rows.map((r) => r.organization_id ?? ''));
+  return buildShiftPayLedger(rows, bounds, schedules);
 }

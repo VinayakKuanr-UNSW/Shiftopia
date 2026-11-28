@@ -202,6 +202,8 @@ interface MinEngagementFloorInput {
   employmentType?: string | null;
   /** Selects the Security Schedule 3 floor tiers instead of the general award's. */
   isSecurityRole?: boolean;
+  /** The shift's rate-card loadings (the floors' lengths); omitted ⇒ ICC's. */
+  loadings?: import('@/modules/rosters/domain/projections/utils/cost/loadings').RateCardLoadings;
 }
 
 interface FlooredNetMinutes {

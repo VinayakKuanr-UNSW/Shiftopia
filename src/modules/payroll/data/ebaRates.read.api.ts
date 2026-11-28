@@ -19,6 +19,11 @@ import {
   type RateCardLoadings,
 } from '@/modules/rosters/domain/projections/utils/cost/loadings';
 import {
+  toPricedCard,
+  type PricedCard,
+  type RateCardSchedule,
+} from '@/modules/rosters/domain/projections/utils/cost/rate-card-resolver';
+import {
   TRAINEE_RATE_SCHEDULE,
   type TraineeRateSet,
 } from '@/modules/rosters/domain/projections/utils/cost/trainee_matrix';
@@ -162,4 +167,75 @@ export async function getTraineeRateSchedule(organizationId: string | null): Pro
   } catch {
     return TRAINEE_RATE_SCHEDULE;
   }
+}
+
+// ── Published cards → the cost engine's schedule (Gross Pay) ─────────────
+
+const PUBLISHED_CARD_SELECT =
+  'organization_id, code, valid_from, valid_to, '
+  + 'eba_rate(classification, employment_basis, ordinary_hourly_rate, paid_hourly_rate), '
+  + 'eba_allowance(code, amount), '
+  + 'eba_trainee_schedule(label, source, matrix), '
+  + 'pay_rate_card_loadings(' + RATE_CARD_LOADINGS_SELECT + ')';
+
+const oneRow = (v: unknown): any => (Array.isArray(v) ? v[0] : v) ?? null;
+
+/**
+ * Each organization's PUBLISHED rate cards as the engine prices from them
+ * (rate-card-resolver.ts). An organization with no published card maps to []
+ * — its shifts are unpriced, never priced at another organization's rates.
+ * Throws on a read error: an empty schedule would silently unprice a pay run.
+ */
+export async function fetchPublishedRateCardSchedules(orgIds: readonly string[]): Promise<Map<string, RateCardSchedule>> {
+  const out = new Map<string, PricedCard[]>(orgIds.map((id) => [id, []]));
+  if (orgIds.length === 0) return out;
+  const { data, error } = await (supabase as any)
+    .from('pay_rate_cards')
+    .select(PUBLISHED_CARD_SELECT)
+    .in('organization_id', [...orgIds])
+    .eq('status', 'published')
+    .order('valid_from', { ascending: true });
+  if (error) throw error;
+  for (const c of (data ?? []) as any[]) {
+    const trainee = oneRow(c.eba_trainee_schedule);
+    const loadings = oneRow(c.pay_rate_card_loadings);
+    const priced = toPricedCard({
+      code: String(c.code),
+      validFrom: ymd(c.valid_from),
+      validTo: c.valid_to ? ymd(c.valid_to) : null,
+      rates: ((c.eba_rate ?? []) as any[]).map((r) => ({
+        classification: String(r.classification), employmentBasis: String(r.employment_basis),
+        ordinaryHourlyRate: num(r.ordinary_hourly_rate), paidHourlyRate: num(r.paid_hourly_rate),
+      })),
+      allowances: ((c.eba_allowance ?? []) as any[]).map((a) => ({ code: String(a.code), amount: num(a.amount) })),
+      loadings: loadings ? mapDbLoadingsRow(loadings) : null,
+      trainee: trainee
+        ? { label: trainee.label ?? null, source: trainee.source ?? null,
+            matrix: typeof trainee.matrix === 'string' ? JSON.parse(trainee.matrix) : (trainee.matrix ?? {}) }
+        : null,
+    });
+    if (priced) out.get(String(c.organization_id))?.push(priced);
+  }
+  return out;
+}
+
+/** Fetch each organization's schedule once per pay run, however many readers ask. */
+export interface RateCardScheduleCache {
+  get(orgIds: readonly string[]): Promise<Map<string, RateCardSchedule>>;
+}
+
+export function createRateCardScheduleCache(
+  fetcher: typeof fetchPublishedRateCardSchedules = fetchPublishedRateCardSchedules,
+): RateCardScheduleCache {
+  const known = new Map<string, RateCardSchedule>();
+  return {
+    async get(orgIds) {
+      const wanted = [...new Set(orgIds.filter(Boolean))];
+      const missing = wanted.filter((id) => !known.has(id));
+      if (missing.length > 0) {
+        for (const [id, schedule] of await fetcher(missing)) known.set(id, schedule);
+      }
+      return new Map(wanted.map((id) => [id, known.get(id) ?? []]));
+    },
+  };
 }

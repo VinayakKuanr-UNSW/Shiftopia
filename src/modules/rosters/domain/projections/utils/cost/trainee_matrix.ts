@@ -163,9 +163,10 @@ export function resolveTraineeRateSet(
  * given `shiftDate`. Weekly rates are converted to hourly at the 38h ordinary
  * week (cl 1.5.5); the AQF Cert IV uplift is applied last (cl 1.4.3 / 1.5.4).
  */
-export function getTraineeBaseRate(req: TraineeWageRequest, shiftDate?: string | null): number {
+export function getTraineeBaseRate(req: TraineeWageRequest, shiftDate?: string | null, cardSet?: TraineeRateSet): number {
   const { category, level, exitYear = 12, yearsOut = 0, aqfLevel, yearOfTraineeship, isPartTime } = req;
-  const set = resolveTraineeRateSet(shiftDate);
+  // The rate card's own Schedule 5 set when the shift is priced from a card.
+  const set = cardSet ?? resolveTraineeRateSet(shiftDate);
 
   let rate = 0;
 

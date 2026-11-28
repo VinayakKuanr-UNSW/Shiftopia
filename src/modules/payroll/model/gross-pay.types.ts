@@ -69,6 +69,12 @@ export interface ShiftGrossPay {
   hoursSource: GrossPayHoursSource;
   isLeave: boolean;
   /**
+   * NO_RATE_CARD: the organization has no published pay rate card covering
+   * the shift date, so it is not priced (grossPay 0) — publish a card in
+   * Payroll → Pay Rates. Never priced at another organization's rates.
+   */
+  unpriced?: boolean;
+  /**
    * The de-loaded ordinary hourly rate the award engine priced this shift from
    * (breakdown.ordinaryRate). Carried so cross-shift pay rules (cl 40.1
    * double-time floor) can price uplifts even when the INPUT rate was null

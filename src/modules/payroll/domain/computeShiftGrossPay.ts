@@ -13,6 +13,7 @@
  */
 
 import { estimateDetailedShiftCost } from '../../rosters/domain/projections/utils/cost/index';
+import { resolveCardOn, type RateCardSchedule } from '../../rosters/domain/projections/utils/cost/rate-card-resolver';
 import type { CostCalculatorOptions, ShiftCostBreakdown } from '../../rosters/domain/projections/utils/cost/types';
 import type { EarningsLine, ShiftGrossPay, GrossPayHoursSource } from '../model/gross-pay.types';
 import type { PayBasis } from '@/modules/users/domain/contractPayTerms';
@@ -29,6 +30,15 @@ export interface GrossPayShiftInput {
   shiftId: string;
   employeeId: string;
   shiftDate: string;                 // YYYY-MM-DD
+  /** The organization the work was done for — whose rate cards price it. */
+  organizationId?: string;
+  /**
+   * That organization's published rate cards. Given, the shift is priced from
+   * the card covering its date, and is `unpriced` when none does (never at
+   * another organization's or the embedded ICC rates). Omitted ⇒ the
+   * engine's embedded schedule.
+   */
+  rateCards?: RateCardSchedule;
 
   // Approved worked hours (already manager-reviewed / adjusted).
   netMinutes: number;
@@ -360,6 +370,13 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
   // shift is not worked and is not paid.
   if (input.isNoShow || input.isCancelled) return NOT_WORKED(input);
 
+  // NO_RATE_CARD: the organization has no published card covering this date.
+  // EBA pay cannot be computed — say so rather than price it at someone
+  // else's rates. Salaried pay is outside the EA and needs no card.
+  if (input.rateCards && input.payBasis !== 'salary' && !resolveCardOn(input.rateCards, input.shiftDate)) {
+    return { ...NOT_WORKED(input), unpriced: true };
+  }
+
   if (input.isToilPayout) {
     const hours = round2(Math.max(0, input.netMinutes) / 60);
     const rate = input.rate ?? 0;
@@ -466,6 +483,7 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
     start_time: input.startTime ?? '',
     end_time: input.endTime ?? '',
     rate: input.rate,
+    rateCards: input.rateCards,
     scheduled_length_minutes: input.scheduledLengthMinutes ?? 0,
     unpaid_break_minutes: input.unpaidBreakMinutes,
     break_start: input.breakStart,

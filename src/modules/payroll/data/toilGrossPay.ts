@@ -20,6 +20,8 @@
  */
 import { supabase } from '@/platform/supabase/client';
 import { resolveRateSet } from '../../rosters/domain/projections/utils/cost/rate-schedule';
+import { resolveCardOn, type RateCardSchedule } from '../../rosters/domain/projections/utils/cost/rate-card-resolver';
+import type { RateCardScheduleCache } from './ebaRates.read.api';
 import { toilPayoutHourlyRate } from '@/modules/toil/domain/toil-rules';
 import type { GrossPayShiftInput } from '../domain/computeShiftGrossPay';
 
@@ -44,11 +46,16 @@ const PAYOUT_WORDING: Record<string, string> = {
     termination_payout: 'Time in lieu paid out (salaried contract ended)',
 };
 
-/** The permanent ordinary rate of a level on a date (Level 0 is the trainee rate). */
-function permanentLevelRate(level: number | null, onDate: string): number | null {
+/**
+ * The permanent ordinary rate of a level on a date (Level 0 is the trainee
+ * rate) — from the organization's card when its schedule is given (none
+ * covering the date ⇒ null), else the embedded schedule.
+ */
+function permanentLevelRate(level: number | null, onDate: string, rateCards?: RateCardSchedule): number | null {
     if (level == null) return null;
     const key = level === 0 ? 'TRAINEE' : `LEVEL_${level}`;
-    const rates = (resolveRateSet(onDate).wageRates as Record<string, { permanent: number } | undefined>)[key];
+    const rateSet = rateCards ? resolveCardOn(rateCards, onDate)?.rateSet : resolveRateSet(onDate);
+    const rates = (rateSet?.wageRates as Record<string, { permanent: number } | undefined> | undefined)?.[key];
     return rates?.permanent ?? null;
 }
 
@@ -60,7 +67,9 @@ export function payoutInputFromEntry(
         contracted_weekly_hours?: number | string | null;
         employment_status?: string | null;
         remuneration_level?: number | null;
+        organization_id?: string | null;
     } | undefined,
+    rateCards?: RateCardSchedule,
 ): GrossPayShiftInput {
     const date = String(entry.effective_date).slice(0, 10);
     const rate = toilPayoutHourlyRate({
@@ -68,11 +77,13 @@ export function payoutInputFromEntry(
         annualSalary: contract?.annual_salary != null ? Number(contract.annual_salary) : null,
         contractedWeeklyHours: contract?.contracted_weekly_hours != null ? Number(contract.contracted_weekly_hours) : null,
         employmentStatus: contract?.employment_status ?? null,
-        permanentLevelRate: permanentLevelRate(contract?.remuneration_level ?? null, date),
+        permanentLevelRate: permanentLevelRate(contract?.remuneration_level ?? null, date, rateCards),
     });
     return {
         shiftId: `toil-payout:${entry.id}`,
         employeeId: entry.employee_id,
+        organizationId: contract?.organization_id ?? undefined,
+        rateCards,
         shiftDate: date,
         netMinutes: Math.abs(Number(entry.minutes) || 0),
         rate,
@@ -82,7 +93,7 @@ export function payoutInputFromEntry(
     };
 }
 
-export async function getToilPeriodFacts(bounds: ToilFetchBounds): Promise<ToilPeriodFacts> {
+export async function getToilPeriodFacts(bounds: ToilFetchBounds, rateCardCache?: RateCardScheduleCache): Promise<ToilPeriodFacts> {
     const empty: ToilPeriodFacts = { payoutInputs: [], accruedHoursByEmployee: new Map() };
     const { data: entries, error } = await (supabase as any)
         .from('toil_ledger')
@@ -115,6 +126,9 @@ export async function getToilPeriodFacts(bounds: ToilFetchBounds): Promise<ToilP
         return true;
     };
 
+    const schedules = rateCardCache
+        ? await rateCardCache.get((contracts ?? []).map((c: any) => c.organization_id ?? ''))
+        : null;
     const out: ToilPeriodFacts = { payoutInputs: [], accruedHoursByEmployee: new Map() };
     for (const e of entries as any[]) {
         const contract = byId.get(e.user_contract_id);
@@ -125,7 +139,8 @@ export async function getToilPeriodFacts(bounds: ToilFetchBounds): Promise<ToilP
                 (out.accruedHoursByEmployee.get(e.employee_id) ?? 0) + Number(e.minutes) / 60,
             );
         } else {
-            out.payoutInputs.push(payoutInputFromEntry(e, contract));
+            out.payoutInputs.push(payoutInputFromEntry(e, contract,
+                schedules ? (schedules.get(contract?.organization_id ?? '') ?? []) : undefined));
         }
     }
     return out;
