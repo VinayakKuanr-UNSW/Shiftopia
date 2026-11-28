@@ -116,7 +116,7 @@ BEGIN
 
   v_start := (NEW.shift_date || ' ' || NEW.start_time)::timestamp AT TIME ZONE NEW.timezone;
   IF v_start <= now() THEN
-    RAISE EXCEPTION 'A shift cannot start in the past: % at % (Sydney time) has already passed.',
+    RAISE EXCEPTION 'A shift cannot start in the past: % at % (venue time) has already passed.',
       to_char(NEW.shift_date, 'Dy DD Mon'), to_char(NEW.start_time, 'HH24:MI')
       USING ERRCODE = 'check_violation', HINT = 'SHIFT_STARTED';
   END IF;
@@ -139,7 +139,7 @@ BEGIN
       RETURN OLD;
     END IF;
     IF v_shift_start <= now() THEN
-      RAISE EXCEPTION 'Shift % has already started (Sydney time) and cannot be deleted.', OLD.id
+      RAISE EXCEPTION 'Shift % has already started (venue time) and cannot be deleted.', OLD.id
         USING HINT = 'SHIFT_STARTED';
     END IF;
     RETURN OLD;
@@ -161,7 +161,7 @@ BEGIN
     ) THEN
       RETURN NEW;
     END IF;
-    RAISE EXCEPTION 'Cannot modify a shift schedule that has already started (Sydney Time). Shift ID: %', OLD.id;
+    RAISE EXCEPTION 'Cannot modify a shift schedule that has already started (venue time). Shift ID: %', OLD.id;
   END IF;
   RETURN NEW;
 END;
