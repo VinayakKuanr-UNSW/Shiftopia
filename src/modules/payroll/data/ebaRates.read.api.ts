@@ -1,18 +1,15 @@
 /**
- * EBA rate schedule — read adapter for the Phase-2 rate-admin UI.
+ * EBA rate schedule — read adapter for the rate-admin UI.
  *
- * Reads the durable, effective-dated wage/allowance source of truth from the DB
- * tables `public.eba_rate` + `public.eba_allowance` (migration
- * 20260709000000_eba_rate_allowance_effective_dated.sql) and groups the flat
- * rows into one `EbaRateSet` per `effective_from` date, ascending.
+ * Reads the organization's PUBLISHED pay rate cards (`public.pay_rate_cards`,
+ * migration *_rate_cards_per_period) with their lines (`eba_rate`,
+ * `eba_allowance`, `eba_trainee_schedule`). Each card is one period's rates, so
+ * each becomes one `EbaRateSet` dated by the card's `valid_from`, ascending.
  *
- * SCOPE: this is READ-ONLY. The worker cost engine reads an EMBEDDED copy of
- * these rates (`rate-schedule.ts` → RATE_SCHEDULE) because it runs in a
- * projection worker with no Supabase access; the DB tables only mirror it, and
- * RLS denies authenticated writes (service_role only). So the admin UI views
- * the schedule and PREVIEWS a CPI increase (emitting the migration SQL + TS
- * snippet an engineer applies to BOTH copies) — it never writes rates directly.
- * Making the DB the single writable source is the explicit Phase-3 milestone.
+ * SCOPE: READ-ONLY. New periods are made through the rate-card API —
+ * `roll_rate_card_forward` → `publish_rate_card` (payroll.manage) — not here.
+ * The worker cost engine still reads an EMBEDDED copy of these rates
+ * (`rate-schedule.ts` → RATE_SCHEDULE); moving it onto the cards is phase 2.
  */
 
 import { supabase } from '@/platform/supabase/client';
@@ -41,7 +38,7 @@ export interface EbaAllowanceRow {
   source: string | null;
 }
 
-/** All rates + allowances in force from `effectiveFrom` until the next set. */
+/** One published card's rates + allowances, in force from `effectiveFrom` until the next card. */
 export interface EbaRateSet {
   effectiveFrom: string;           // YYYY-MM-DD
   rates: EbaRateRow[];
@@ -59,63 +56,44 @@ const ymd = (v: unknown): string => {
 };
 
 /**
- * Fetch the full effective-dated EBA rate schedule from the DB, grouped by
- * `effective_from` (ascending). Returns `[]` on error (fail-soft — the admin UI
- * shows an empty state rather than throwing).
+ * Fetch the organization's published rate cards as rate sets, ascending by the
+ * card's `valid_from`. Returns `[]` with no organization, or on error
+ * (fail-soft — the admin UI shows an empty state rather than throwing).
  */
-export async function getEbaRateSchedule(): Promise<EbaRateSet[]> {
-  const [rateRes, allowanceRes] = await Promise.all([
-    (supabase as any)
-      .from('eba_rate')
-      .select('effective_from, classification, employment_basis, ordinary_hourly_rate, paid_hourly_rate, source')
-      .order('effective_from', { ascending: true })
-      .order('classification', { ascending: true }),
-    (supabase as any)
-      .from('eba_allowance')
-      .select('effective_from, code, amount, unit, source')
-      .order('effective_from', { ascending: true })
-      .order('code', { ascending: true }),
-  ]);
+export async function getEbaRateSchedule(organizationId: string | null): Promise<EbaRateSet[]> {
+  if (!organizationId) return [];
+  const { data, error } = await (supabase as any)
+    .from('pay_rate_cards')
+    .select('valid_from, eba_rate(classification, employment_basis, ordinary_hourly_rate, paid_hourly_rate, source), eba_allowance(code, amount, unit, source)')
+    .eq('organization_id', organizationId)
+    .eq('status', 'published')
+    .order('valid_from', { ascending: true });
 
-  if (rateRes.error) {
-    console.error('[ebaRates.read] eba_rate query error:', rateRes.error);
-    return [];
-  }
-  if (allowanceRes.error) {
-    console.error('[ebaRates.read] eba_allowance query error:', allowanceRes.error);
+  if (error) {
+    console.error('[ebaRates.read] pay_rate_cards query error:', error);
     return [];
   }
 
-  // Group both tables by effective_from into a single map of sets.
-  const byDate = new Map<string, EbaRateSet>();
-  const setFor = (date: string): EbaRateSet => {
-    let s = byDate.get(date);
-    if (!s) {
-      s = { effectiveFrom: date, rates: [], allowances: [] };
-      byDate.set(date, s);
-    }
-    return s;
-  };
-
-  for (const r of (rateRes.data ?? []) as any[]) {
-    setFor(ymd(r.effective_from)).rates.push({
-      classification: String(r.classification),
-      employmentBasis: r.employment_basis,
-      ordinaryHourlyRate: num(r.ordinary_hourly_rate),
-      paidHourlyRate: num(r.paid_hourly_rate),
-      source: r.source ?? null,
-    });
-  }
-  for (const a of (allowanceRes.data ?? []) as any[]) {
-    setFor(ymd(a.effective_from)).allowances.push({
-      code: String(a.code),
-      amount: num(a.amount),
-      unit: String(a.unit),
-      source: a.source ?? null,
-    });
-  }
-
-  return [...byDate.values()].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  return ((data ?? []) as any[]).map((card) => ({
+    effectiveFrom: ymd(card.valid_from),
+    rates: ((card.eba_rate ?? []) as any[])
+      .map((r): EbaRateRow => ({
+        classification: String(r.classification),
+        employmentBasis: r.employment_basis,
+        ordinaryHourlyRate: num(r.ordinary_hourly_rate),
+        paidHourlyRate: num(r.paid_hourly_rate),
+        source: r.source ?? null,
+      }))
+      .sort((a, b) => a.classification.localeCompare(b.classification)),
+    allowances: ((card.eba_allowance ?? []) as any[])
+      .map((a): EbaAllowanceRow => ({
+        code: String(a.code),
+        amount: num(a.amount),
+        unit: String(a.unit),
+        source: a.source ?? null,
+      }))
+      .sort((a, b) => a.code.localeCompare(b.code)),
+  }));
 }
 
 /**
@@ -139,25 +117,33 @@ export function resolveEbaRateSetOnDate(
 }
 
 /**
- * Fetch the effective-dated Schedule 5 trainee schedule. Reads the durable
- * `eba_trainee_schedule` (JSONB matrix per effective_from); on any error or
- * empty result — e.g. before the migration is applied — falls back to the
- * embedded `TRAINEE_RATE_SCHEDULE` the engine uses. Both are kept identical by
- * the rate-schedule-trainee-sync drift guard, so the fallback is authoritative.
+ * Fetch the Schedule 5 trainee schedule from the organization's published cards
+ * (one JSONB matrix per card, dated by the card's `valid_from`). On any error
+ * or empty result falls back to the embedded `TRAINEE_RATE_SCHEDULE` the engine
+ * uses; the rate-schedule-trainee-sync drift guard keeps the two identical.
  */
-export async function getTraineeRateSchedule(): Promise<TraineeRateSet[]> {
+export async function getTraineeRateSchedule(organizationId: string | null): Promise<TraineeRateSet[]> {
+  if (!organizationId) return TRAINEE_RATE_SCHEDULE;
   try {
     const { data, error } = await (supabase as any)
-      .from('eba_trainee_schedule')
-      .select('effective_from, matrix, label, source')
-      .order('effective_from', { ascending: true });
-    if (error || !data || data.length === 0) return TRAINEE_RATE_SCHEDULE;
-    return (data as any[]).map((row) => ({
-      effectiveFrom: ymd(row.effective_from),
-      label: row.label ?? '',
-      source: row.source ?? '',
-      ...(typeof row.matrix === 'string' ? JSON.parse(row.matrix) : row.matrix),
-    })) as TraineeRateSet[];
+      .from('pay_rate_cards')
+      .select('valid_from, eba_trainee_schedule(matrix, label, source)')
+      .eq('organization_id', organizationId)
+      .eq('status', 'published')
+      .order('valid_from', { ascending: true });
+    if (error || !data) return TRAINEE_RATE_SCHEDULE;
+    // One schedule per card: PostgREST embeds it as an object (or a one-row array).
+    const sets = (data as any[]).flatMap((card) => {
+      const row = Array.isArray(card.eba_trainee_schedule) ? card.eba_trainee_schedule[0] : card.eba_trainee_schedule;
+      if (!row) return [];
+      return [{
+        effectiveFrom: ymd(card.valid_from),
+        label: row.label ?? '',
+        source: row.source ?? '',
+        ...(typeof row.matrix === 'string' ? JSON.parse(row.matrix) : row.matrix),
+      } as TraineeRateSet];
+    });
+    return sets.length > 0 ? sets : TRAINEE_RATE_SCHEDULE;
   } catch {
     return TRAINEE_RATE_SCHEDULE;
   }
