@@ -29,8 +29,8 @@ export const useReferenceData = (shouldLoad: boolean = false) => {
         try {
             const [orgsRes, deptsRes, subDeptsRes, rolesRes, remLevelsRes] = await Promise.all([
                 supabase.from('organizations').select('id, name').order('name'),
-                (supabase as any).schema('hr').from('departments').select('id, name, organization_id').order('name'),
-                (supabase as any).schema('hr').from('subdepartments').select('id, name, department_id').order('name'),
+                supabase.from('departments').select('id, name, organization_id').order('name'),
+                supabase.from('sub_departments').select('id, name, department_id').order('name'),
                 (supabase as any).schema('hr').from('roles').select('id, name, subdepartment_id, remuneration_level, employment_type, eba_level_min, eba_level_max, typically_salaried').order('name'),
                 (supabase as any).schema('hr').from('remuneration_levels').select('level_number, level_name, description').order('level_number'),
             ]);

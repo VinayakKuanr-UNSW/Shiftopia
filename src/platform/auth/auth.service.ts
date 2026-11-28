@@ -116,11 +116,10 @@ export const authService = {
             // 2. Fetch Contracts
             // NOTE: scalar columns only. hr.user_contracts has cross-schema FKs
             // (organization_id/department_id/sub_department_id → public.*, while
-            // role_id/remuneration_level → hr.*), and same-named hr.organizations
-            // / hr.departments tables shadow the FK targets — so PostgREST cannot
-            // auto-embed `organizations(name)` etc. (PGRST200). The joined names
-            // are not consumed anywhere (org/dept names come from the certificate
-            // scope tree), so we skip the embeds entirely.
+            // role_id/remuneration_level → hr.*), and PostgREST cannot auto-embed
+            // across schemas without explicit hints. The joined names are not
+            // consumed anywhere (org/dept names come from the certificate scope
+            // tree), so we skip the embeds entirely.
             const { data: contractsData, error: contractsErr } = await (supabase as any)
                 .schema('hr')
                 .from('user_contracts')

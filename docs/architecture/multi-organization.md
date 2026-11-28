@@ -22,7 +22,7 @@ it: why the code looks the way it does is the point of this file.
 | ID | Statement | Tag | Where it lives |
 |---|---|---|---|
 | T1 | The platform holds several organizations. Supersedes decision 9 of [access-suites-plan.md](access-suites-plan.md) ("one organization"). | Decided 2026-11-25 | — |
-| T2 | `public.organizations / departments / sub_departments` is the canonical org tree. `hr.organizations` is a duplicate being retired; `hr.departments / hr.subdepartments` still mirror the public rows under the same ids until the Wave 2 review retires them. | Decided 2026-11-25 | `20261125192153_organizations_hardening`, `supabase/pending/…drop_hr_organizations.sql` |
+| T2 | `public.organizations / departments / sub_departments` is the canonical org tree. All three duplicate `hr.*` mirrors (`hr.organizations`, `hr.departments`, `hr.subdepartments`) are retired; `hr.roles` and `public.role_ml_class_map` RLS policies now reference `public.sub_departments` / `public.departments` (§14). | Built 2026-11-28 | `20261125192153_organizations_hardening`, `20261125200241_drop_hr_organizations`, `20261128093400_org_tree_departments_unification` |
 | T3 | Administrator (zeta) is the administrator of **its own organization**: the one on the contract that carries it. No level reaches across organizations. | Decided 2026-11-25 | `20261125192142_tenant_isolation_foundation` |
 | T4 | Work across organizations (creating one, support) uses the service role, not an in-app level. There is no in-app "create organization". | Assumed (follows T3) | foundation migration drops `organizations_insert` |
 | T5 | A person is a member of an organization if they hold any contract there, in any status, so people keep seeing the organization their past records belong to. | Assumed | `public.is_org_member` |
@@ -136,8 +136,8 @@ database then client. Each lands as its own PR through CI.
 
 ## 8. Follow-ups outside these three fixes
 
-- Apply the `hr.organizations` drop (`supabase/pending/`) now that the PR #65 frontend is deployed.
-- Retire the `hr.departments / hr.subdepartments` mirrors (Wave 2 review).
+- ~~Apply the `hr.organizations` drop~~ (done, PR #68 / `20261125200241_drop_hr_organizations`).
+- ~~Retire the `hr.departments / hr.subdepartments` mirrors (Wave 2 review)~~ (done, §14 / `20261128093400_org_tree_departments_unification`).
 
 ## 9. Global expansion (scoped 2026-11-28)
 
@@ -220,3 +220,12 @@ The user asked for: no CPI wizard, an API instead; a card per financial year; mu
 | C3 | `public.reconcile_public_holidays(jsonb)` (`service_role` only, `pg_try_advisory_xact_lock(hashtext('reconcile_public_holidays'))`) reconciles covered jurisdiction-years: inserts missing official dates as `'gazetted'` (live repricing), marks matches `'gazetted'`, keeps unconfirmed `table_only` rows for human review (demoted to `'rule'`), and notifies active `zeta` Administrators of every active organization whose `jurisdiction_lineage` includes newly seen `official_only` / `table_only` findings. Re-runs are idempotent and send zero duplicate notifications. | Built |
 | C4 | `scripts/holidays/official-holidays.mjs` fetches `data.gov.au` (2021–2025 CSV, marked inactive after 2025), `nsw.gov.au`, and `qld.gov.au`, excludes NSW Bank Holiday & QLD part-day Christmas Eve, routes Brisbane Ekka to `AU-QLD-BNE`, normalizes CSV apostrophe mojibake, and parses HTML strictly (failing loudly if a page changes structure). `.github/workflows/public-holidays-check.yml` runs it monthly against `SUPABASE_DB_URL`. | Built |
 | C5 | Initial comparison of official lists (2024–2029: NSW 2024–2027, QLD & Brisbane 2024–2029) against live `public_holidays` matched 125/125 dates (`0` official-only, `0` table-only; only wording differences such as "additional day" vs "substitute day"). | Verified 2026-11-28 |
+
+## 14. Wave 2 org-tree unification (built 2026-11-28)
+
+| ID | Statement | Tag |
+|---|---|---|
+| O1 | `hr.departments` and `hr.subdepartments` mirrors dropped without `CASCADE` (`20261128093400_org_tree_departments_unification`), closing their cross-tenant `SELECT USING (true)` read leak and eliminating mirror drift against `public.departments` / `public.sub_departments`. | Built |
+| O2 | `public.departments` and `public.sub_departments` hardened: `anon` grants revoked; `is_active`, `sort_order`, `created_at`, `updated_at` set `NOT NULL`; blank-string, non-negative `sort_order`, and hex `color` CHECK constraints added; partial unique `(organization_id, code)` / `(department_id, code)` indexes added; redundant `idx_departments_organization_id` dropped. | Built |
+| O3 | `hr.roles.roles_subdepartment_id_fkey` repointed to `public.sub_departments(id) ON DELETE CASCADE`, and `public.role_ml_class_map` write RLS policies repointed to join `public.sub_departments` / `public.departments`. | Built |
+| O4 | Remaining application callers (`supabase/functions/get-roster-view/index.ts` v20, `src/modules/users/ui/hooks/useReferenceData.ts`, `src/modules/rosters/api/shifts.queries.ts`) switched to `public.departments` / `public.sub_departments`. | Built |

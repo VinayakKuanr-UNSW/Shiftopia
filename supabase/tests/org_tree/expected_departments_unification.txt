@@ -1,0 +1,27 @@
+mirrors dropped: hr.departments=t hr.subdepartments=t
+redundant idx_departments_organization_id dropped: t
+anon table select: departments=f sub_departments=f
+hr.roles FK targets public.sub_departments: t
+new public dept -> sub_dept -> hr.roles inserted: t
+dept null is_active: refused (23502)
+dept null sort_order: refused (23502)
+dept null created_at: refused (23502)
+dept null updated_at: refused (23502)
+dept blank name: refused (23514)
+dept blank code: refused (23514)
+dept negative sort_order: refused (23514)
+dept bad color: refused (23514)
+dept blank icon: refused (23514)
+dept duplicate code in org: refused (23505)
+dept null code coexists: t
+sub_dept null is_active: refused (23502)
+sub_dept null sort_order: refused (23502)
+sub_dept blank name: refused (23514)
+sub_dept blank code: refused (23514)
+sub_dept negative sort_order: refused (23514)
+sub_dept duplicate code in dept: refused (23505)
+sub_dept null code coexists: t
+role_ml_class_map cross-org insert: refused (42501)
+other-org persona sees depts=1 (icc=0) sub_depts=1
+role_ml_class_map in-scope insert+update: updated=1
+role_ml_class_map cross-org update rows: 0
