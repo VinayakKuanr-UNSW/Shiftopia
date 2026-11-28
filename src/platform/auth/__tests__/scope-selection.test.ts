@@ -6,6 +6,7 @@ import {
     reconcileScope,
     scopeKeyOf,
     scopeTreeFor,
+    treeInOrganization,
 } from '../scope-selection';
 import type { PermissionObject, ScopeSelection, ScopeTree } from '../types';
 
@@ -131,4 +132,29 @@ describe('asSelection — what storage gives back', () => {
         'rejects %j',
         (v) => expect(asSelection(v)).toBeNull(),
     );
+});
+
+describe('treeInOrganization — the organization chosen in the account menu', () => {
+    const BCEC = tree([['bcec', [['admin', ['management']]]]]);
+    const BOTH: ScopeTree = { organizations: [...ICC.organizations, ...BCEC.organizations] };
+
+    it('keeps only the chosen organization', () => {
+        expect(treeInOrganization(BOTH, 'bcec')).toEqual(BCEC);
+        expect(defaultSelectionFromTree(treeInOrganization(BOTH, 'icc')).org_ids).toEqual(['icc']);
+    });
+
+    it('returns the tree itself when there is nothing to cut', () => {
+        expect(treeInOrganization(BOTH, null)).toBe(BOTH);
+        expect(treeInOrganization(ICC, 'icc')).toBe(ICC);
+        expect(treeInOrganization(null, 'icc')).toBeNull();
+    });
+
+    it('leaves the tree whole when it does not reach the chosen organization', () => {
+        expect(treeInOrganization(ICC, 'bcec')).toBe(ICC);
+    });
+
+    it('a saved choice in the other organization falls back to everything in this one', () => {
+        const saved = sel(['icc'], ['delivery'], ['bar']);
+        expect(reconcileScope(saved, treeInOrganization(BOTH, 'bcec'))).toEqual(sel(['bcec'], ['admin'], ['management']));
+    });
 });
