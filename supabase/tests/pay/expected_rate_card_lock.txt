@@ -11,6 +11,7 @@ delete a published card: refused (55000)
 add, edit and delete a draft's lines: allowed
 move a draft's line onto a published card: refused (55000)
 move a published line onto a draft: refused (55000)
+close the open-ended card where no card follows: refused (55000)
 close the open-ended card and publish the draft: allowed
 edit the just-published card: refused (55000)
 reopen a closed card: refused (55000)

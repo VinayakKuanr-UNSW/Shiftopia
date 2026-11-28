@@ -108,6 +108,11 @@ BEGIN
         RAISE NOTICE 'move a published line onto a draft: allowed';
     EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'move a published line onto a draft: refused (%)', SQLSTATE;
     END;
+    BEGIN
+        UPDATE public.pay_rate_cards SET valid_to = DATE '2027-01-31' WHERE id = icc26;
+        RAISE NOTICE 'close the open-ended card where no card follows: allowed';
+    EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'close the open-ended card where no card follows: refused (%)', SQLSTATE;
+    END;
     -- What publish_rate_card does: close the open-ended predecessor, then publish.
     BEGIN
         UPDATE public.pay_rate_cards SET valid_to = DATE '2027-07-04' WHERE id = icc26;

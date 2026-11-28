@@ -65,3 +65,6 @@ SELECT format(
   FROM resolved
  ORDER BY ord
 \gexec
+
+-- Close the lock again, so later seed files (and pooled sessions) run locked.
+SELECT E'\nSELECT set_config(''pay.rate_card_lock'', '''', false);  -- lock back on';

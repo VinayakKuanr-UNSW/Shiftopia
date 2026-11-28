@@ -16,13 +16,18 @@
 --     the card as published.
 --   * pay_rate_cards: a published card cannot be deleted, and its only legal
 --     change is closing an open-ended period (valid_to NULL → a date), which is
---     what publish_rate_card does to the card it supersedes.
+--     what publish_rate_card does to the card it supersedes — so the new end
+--     must be the day before another card of the organization starts (the
+--     successor, still a draft at that moment).
 --
 -- Break-glass: `SET pay.rate_card_lock = 'off'` (session or transaction) lets
 -- a maintenance session through. Only the generated reference seed (which
 -- inserts published cards before their lines) and test clean-up use it.
 -- Clients cannot reach it: authenticated / anon hold SELECT only on these
 -- tables, and PostgREST exposes no way to set an arbitrary GUC.
+--
+-- Not covered (owner/superuser only, never client-reachable): TRUNCATE skips
+-- row triggers, and session_replication_role = replica skips all of them.
 --
 -- Refusals raise 55000 (object_not_in_prerequisite_state), the code the RPCs
 -- already use for "card is published".
@@ -70,10 +75,14 @@ BEGIN
     IF TG_OP = 'DELETE' THEN
         RAISE EXCEPTION 'card % is published and cannot be deleted', OLD.code USING ERRCODE = '55000';
     END IF;
-    -- Closing an open-ended period is the one change publish_rate_card makes.
+    -- Closing an open-ended period, at the day before its successor starts, is
+    -- the one change publish_rate_card makes.
     IF to_jsonb(NEW) - 'valid_to' - 'updated_at' = to_jsonb(OLD) - 'valid_to' - 'updated_at'
        AND (NEW.valid_to IS NOT DISTINCT FROM OLD.valid_to
-            OR (OLD.valid_to IS NULL AND NEW.valid_to IS NOT NULL)) THEN
+            OR (OLD.valid_to IS NULL AND NEW.valid_to IS NOT NULL
+                AND EXISTS (SELECT 1 FROM public.pay_rate_cards s
+                             WHERE s.organization_id = OLD.organization_id AND s.id <> OLD.id
+                               AND s.valid_from = NEW.valid_to + 1))) THEN
         RETURN NEW;
     END IF;
     RAISE EXCEPTION 'card % is published; only closing its open-ended period is allowed', OLD.code
