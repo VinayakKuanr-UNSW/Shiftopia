@@ -14,15 +14,17 @@ import { shiftDurationMinutes } from '../utils/time';
  * breach the other.
  */
 export const maxDailyHoursRule: V8RuleEvaluator = (ctx) => {
-    const { shifts, config } = ctx;
+    const { employee, shifts, config } = ctx;
 
     const dailyMinutes = new Map<string, number>();
 
     for (const s of shifts) {
         const date = s.date || s.shift_date || '';
+        // Sch 3 §3.2(a) / §5.3(a): Security meal breaks are PAID on the clock.
+        const breakMins = employee.is_security_role ? 0 : (s.unpaid_break_minutes || 0);
         const totalMins = Math.max(
             0,
-            shiftDurationMinutes(s.start_time, s.end_time) - (s.unpaid_break_minutes || 0),
+            shiftDurationMinutes(s.start_time, s.end_time) - breakMins,
         );
         dailyMinutes.set(date, (dailyMinutes.get(date) || 0) + totalMins);
     }

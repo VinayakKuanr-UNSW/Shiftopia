@@ -5,16 +5,18 @@
 import { SwapScenario, SolverResult, ConstraintViolation, SolverConfig } from './types';
 import { v8Engine, V8Engine } from '../engine';
 import { V8ContractType, V8Employee, V8Shift } from '../types';
+import { normaliseCycleWeeks } from '../../ordinary-hours-cycle';
 
 /**
  * Map a party's employment status ('FT'|'PT'|'CASUAL'|null) onto the V8 engine's
  * ContractType. Absent/null → 'CASUAL' so behaviour is unchanged when no context
  * is supplied (CASUAL is exempt from V8_ORD_HOURS_AVG).
  */
-function toV8ContractType(t: 'FT' | 'PT' | 'CASUAL' | null | undefined): V8ContractType {
+function toV8ContractType(t: 'FT' | 'PT' | 'CASUAL' | 'FLEXI_PART_TIME' | null | undefined): V8ContractType {
     switch (t) {
         case 'FT': return 'FULL_TIME';
         case 'PT': return 'PART_TIME';
+        case 'FLEXI_PART_TIME': return 'FLEXI_PART_TIME';
         case 'CASUAL': return 'CASUAL';
         default: return 'CASUAL';
     }
@@ -41,6 +43,11 @@ export class V8SwapEngine {
             // (unchanged legacy behaviour; CASUAL is exempt from V8_ORD_HOURS_AVG).
             contract_type: toV8ContractType(scenario.partyA.contract_type ?? 'CASUAL'),
             contracted_weekly_hours: scenario.partyA.contracted_weekly_hours ?? 38,
+            ordinary_hours_cycle_weeks:
+                scenario.partyA.ordinary_hours_cycle_weeks != null
+                    ? normaliseCycleWeeks(scenario.partyA.ordinary_hours_cycle_weeks)
+                    : undefined,
+            ordinary_hours_cycle_anchor: scenario.partyA.ordinary_hours_cycle_anchor,
             leave_days: scenario.partyA.leave_days,
             is_security_role: scenario.partyA.is_security_role,
             // V8_EMPLOYMENT_TARGET short-circuits on an empty list, so this was
@@ -81,6 +88,11 @@ export class V8SwapEngine {
                 // swap. Mirror Party A's handling above.
                 contract_type: toV8ContractType(scenario.partyB.contract_type ?? 'CASUAL'),
                 contracted_weekly_hours: scenario.partyB.contracted_weekly_hours ?? 38,
+                ordinary_hours_cycle_weeks:
+                    scenario.partyB.ordinary_hours_cycle_weeks != null
+                        ? normaliseCycleWeeks(scenario.partyB.ordinary_hours_cycle_weeks)
+                        : undefined,
+                ordinary_hours_cycle_anchor: scenario.partyB.ordinary_hours_cycle_anchor,
                 leave_days: scenario.partyB.leave_days,
                 is_security_role: scenario.partyB.is_security_role,
                 employment_statuses: scenario.partyB.employment_statuses,

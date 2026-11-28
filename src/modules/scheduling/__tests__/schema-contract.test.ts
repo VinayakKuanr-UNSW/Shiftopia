@@ -114,6 +114,7 @@ const CONSTRAINTS_FIELDS = fieldSet<Required<OptimizerConstraints>>({
     // request is filtered through `__dataclass_fields__` on the way in, so a
     // field missing from either side is dropped without an error.
     split_shift_allowance_cents: 0,
+    scheduler_mode: 0,
 });
 
 const STRATEGY_FIELDS = fieldSet<Required<OptimizerStrategy>>({

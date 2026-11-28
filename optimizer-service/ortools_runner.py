@@ -40,6 +40,18 @@ from model_builder import (
     OptimizerConstraints,
     SolverParameters,
     StrategyInput,
+    FT_MIN_ORDINARY_DAY_MINUTES,
+    PT_MIN_ENGAGEMENT_MINUTES,
+    FPT_MIN_ENGAGEMENT_MINUTES,
+    FPT_TRAINING_MIN_ENGAGEMENT_MINUTES,
+    FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES,
+    CASUAL_MIN_ENGAGEMENT_MINUTES,
+    CASUAL_TRAINING_MIN_ENGAGEMENT_MINUTES,
+    CASUAL_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES,
+    CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES,
+    PUBLIC_HOLIDAY_MIN_ENGAGEMENT_MINUTES,
+    MAX_DAILY_MINUTES,
+    net_shift_minutes,
     existing_blocks_proposal,
     override_blocks_shift,
     envelope_excludes_shift,
@@ -269,6 +281,10 @@ class ConstraintsReq(BaseModel):
     # here. Default 0 = "caller did not price it", which leaves the objective
     # exactly as it was rather than inventing a rate.
     split_shift_allowance_cents: int = 0
+    # Dedicated employment-mode partition ('FT_STANDARD', 'FT_SECURITY', 'PT',
+    # 'FPT', 'CASUAL', or None/'ALL' for legacy mixed runs). Declared here so
+    # Pydantic forwards it across the wire to OptimizerConstraints.
+    scheduler_mode: Optional[str] = None
 
 
 class StrategyReq(BaseModel):
@@ -670,6 +686,79 @@ def _explain_eligibility(
     """
     reasons: list[str] = []
 
+    # Layer 1 (Mode Isolation) — mirrors `employee_eligible` for FT_STANDARD / FT_SECURITY.
+    if c.scheduler_mode == 'FT_STANDARD':
+        if emp.employment_type != 'FT' or emp.is_flexible or emp.is_security_role:
+            reasons.append('MODE_MISMATCH')
+        if shift.target_employment_type not in (None, 'FT') or shift.target_requires_flexible:
+            reasons.append('EMPLOYMENT_TARGET')
+        net_mins = net_shift_minutes(shift, is_security=False)
+        if net_mins < FT_MIN_ORDINARY_DAY_MINUTES:
+            reasons.append('FT_MIN_DAILY_HOURS')
+        elif net_mins > MAX_DAILY_MINUTES:
+            reasons.append('MAX_DAILY_HOURS')
+    elif c.scheduler_mode == 'FT_SECURITY':
+        if emp.employment_type != 'FT' or emp.is_flexible or not emp.is_security_role:
+            reasons.append('MODE_MISMATCH')
+        if shift.target_employment_type not in (None, 'FT') or shift.target_requires_flexible:
+            reasons.append('EMPLOYMENT_TARGET')
+        paid_mins = net_shift_minutes(shift, is_security=True)
+        if paid_mins < FT_MIN_ORDINARY_DAY_MINUTES:
+            reasons.append('FT_MIN_DAILY_HOURS')
+        elif paid_mins > MAX_DAILY_MINUTES:
+            reasons.append('MAX_DAILY_HOURS')
+    elif c.scheduler_mode == 'PT':
+        if emp.employment_type != 'PT' or emp.is_flexible:
+            reasons.append('MODE_MISMATCH')
+        if shift.target_employment_type not in (None, 'PT') or shift.target_requires_flexible:
+            reasons.append('EMPLOYMENT_TARGET')
+        worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
+        min_req = (
+            PUBLIC_HOLIDAY_MIN_ENGAGEMENT_MINUTES
+            if shift.is_public_holiday
+            else PT_MIN_ENGAGEMENT_MINUTES
+        )
+        if worked_mins < min_req:
+            reasons.append('MIN_ENGAGEMENT')
+        elif worked_mins > MAX_DAILY_MINUTES:
+            reasons.append('MAX_DAILY_HOURS')
+    elif c.scheduler_mode == 'FPT':
+        if emp.employment_type != 'PT' or not emp.is_flexible:
+            reasons.append('MODE_MISMATCH')
+        if shift.target_employment_type not in (None, 'PT') or (
+            shift.target_employment_type == 'PT' and not shift.target_requires_flexible
+        ):
+            reasons.append('EMPLOYMENT_TARGET')
+        worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
+        if shift.is_training:
+            min_req = FPT_TRAINING_MIN_ENGAGEMENT_MINUTES
+        elif shift.is_sunday or shift.is_public_holiday:
+            min_req = FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
+        else:
+            min_req = FPT_MIN_ENGAGEMENT_MINUTES
+        if worked_mins < min_req:
+            reasons.append('MIN_ENGAGEMENT')
+        elif worked_mins > MAX_DAILY_MINUTES:
+            reasons.append('MAX_DAILY_HOURS')
+    elif c.scheduler_mode == 'CASUAL':
+        if emp.employment_type != 'Casual':
+            reasons.append('MODE_MISMATCH')
+        if shift.target_employment_type not in (None, 'Casual') or shift.target_requires_flexible:
+            reasons.append('EMPLOYMENT_TARGET')
+        worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
+        if emp.is_security_role:
+            min_req = CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES
+        elif shift.is_training:
+            min_req = CASUAL_TRAINING_MIN_ENGAGEMENT_MINUTES
+        elif shift.is_sunday or shift.is_public_holiday:
+            min_req = CASUAL_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
+        else:
+            min_req = CASUAL_MIN_ENGAGEMENT_MINUTES
+        if worked_mins < min_req:
+            reasons.append('MIN_ENGAGEMENT')
+        elif worked_mins > MAX_DAILY_MINUTES:
+            reasons.append('MAX_DAILY_HOURS')
+
     # Calendar-day unavailability
     if shift.shift_date in emp.unavailable_dates:
         reasons.append('UNAVAILABLE_DATE')
@@ -685,9 +774,13 @@ def _explain_eligibility(
         if not set(shift.required_license_ids).issubset(set(emp.license_ids)):
             reasons.append('QUALIFICATION_MISSING')
 
-    # Existing-shift overlap / rest gap
+    # Existing-shift overlap / rest gap / same-day labour rules
     if emp.existing_shifts and existing_blocks_proposal(
-        shift, emp.existing_shifts, c.min_rest_minutes,
+        shift,
+        emp.existing_shifts,
+        c.min_rest_minutes,
+        emp=emp,
+        scheduler_mode=c.scheduler_mode,
     ):
         if not c.relax_constraints:
             reasons.append('REST_GAP')
@@ -701,12 +794,13 @@ def _explain_eligibility(
     # 'Flexible Part-Time' onto 'PT'.
     if shift.target_employment_type:
         if emp.employment_type != shift.target_employment_type:
-            reasons.append('EMPLOYMENT_TARGET')
+            if 'EMPLOYMENT_TARGET' not in reasons:
+                reasons.append('EMPLOYMENT_TARGET')
         elif shift.target_requires_flexible and not emp.is_flexible:
             reasons.append('EMPLOYMENT_TARGET_FLEXIBLE')
 
-    # Min engagement floor
-    if shift.duration_minutes < 60:
+    # Degenerate duration guard — mirrors `employee_eligible` (`<= 0`).
+    if shift.duration_minutes <= 0:
         reasons.append('SHIFT_TOO_SHORT')
 
     # HARD availability override windows

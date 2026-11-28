@@ -8,6 +8,29 @@
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 // =============================================================================
+// SCHEDULER MODES (EBA employment & Schedule 3 partitions)
+// =============================================================================
+
+/**
+ * Employment-mode partition for the AutoScheduler (ICC Sydney EBA 2025):
+ *   - 'ALL'         — Legacy mixed-pool solve across all employment types
+ *   - 'FT_STANDARD' — Standard Non-Security Full-Time (cl 35.1, 12.2, 36-43)
+ *   - 'FT_SECURITY' — Full-Time Security (Schedule 3 §3.1 42h/8-week even-time)
+ *   - 'PT'          — Standard Part-Time (cl 12.3, 35.2)
+ *   - 'FPT'         — Flexible Part-Time (cl 12.4, 35.3)
+ *   - 'CASUAL'      — Casual incl. Casual Event Security (cl 12.5, 35.4, Sch 3 §5)
+ */
+export type SchedulerMode =
+    | 'ALL'
+    | 'FT_STANDARD'
+    | 'FT_SECURITY'
+    | 'PT'
+    | 'FPT'
+    | 'CASUAL';
+
+export type SolverSchedulerMode = Exclude<SchedulerMode, 'ALL'>;
+
+// =============================================================================
 // OPTIMIZER REQUEST
 // =============================================================================
 
@@ -291,6 +314,8 @@ export interface OptimizerConstraints {
      * truncated silently, and 1113 is exact where 11.13 is not.
      */
     split_shift_allowance_cents?: number;
+    /** Active employment-mode partition (e.g. 'FT_STANDARD'); null/omitted = mixed pool. */
+    scheduler_mode?: SolverSchedulerMode | null;
 }
 
 export interface OptimizeRequest {
@@ -515,6 +540,8 @@ export interface CapacityCheck {
 }
 
 export interface AutoSchedulerResult {
+    /** Employment-mode partition used for this run ('ALL' | 'FT_STANDARD' | ...). */
+    mode?: SchedulerMode;
     optimizerStatus: OptimizerStatus;
     solveTimeMs: number;
     validationTimeMs: number;
@@ -555,6 +582,8 @@ export interface AutoSchedulerResult {
  *
  * `applied` is the headline: when false, the roster was built with NO
  * cross-roster fairness at all and the reason says why. `reason`:
+ *   - `not_applicable` — non-casual mode (e.g. FT_STANDARD); fairness ledger is
+ *                        casual-only by design.
  *   - `no_org_scope` — the run carried no organizationId; the ledger is off by
  *     design (not a fault).
  *   - `no_data`      — org scoped, but the ledger has never been computed (or
@@ -564,7 +593,7 @@ export interface AutoSchedulerResult {
  */
 export interface FairnessLedgerRunStatus {
     applied: boolean;
-    reason: 'ok' | 'stale' | 'no_data' | 'no_org_scope' | 'fetch_failed';
+    reason: 'ok' | 'stale' | 'no_data' | 'no_org_scope' | 'fetch_failed' | 'not_applicable';
     /** Employees that carried at least one debt row. */
     employeesWithDebts: number;
     /** `window_end` of the freshest row used, or null. */

@@ -58,6 +58,10 @@ const REASON_DESCRIPTIONS: Record<string, string> = {
     OUTSIDE_CONTRACT_ORDINARY_HOURS: "Shift falls outside the employee's contracted ordinary-hours span.",
     EMPLOYMENT_TARGET: 'Shift is for a different employment type (see the shift target).',
     EMPLOYMENT_TARGET_FLEXIBLE: 'Shift requires Flexible Part-Time staff.',
+    MODE_MISMATCH: 'Employee or shift does not belong to the active scheduling mode.',
+    FT_MIN_DAILY_HOURS: 'Shift net duration is below the 7.6-hour Standard Full-Time daily minimum (cl 35.1(c)).',
+    MIN_ENGAGEMENT: 'Shift worked duration is below the Part-Time minimum engagement (3h standard / 4h public holiday, cl 35.2(e) & cl 56.2).',
+    MAX_DAILY_HOURS: 'Shift net duration exceeds the 12-hour daily ordinary-hours ceiling (cl 35.1(d)).',
     CAPACITY_CONFLICT: 'Employee is already on another shift at this time.',
     INSUFFICIENT_CAPACITY: 'Not enough available people-hours on this day.',
     OPTIMIZER_TRADEOFF: 'Eligible, but the solver used this person elsewhere.',
@@ -87,6 +91,22 @@ export const BLOCKER_LABELS: Record<string, { label: string; fix: string }> = {
     EMPLOYMENT_TARGET_FLEXIBLE: {
         label: 'Not Flexible Part-Time',
         fix: "Clear the shift's 'requires flexible' flag, or use Flexible PT staff.",
+    },
+    MODE_MISMATCH: {
+        label: 'Outside active scheduling mode',
+        fix: 'Run the matching scheduling mode for this employment group, or retarget the shift.',
+    },
+    FT_MIN_DAILY_HOURS: {
+        label: 'Below 7.6h FT daily minimum (cl 35.1(c))',
+        fix: 'Lengthen the shift to at least 7.6 net paid hours, or retarget it to Part-Time / Casual.',
+    },
+    MIN_ENGAGEMENT: {
+        label: 'Below PT minimum engagement (cl 35.2(e) / cl 56.2)',
+        fix: 'Lengthen the shift to at least 3 worked hours (4 hours on a public holiday).',
+    },
+    MAX_DAILY_HOURS: {
+        label: 'Over 12h daily ordinary cap (cl 35.1(d))',
+        fix: 'Shorten the shift (or add an unpaid meal break) so net worked hours are 12h or less.',
     },
     ROLE_MISMATCH: {
         label: 'Role not contracted',
