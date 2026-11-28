@@ -57,6 +57,24 @@
     "start_time",
     "unpaid_break_minutes"
   ],
+  "PricingPolicy": [
+    "casual_loading",
+    "min_engagement_minutes",
+    "min_engagement_public_holiday_minutes",
+    "min_engagement_sunday_minutes",
+    "min_engagement_training_minutes",
+    "night_loading_fri",
+    "night_loading_mon_thu",
+    "night_loading_sat_sun",
+    "ordinary_daily_cap_hours",
+    "overtime_after_multiplier",
+    "overtime_first_hours",
+    "overtime_first_multiplier",
+    "public_holiday_loading",
+    "saturday_loading",
+    "security_ordinary_cap_hours",
+    "sunday_loading"
+  ],
   "Shift": [
     "duration_minutes",
     "end_time",

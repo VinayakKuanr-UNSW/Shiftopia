@@ -9,6 +9,7 @@
  */
 
 import type { ContractRecordV2 } from '@/modules/compliance/v8/types';
+import type { SolverConfig } from '@/modules/compliance/v8/swap-engine/types';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 // =============================================================================
@@ -272,6 +273,8 @@ export interface ValidationRunOptions {
     skipQualificationChecks?: boolean;
     /** (Optional) Pre-fetched data to skip network calls. */
     injectedData?: InjectedSimulationData;
+    /** (Optional) Rate-card compliance thresholds forwarded to V8 (e.g. daily caps). */
+    solverConfig?: SolverConfig;
 }
 
 

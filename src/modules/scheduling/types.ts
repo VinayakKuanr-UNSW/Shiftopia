@@ -324,7 +324,7 @@ export interface OptimizerConstraints {
     pricing_policy?: SolverPricingPolicy | null;
 }
 
-/** Numeric loadings the solver's cost model reads (mirrors PricingPolicyReq in ortools_runner.py). */
+/** Numeric loadings and thresholds the solver reads (mirrors PricingPolicyReq in ortools_runner.py). */
 export interface SolverPricingPolicy {
     casual_loading: number;
     saturday_loading: number;
@@ -336,6 +336,12 @@ export interface SolverPricingPolicy {
     overtime_first_hours: number;
     overtime_first_multiplier: number;
     overtime_after_multiplier: number;
+    ordinary_daily_cap_hours: number;
+    security_ordinary_cap_hours: number;
+    min_engagement_minutes: number;
+    min_engagement_sunday_minutes: number;
+    min_engagement_public_holiday_minutes: number;
+    min_engagement_training_minutes: number;
 }
 
 export interface OptimizeRequest {

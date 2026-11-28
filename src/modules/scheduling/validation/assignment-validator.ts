@@ -92,7 +92,7 @@ class AssignmentValidator {
             const hasBlockingPreFlight = preFlightViolations.some(v => v.blocking);
             const solverViolations = hasBlockingPreFlight
                 ? []
-                : complianceEvaluator.evaluate(shift, employee, roster);
+                : complianceEvaluator.evaluate(shift, employee, roster, options.solverConfig);
 
             // Build structured result
             const result = conflictReporter.build(

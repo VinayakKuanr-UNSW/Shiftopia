@@ -18,8 +18,9 @@ from model_builder import (
     OptimizerConstraints,
     PricingPolicy,
     _assignment_cost_cents_with_night,
+    employee_eligible,
 )
-from ortools_runner import ConstraintsReq
+from ortools_runner import ConstraintsReq, _explain_eligibility
 
 # The tables the solver hardcoded before rate cards (cl 41 / cl 43).
 OLD_PERMANENT = {'public_holiday': 2.50, 'sunday': 1.50, 'saturday': 1.25}
@@ -80,7 +81,15 @@ def test_the_wire_defaults_to_icc_and_carries_a_card():
     assert c.pricing_policy.sunday_loading == pytest.approx(ICC_PRICING.sunday_loading)
 
 
-@pytest.mark.parametrize('bad', [{'saturday_loading': -0.1}, {'overtime_first_multiplier': 0.5}, {'casual_loading': 'x'}])
+@pytest.mark.parametrize('bad', [
+    {'saturday_loading': -0.1},
+    {'overtime_first_multiplier': 0.5},
+    {'casual_loading': 'x'},
+    {'ordinary_daily_cap_hours': 0},
+    {'security_ordinary_cap_hours': 25},
+    {'min_engagement_minutes': 900},
+    {'min_engagement_sunday_minutes': -1},
+])
 def test_the_wire_refuses_an_impossible_card(bad):
     with pytest.raises(ValidationError):
         ConstraintsReq(pricing_policy=bad)
@@ -102,3 +111,90 @@ def test_the_reported_cost_is_the_priced_cost_not_flat_hours_times_rate():
     )
     out = solve([SATURDAY], [emp], constraints=custom)
     assert [a.cost for a in out.assignments] == [369.6]
+
+
+def test_daily_cap_thresholds_follow_the_card_in_eligibility_audit_and_hc6():
+    # A card with a 10h general cap and 8h security cap.
+    policy = {'ordinary_daily_cap_hours': 10.0, 'security_ordinary_cap_hours': 8.0}
+    c_ft = _constraints(scheduler_mode='FT_STANDARD', pricing_policy=policy)
+    c_sec = _constraints(scheduler_mode='FT_SECURITY', pricing_policy=policy)
+
+    emp_ft = make_employee("ft1", employment_type="FT")
+    emp_sec = make_employee("sec1", employment_type="FT", is_security_role=True)
+
+    s_11h = make_shift("s11", date="2027-07-06", start="07:00", end="18:30", unpaid_break_minutes=30, target_employment_type="FT")
+    s_10h = make_shift("s10", date="2027-07-06", start="07:00", end="17:30", unpaid_break_minutes=30, target_employment_type="FT")
+    s_9h_sec = make_shift("s9s", date="2027-07-06", start="07:00", end="16:00", target_employment_type="FT")
+    s_8h_sec = make_shift("s8s", date="2027-07-06", start="07:00", end="15:00", target_employment_type="FT")
+
+    # Under default 12h cap both 11h FT and 9h Security pass.
+    assert employee_eligible(emp_ft, s_11h, _constraints(scheduler_mode='FT_STANDARD'))
+    assert employee_eligible(emp_sec, s_9h_sec, _constraints(scheduler_mode='FT_SECURITY'))
+
+    # Under custom 10h/8h caps: 11h FT and 9h Security are rejected by both eligibility & /audit.
+    assert not employee_eligible(emp_ft, s_11h, c_ft)
+    assert 'MAX_DAILY_HOURS' in _explain_eligibility(emp_ft, s_11h, c_ft)
+    assert employee_eligible(emp_ft, s_10h, c_ft)
+    assert not employee_eligible(emp_sec, s_9h_sec, c_sec)
+    assert 'MAX_DAILY_HOURS' in _explain_eligibility(emp_sec, s_9h_sec, c_sec)
+    assert employee_eligible(emp_sec, s_8h_sec, c_sec)
+
+    # HC-6 cumulative daily cap: two 6h shifts (12h total) on one day violate a 10h cap,
+    # so the solver leaves the second shift uncovered rather than breaching Tier-0 legal slack.
+    s_am = make_shift("am", date="2027-07-06", start="06:00", end="12:00", target_employment_type="Casual")
+    s_pm = make_shift("pm", date="2027-07-06", start="13:00", end="19:00", target_employment_type="Casual")
+    cas = make_employee("cas1", employment_type="Casual")
+    c_cas = OptimizerConstraints(
+        min_rest_minutes=600, enforce_role_match=False, enforce_skill_match=False,
+        allow_partial=True, scheduler_mode='CASUAL', pricing_policy=policy,
+    )
+    out = solve([s_am, s_pm], [cas], constraints=c_cas)
+    assert len(out.assignments) == 1
+    assert len(out.unassigned_shift_ids) == 1
+
+
+def test_min_engagement_thresholds_follow_the_card_across_modes_and_audit():
+    policy = {
+        'min_engagement_minutes': 240,                # 4h standard (up from 3h)
+        'min_engagement_sunday_minutes': 300,         # 5h Sunday (up from 4h)
+        'min_engagement_public_holiday_minutes': 360, # 6h PH (up from 4h)
+        'min_engagement_training_minutes': 90,        # 1.5h training (down from 2h)
+    }
+    pt = make_employee("pt1", employment_type="PT")
+    fpt = make_employee("fpt1", employment_type="PT")
+    fpt.is_flexible = True
+    cas = make_employee("cas1", employment_type="Casual")
+
+    s_3h_mon = make_shift("m3", date="2027-07-05", start="09:00", end="12:00")
+    s_4h_sun = make_shift("su4", date="2027-07-11", start="09:00", end="13:00")
+    s_4h_sun.is_sunday = True
+    s_5h_ph = make_shift("ph5", date="2027-07-05", start="09:00", end="14:00")
+    s_5h_ph.is_public_holiday = True
+    s_90m_tr = make_shift("tr90", date="2027-07-05", start="09:00", end="10:30", is_training=True)
+
+    c_pt  = _constraints(scheduler_mode='PT', pricing_policy=policy)
+    c_fpt = _constraints(scheduler_mode='FPT', pricing_policy=policy)
+    c_cas = _constraints(scheduler_mode='CASUAL', pricing_policy=policy)
+
+    # 3h Monday: passes ICC 180m, rejected under card's 240m.
+    assert employee_eligible(pt, s_3h_mon, _constraints(scheduler_mode='PT'))
+    assert not employee_eligible(pt, s_3h_mon, c_pt)
+    assert 'MIN_ENGAGEMENT' in _explain_eligibility(pt, s_3h_mon, c_pt)
+    assert not employee_eligible(cas, s_3h_mon, c_cas)
+    assert 'MIN_ENGAGEMENT' in _explain_eligibility(cas, s_3h_mon, c_cas)
+
+    # 4h Sunday: rejected under card's 300m Sunday floor for FPT/Casual.
+    assert not employee_eligible(fpt, s_4h_sun, c_fpt)
+    assert 'MIN_ENGAGEMENT' in _explain_eligibility(fpt, s_4h_sun, c_fpt)
+    assert not employee_eligible(cas, s_4h_sun, c_cas)
+
+    # 5h Public Holiday: rejected under card's 360m PH floor across PT/FPT/Casual.
+    assert not employee_eligible(pt, s_5h_ph, c_pt)
+    assert not employee_eligible(fpt, s_5h_ph, c_fpt)
+    assert not employee_eligible(cas, s_5h_ph, c_cas)
+
+    # 90m Training: fails ICC 120m, passes under card's 90m training floor.
+    assert not employee_eligible(fpt, s_90m_tr, _constraints(scheduler_mode='FPT'))
+    assert employee_eligible(fpt, s_90m_tr, c_fpt)
+    assert _explain_eligibility(fpt, s_90m_tr, c_fpt) == []
+    assert employee_eligible(cas, s_90m_tr, c_cas)

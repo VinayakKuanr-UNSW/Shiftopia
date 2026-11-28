@@ -4,8 +4,19 @@
 
 import { SwapScenario, SolverResult, ConstraintViolation, SolverConfig } from './types';
 import { v8Engine, V8Engine } from '../engine';
-import { V8ContractType, V8Employee, V8Shift } from '../types';
+import { V8Config, V8ContractType, V8Employee, V8Shift } from '../types';
 import { normaliseCycleWeeks } from '../../ordinary-hours-cycle';
+import type { RateCardLoadings } from '@/modules/rosters/domain/projections/utils/cost/loadings';
+
+/** Map a rate card's daily ordinary caps onto V8's SolverConfig (lockstep with Python PricingPolicy). */
+export function v8ConfigFromLoadings(
+    loadings: Pick<RateCardLoadings, 'ordinaryDailyCapHours' | 'securityOrdinaryCapHours'>,
+): Pick<SolverConfig, 'max_daily_hours' | 'security_max_daily_hours'> {
+    return {
+        max_daily_hours: loadings.ordinaryDailyCapHours,
+        security_max_daily_hours: loadings.securityOrdinaryCapHours,
+    };
+}
 
 /**
  * Map a party's employment status ('FT'|'PT'|'CASUAL'|null) onto the V8 engine's
@@ -29,11 +40,14 @@ export class V8SwapEngine {
     evaluate(scenario: SwapScenario, config?: SolverConfig): SolverResult {
         const t0 = performance.now();
 
-        // Honour the configurable cross-day rest gap (clause 40.2 — 8h by
-        // written agreement). Absent config preserves the 10h default engine.
-        const engine = config?.rest_gap_hours
-            ? new V8Engine({ min_rest_gap_minutes: config.rest_gap_hours * 60 })
-            : v8Engine;
+        // Honour configurable rest gap (cl 40.2) and rate-card daily ordinary caps
+        // (ordinary_daily_cap_hours / security_ordinary_cap_hours). Absent config
+        // preserves the shared default engine.
+        const overrides: Partial<V8Config> = {};
+        if (config?.rest_gap_hours != null) overrides.min_rest_gap_minutes = config.rest_gap_hours * 60;
+        if (config?.max_daily_hours != null) overrides.max_daily_hours = config.max_daily_hours;
+        if (config?.security_max_daily_hours != null) overrides.security_max_daily_hours = config.security_max_daily_hours;
+        const engine = Object.keys(overrides).length > 0 ? new V8Engine(overrides) : v8Engine;
 
         // 1. Evaluate Party A
         const empA: V8Employee = {

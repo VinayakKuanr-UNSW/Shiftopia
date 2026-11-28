@@ -109,4 +109,88 @@ describe('rate-card admin over HTTP', () => {
         expect((await z.rpc('discard_rate_card', { p_card_id: roll.data })).error).toBeNull();
         expect((await cards('Z')).some((c) => c.id === roll.data)).toBe(false);
     });
+
+    it('zeta authors a draft via the Studio RPCs, prices it in the sandbox, copies items, and discards it', async () => {
+        const z = personaClient('Z');
+        const e = personaClient('E');
+
+        // View-only (epsilon) cannot create a card.
+        expect((await e.rpc('create_rate_card', {
+            p_org_id: ORG, p_code: `${PREFIX}NOPE`, p_name: 'Nope', p_valid_from: '2032-07-05',
+        })).error?.code).toBe('42501');
+
+        // Create blank draft with default loadings, edit meta, rates, allowances, loadings.
+        const created = await z.rpc('create_rate_card', {
+            p_org_id: ORG, p_code: `${PREFIX}AUTH`, p_name: 'HTTP Authored', p_valid_from: '2032-07-05', p_notes: 'Draft note',
+        });
+        expect(created.error).toBeNull();
+        const draftId = created.data as string;
+
+        expect((await z.rpc('update_rate_card_meta', {
+            p_card_id: draftId, p_patch: { name: 'HTTP Authored v2', award_floor_checked: true },
+        })).error).toBeNull();
+
+        const upRates = await z.rpc('upsert_rate_card_rates', {
+            p_card_id: draftId,
+            p_items: [
+                { classification: 'LEVEL_1', employment_basis: 'permanent', ordinary_hourly_rate: 30 },
+                { classification: 'LEVEL_1', employment_basis: 'casual', ordinary_hourly_rate: 30 },
+            ],
+        });
+        expect(upRates.error).toBeNull();
+        expect(upRates.data).toBe(2);
+
+        const adj = await z.rpc('bulk_adjust_rate_card_rates', {
+            p_card_id: draftId, p_classifications: ['LEVEL_1'], p_multiplier: 1.1,
+        });
+        expect(adj.error).toBeNull();
+        expect(adj.data).toBe(2);
+
+        expect((await z.rpc('upsert_rate_card_allowances', {
+            p_card_id: draftId, p_items: [{ code: 'meal', amount: 22.5, unit: 'per_occasion', notes: 'cl 28.1' }],
+        })).error).toBeNull();
+
+        expect((await z.rpc('update_rate_card_loadings', {
+            p_card_id: draftId, p_loadings: { saturday_loading: 0.35, sws_min_weekly: 95 },
+        })).error).toBeNull();
+
+        const copiedItems = await z.rpc('copy_rate_card_items', {
+            p_target_card_id: draftId, p_source_card_id: source.id,
+            p_classifications: ['LEVEL_2'], p_allowance_codes: ['split_shift'],
+        });
+        expect(copiedItems.error).toBeNull();
+        expect(Number(copiedItems.data)).toBeGreaterThanOrEqual(3);
+
+        // Cost sandbox RPC prices the draft card with its edited loadings (Sat +35% + 25% casual = 1.60x ordinary).
+        const sb = await z.rpc('fn_eba_estimate_shift_cost', {
+            p_shift_date: '2032-07-10', p_start_time: '09:00', p_net_minutes: 420, p_scheduled_minutes: 420,
+            p_base_rate: 41.25, p_employment_type: 'Casual',
+            p_rate_card_id: draftId, p_jurisdiction: 'AU-NSW',
+        });
+        expect(sb.error).toBeNull();
+        expect(Number(sb.data)).toBeCloseTo(7 * 33 * 1.6, 2);
+
+        // Copy card + delete item + discard both drafts cleanly.
+        const copyRes = await z.rpc('copy_rate_card', {
+            p_source_card_id: draftId, p_target_org_id: null,
+            p_code: `${PREFIX}COPY`, p_name: 'HTTP Copy', p_valid_from: '2033-07-04',
+            p_options: { allowances: false, trainee: false, multiplier: 1.02 },
+        });
+        expect(copyRes.error).toBeNull();
+        const copyId = copyRes.data as string;
+
+        expect((await z.rpc('delete_rate_card_items', {
+            p_card_id: draftId,
+            p_rates: [{ classification: 'LEVEL_2', employment_basis: 'permanent' }],
+            p_allowance_codes: ['split_shift'],
+        })).error).toBeNull();
+
+        const authored = (await cards('Z')).find((c) => c.id === draftId);
+        expect(authored).toMatchObject({ name: 'HTTP Authored v2', notes: 'Draft note' });
+        expect(authored.award_floor_checked_at).not.toBeNull();
+        expect(Number(authored.pay_rate_card_loadings?.sws_min_weekly)).toBe(95);
+
+        expect((await z.rpc('discard_rate_card', { p_card_id: copyId })).error).toBeNull();
+        expect((await z.rpc('discard_rate_card', { p_card_id: draftId })).error).toBeNull();
+    });
 });

@@ -106,6 +106,9 @@ describe('the solver prices from the organization\'s card', () => {
             casual_loading: 0.25, saturday_loading: 0.25, sunday_loading: 0.5, public_holiday_loading: 1.5,
             night_loading_mon_thu: 0.2, night_loading_fri: 0.25, night_loading_sat_sun: 0.5,
             overtime_first_hours: 3, overtime_first_multiplier: 1.5, overtime_after_multiplier: 2,
+            ordinary_daily_cap_hours: 12, security_ordinary_cap_hours: 12,
+            min_engagement_minutes: 180, min_engagement_sunday_minutes: 240,
+            min_engagement_public_holiday_minutes: 240, min_engagement_training_minutes: 120,
         });
     });
 
@@ -139,5 +142,77 @@ describe('a card without the employee\'s level', () => {
         h.fetchCards.mockResolvedValue(new Map([['org-b', [noLevel2]]]));
         await expect(run('org-b')).rejects.toThrow(/BCEC-EA has no rate for FT's classification \(Level 2\)/);
         expect(mockOptimize).not.toHaveBeenCalled();
+    });
+});
+
+describe('operational thresholds and holiday jurisdiction flow end-to-end', () => {
+    it('a card\'s 10h daily cap blocks an 11h shift in V8 validation and greedy fallback', async () => {
+        const cap10: PricedCard = {
+            ...CUSTOM,
+            loadings: { ...CUSTOM.loadings, ordinaryDailyCapHours: 10 },
+        };
+        const shift11h: ShiftMeta = {
+            ...shift('s11', '2027-05-03'),
+            start_time: '07:00', end_time: '18:30', unpaid_break_minutes: 30,
+        };
+        const proposed11h = {
+            status: 'OPTIMAL',
+            assignments: [{ shift_id: 's11', employee_id: 'emp-ft', cost: 440, employment_type: 'FT' }],
+            unassigned_shift_ids: [], solve_time_ms: 1, objective_value: 0, metrics: {},
+        };
+
+        // Under the 12h card, the 11h proposal passes V8 validation.
+        h.fetchCards.mockResolvedValue(new Map([['org-b', [CUSTOM]]]));
+        mockOptimize.mockResolvedValueOnce(proposed11h);
+        const passRes = await new AutoSchedulerController().run({
+            shifts: [shift11h], employees: [emp], mode: 'FT_STANDARD', organizationId: 'org-b',
+        });
+        expect(passRes.passing).toBe(1);
+        expect(passRes.proposals).toHaveLength(1);
+
+        // Under the 10h card, V8 blocks the 11h proposal and the hard gate moves it to uncovered.
+        h.fetchCards.mockResolvedValue(new Map([['org-b', [cap10]]]));
+        mockOptimize
+            .mockResolvedValueOnce(proposed11h)
+            .mockResolvedValueOnce({ status: 'OPTIMAL', assignments: [], unassigned_shift_ids: ['s11'], solve_time_ms: 1, objective_value: 0, metrics: {} });
+        const failRes = await new AutoSchedulerController().run({
+            shifts: [shift11h], employees: [emp], mode: 'FT_STANDARD', organizationId: 'org-b',
+        });
+        expect(failRes.passing).toBe(0);
+        expect(failRes.proposals).toHaveLength(0);
+        expect(failRes.uncoveredV8ShiftIds).toContain('s11');
+
+        // Greedy fallback (INFEASIBLE) also rejects the 11h shift under the 10h card (and accepts under 12h).
+        mockOptimize.mockResolvedValue({
+            status: 'INFEASIBLE', assignments: [], unassigned_shift_ids: ['s11'], solve_time_ms: 1, objective_value: 0, metrics: {},
+        });
+        const fbFail = await new AutoSchedulerController().run({
+            shifts: [shift11h], employees: [emp], mode: 'FT_STANDARD', organizationId: 'org-b',
+        });
+        expect(fbFail.usedFallback).toBe(true);
+        expect(fbFail.passing).toBe(0);
+        expect(fbFail.uncoveredV8ShiftIds).toContain('s11');
+
+        h.fetchCards.mockResolvedValue(new Map([['org-b', [CUSTOM]]]));
+        const fbPass = await new AutoSchedulerController().run({
+            shifts: [shift11h], employees: [emp], mode: 'FT_STANDARD', organizationId: 'org-b',
+        });
+        expect(fbPass.usedFallback).toBe(true);
+        expect(fbPass.passing).toBe(1);
+    });
+
+    it('optimizer shift holiday flags follow the organization\'s jurisdiction (Ekka in Brisbane, not Sydney)', async () => {
+        vi.setSystemTime(new Date('2026-08-01T00:00:00Z'));
+        const bneCard: PricedCard = { ...CUSTOM, validFrom: '2026-01-01', jurisdiction: 'AU-QLD-BNE' };
+        const nswCard: PricedCard = { ...ICC_TEST_CARDS[1], jurisdiction: 'AU-NSW' };
+
+        h.fetchCards.mockResolvedValue(new Map([['org-bne', [bneCard]]]));
+        await run('org-bne', ['2026-08-12']);
+        expect(mockOptimize.mock.calls[0][0].shifts[0].is_public_holiday).toBe(true);
+
+        mockOptimize.mockClear();
+        h.fetchCards.mockResolvedValue(new Map([['org-nsw', [nswCard]]]));
+        await run('org-nsw', ['2026-08-12']);
+        expect(mockOptimize.mock.calls[0][0].shifts[0].is_public_holiday).toBe(false);
     });
 });

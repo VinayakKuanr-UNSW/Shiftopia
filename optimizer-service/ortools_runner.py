@@ -276,6 +276,12 @@ class PricingPolicyReq(BaseModel):
     overtime_first_hours: float = Field(3.0, ge=0, le=12)
     overtime_first_multiplier: float = Field(1.5, ge=1, le=5)
     overtime_after_multiplier: float = Field(2.0, ge=1, le=5)
+    ordinary_daily_cap_hours: float = Field(12.0, gt=0, le=24)
+    security_ordinary_cap_hours: float = Field(12.0, gt=0, le=24)
+    min_engagement_minutes: int = Field(180, ge=0, le=720)
+    min_engagement_sunday_minutes: int = Field(240, ge=0, le=720)
+    min_engagement_public_holiday_minutes: int = Field(240, ge=0, le=720)
+    min_engagement_training_minutes: int = Field(120, ge=0, le=720)
 
 
 class ConstraintsReq(BaseModel):
@@ -704,7 +710,8 @@ def _explain_eligibility(
     """
     reasons: list[str] = []
 
-    # Layer 1 (Mode Isolation) — mirrors `employee_eligible` for FT_STANDARD / FT_SECURITY.
+    # Layer 1 (Mode Isolation) — mirrors `employee_eligible` using the card's policy.
+    policy = c.pricing_policy
     if c.scheduler_mode == 'FT_STANDARD':
         if emp.employment_type != 'FT' or emp.is_flexible or emp.is_security_role:
             reasons.append('MODE_MISMATCH')
@@ -713,7 +720,7 @@ def _explain_eligibility(
         net_mins = net_shift_minutes(shift, is_security=False)
         if net_mins < FT_MIN_ORDINARY_DAY_MINUTES:
             reasons.append('FT_MIN_DAILY_HOURS')
-        elif net_mins > MAX_DAILY_MINUTES:
+        elif net_mins > policy.daily_cap_minutes(False):
             reasons.append('MAX_DAILY_HOURS')
     elif c.scheduler_mode == 'FT_SECURITY':
         if emp.employment_type != 'FT' or emp.is_flexible or not emp.is_security_role:
@@ -723,7 +730,7 @@ def _explain_eligibility(
         paid_mins = net_shift_minutes(shift, is_security=True)
         if paid_mins < FT_MIN_ORDINARY_DAY_MINUTES:
             reasons.append('FT_MIN_DAILY_HOURS')
-        elif paid_mins > MAX_DAILY_MINUTES:
+        elif paid_mins > policy.daily_cap_minutes(True):
             reasons.append('MAX_DAILY_HOURS')
     elif c.scheduler_mode == 'PT':
         if emp.employment_type != 'PT' or emp.is_flexible:
@@ -731,14 +738,12 @@ def _explain_eligibility(
         if shift.target_employment_type not in (None, 'PT') or shift.target_requires_flexible:
             reasons.append('EMPLOYMENT_TARGET')
         worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
-        min_req = (
-            PUBLIC_HOLIDAY_MIN_ENGAGEMENT_MINUTES
-            if shift.is_public_holiday
-            else PT_MIN_ENGAGEMENT_MINUTES
+        min_req = policy.min_engagement_for(
+            'PT', is_security=emp.is_security_role, is_public_holiday=shift.is_public_holiday,
         )
         if worked_mins < min_req:
             reasons.append('MIN_ENGAGEMENT')
-        elif worked_mins > MAX_DAILY_MINUTES:
+        elif worked_mins > policy.daily_cap_minutes(emp.is_security_role):
             reasons.append('MAX_DAILY_HOURS')
     elif c.scheduler_mode == 'FPT':
         if emp.employment_type != 'PT' or not emp.is_flexible:
@@ -748,15 +753,16 @@ def _explain_eligibility(
         ):
             reasons.append('EMPLOYMENT_TARGET')
         worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
-        if shift.is_training:
-            min_req = FPT_TRAINING_MIN_ENGAGEMENT_MINUTES
-        elif shift.is_sunday or shift.is_public_holiday:
-            min_req = FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
-        else:
-            min_req = FPT_MIN_ENGAGEMENT_MINUTES
+        min_req = policy.min_engagement_for(
+            'FPT',
+            is_security=emp.is_security_role,
+            is_training=shift.is_training,
+            is_sunday=shift.is_sunday,
+            is_public_holiday=shift.is_public_holiday,
+        )
         if worked_mins < min_req:
             reasons.append('MIN_ENGAGEMENT')
-        elif worked_mins > MAX_DAILY_MINUTES:
+        elif worked_mins > policy.daily_cap_minutes(emp.is_security_role):
             reasons.append('MAX_DAILY_HOURS')
     elif c.scheduler_mode == 'CASUAL':
         if emp.employment_type != 'Casual':
@@ -764,17 +770,16 @@ def _explain_eligibility(
         if shift.target_employment_type not in (None, 'Casual') or shift.target_requires_flexible:
             reasons.append('EMPLOYMENT_TARGET')
         worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
-        if emp.is_security_role:
-            min_req = CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES
-        elif shift.is_training:
-            min_req = CASUAL_TRAINING_MIN_ENGAGEMENT_MINUTES
-        elif shift.is_sunday or shift.is_public_holiday:
-            min_req = CASUAL_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
-        else:
-            min_req = CASUAL_MIN_ENGAGEMENT_MINUTES
+        min_req = policy.min_engagement_for(
+            'CASUAL',
+            is_security=emp.is_security_role,
+            is_training=shift.is_training,
+            is_sunday=shift.is_sunday,
+            is_public_holiday=shift.is_public_holiday,
+        )
         if worked_mins < min_req:
             reasons.append('MIN_ENGAGEMENT')
-        elif worked_mins > MAX_DAILY_MINUTES:
+        elif worked_mins > policy.daily_cap_minutes(emp.is_security_role):
             reasons.append('MAX_DAILY_HOURS')
 
     # Calendar-day unavailability

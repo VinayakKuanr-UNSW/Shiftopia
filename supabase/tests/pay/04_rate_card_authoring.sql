@@ -236,6 +236,9 @@ BEGIN
         (SELECT count(*) FROM public.eba_trainee_schedule WHERE rate_card_id = cp);
 
     -- Administrator of both organizations: the copy lands in the other one.
+    -- RESET ROLE leaves request.jwt.claims set to z, so clear it before the
+    -- owner fixture insert (hr.contract_access_guard checks auth.uid()).
+    PERFORM set_config('request.jwt.claims', '', true);
     INSERT INTO hr.user_contracts (id, user_id, role_id, organization_id, department_id, sub_department_id, status, employment_status, pay_basis, remuneration_level, contracted_weekly_hours, access_level)
     VALUES ('c0c00000-0000-4000-8000-0000000000f9', z, 'e0000000-0000-4000-8000-000000000001', other,
             'd2000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000001', 'Active', 'Casual', 'eba_level', 2, 0, 'zeta');

@@ -111,7 +111,23 @@ describe('add_roster_subgroup_range — bounded, by the Sydney date', () => {
 
 describe('apply_template_to_date_range_v2 — the caller is the actor', () => {
     it('records the signed-in manager, not the user id the client sent', async () => {
-        const day = db(`SELECT ((now() AT TIME ZONE 'Australia/Sydney')::date + 35)::text`)[0][0];
+        // Pick a non-Sunday, non-public-holiday date 35+ days ahead in Sydney so
+        // the 3h Casual template shift (14:00–17:00) is always lawful (Sunday/PH
+        // require a 4h minimum under cl 12.5(c) / cl 56.2).
+        const day = db(`
+            SELECT d::date::text
+              FROM generate_series(
+                       (now() AT TIME ZONE 'Australia/Sydney')::date + 35,
+                       (now() AT TIME ZONE 'Australia/Sydney')::date + 50,
+                       interval '1 day'
+                   ) AS g(d)
+             WHERE EXTRACT(DOW FROM d) <> 0
+               AND NOT EXISTS (
+                   SELECT 1 FROM public.public_holidays ph
+                    WHERE ph.holiday_date = d::date AND ph.jurisdiction = 'AU-NSW'
+               )
+             ORDER BY d LIMIT 1
+        `)[0][0];
         db(`
             DELETE FROM public.roster_templates WHERE id = '${T9}';
             INSERT INTO public.roster_templates (id, name, organization_id, department_id, sub_department_id, status)

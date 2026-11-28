@@ -307,6 +307,52 @@ class PricingPolicy:
     overtime_first_hours: float = 3.0      # cl 42.2
     overtime_first_multiplier: float = 1.5
     overtime_after_multiplier: float = 2.0
+    ordinary_daily_cap_hours: float = 12.0           # cl 35.1(d)/35.2(d)/35.3(d)/35.4(c)
+    security_ordinary_cap_hours: float = 12.0        # Sch 3 §3.1(a) / §5.3
+    min_engagement_minutes: int = 180                # cl 12.3(e)/12.4(c)/12.5(c)
+    min_engagement_sunday_minutes: int = 240         # cl 12.4(c)(iii)/12.5(c)(ii)
+    min_engagement_public_holiday_minutes: int = 240 # cl 56.2
+    min_engagement_training_minutes: int = 120       # cl 12.4(c)(i)/12.5(c)(i)
+
+    def daily_cap_minutes(self, is_security: bool = False) -> int:
+        """Daily ordinary ceiling in minutes (mirrors V8 maxDailyHoursRule)."""
+        hours = self.security_ordinary_cap_hours if is_security else self.ordinary_daily_cap_hours
+        return int(round(hours * 60))
+
+    def min_engagement_for(
+        self,
+        mode: str,
+        *,
+        is_security: bool = False,
+        is_training: bool = False,
+        is_sunday: bool = False,
+        is_public_holiday: bool = False,
+    ) -> int:
+        """Minimum engagement in minutes for PT / FPT / CASUAL (mirrors Shape & SQL)."""
+        if mode == 'PT':
+            return (
+                self.min_engagement_public_holiday_minutes
+                if is_public_holiday
+                else self.min_engagement_minutes
+            )
+        if mode == 'FPT':
+            if is_training:
+                return self.min_engagement_training_minutes
+            if is_public_holiday:
+                return self.min_engagement_public_holiday_minutes
+            if is_sunday:
+                return self.min_engagement_sunday_minutes
+            return self.min_engagement_minutes
+        # CASUAL
+        if is_security:
+            return CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES
+        if is_training:
+            return self.min_engagement_training_minutes
+        if is_public_holiday:
+            return self.min_engagement_public_holiday_minutes
+        if is_sunday:
+            return self.min_engagement_sunday_minutes
+        return self.min_engagement_minutes
 
     @property
     def casual_multiplier(self) -> float:
@@ -1355,13 +1401,14 @@ def employee_eligible(
     #   within Sch 3 §3.1(a) / §3.2(a) / cl 35.1(c)-(d) paid bounds
     #   (7.6h <= paid <= 12.0h, with 30m meal break paid). Excludes PT Event
     #   Security (Sch 3 §5.2) and Casual Event Security (Sch 3 §5.3).
+    policy = c.pricing_policy
     if c.scheduler_mode == 'FT_STANDARD':
         if emp.employment_type != 'FT' or emp.is_flexible or emp.is_security_role:
             return False
         if shift.target_employment_type not in (None, 'FT') or shift.target_requires_flexible:
             return False
         net_mins = net_shift_minutes(shift, is_security=False)
-        if net_mins < FT_MIN_ORDINARY_DAY_MINUTES or net_mins > MAX_DAILY_MINUTES:
+        if net_mins < FT_MIN_ORDINARY_DAY_MINUTES or net_mins > policy.daily_cap_minutes(False):
             return False
     elif c.scheduler_mode == 'FT_SECURITY':
         if emp.employment_type != 'FT' or emp.is_flexible or not emp.is_security_role:
@@ -1369,7 +1416,7 @@ def employee_eligible(
         if shift.target_employment_type not in (None, 'FT') or shift.target_requires_flexible:
             return False
         paid_mins = net_shift_minutes(shift, is_security=True)
-        if paid_mins < FT_MIN_ORDINARY_DAY_MINUTES or paid_mins > MAX_DAILY_MINUTES:
+        if paid_mins < FT_MIN_ORDINARY_DAY_MINUTES or paid_mins > policy.daily_cap_minutes(True):
             return False
     elif c.scheduler_mode == 'PT':
         # Regular / Predetermined Part-Time (cl 12.3, cl 35.2 & Sch 3 §5.2).
@@ -1382,12 +1429,10 @@ def employee_eligible(
         if shift.target_employment_type not in (None, 'PT') or shift.target_requires_flexible:
             return False
         worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
-        min_req = (
-            PUBLIC_HOLIDAY_MIN_ENGAGEMENT_MINUTES
-            if shift.is_public_holiday
-            else PT_MIN_ENGAGEMENT_MINUTES
+        min_req = policy.min_engagement_for(
+            'PT', is_security=emp.is_security_role, is_public_holiday=shift.is_public_holiday,
         )
-        if worked_mins < min_req or worked_mins > MAX_DAILY_MINUTES:
+        if worked_mins < min_req or worked_mins > policy.daily_cap_minutes(emp.is_security_role):
             return False
     elif c.scheduler_mode == 'FPT':
         # Flexible Part-Time (cl 12.4, cl 35.3 & Sch 3 §5.1-§5.3).
@@ -1404,17 +1449,15 @@ def employee_eligible(
         if shift.target_employment_type == 'PT' and not shift.target_requires_flexible:
             return False
         worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
-        # cl 12.4(c) minimum engagement tiers:
-        # a. 2h (120m) for training on non-event day
-        # c. 4h (240m) on Sunday or public holiday
-        # standard: 3h (180m) on any other day
-        if shift.is_training:
-            min_req = FPT_TRAINING_MIN_ENGAGEMENT_MINUTES
-        elif shift.is_sunday or shift.is_public_holiday:
-            min_req = FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
-        else:
-            min_req = FPT_MIN_ENGAGEMENT_MINUTES
-        if worked_mins < min_req or worked_mins > MAX_DAILY_MINUTES:
+        # cl 12.4(c) minimum engagement tiers (sourced from the card's loadings).
+        min_req = policy.min_engagement_for(
+            'FPT',
+            is_security=emp.is_security_role,
+            is_training=shift.is_training,
+            is_sunday=shift.is_sunday,
+            is_public_holiday=shift.is_public_holiday,
+        )
+        if worked_mins < min_req or worked_mins > policy.daily_cap_minutes(emp.is_security_role):
             return False
     elif c.scheduler_mode == 'CASUAL':
         # Casual Team Members (cl 12.5, cl 35.4 & Sch 3 §5.1-§5.3).
@@ -1429,20 +1472,15 @@ def employee_eligible(
         if shift.target_employment_type not in (None, 'Casual') or shift.target_requires_flexible:
             return False
         worked_mins = net_shift_minutes(shift, is_security=emp.is_security_role)
-        # Minimum engagement tiers:
-        # 1. Event Security Casual: flat 4 consecutive hours (240m) on ANY day (Sch 3 §5.3(e))
-        # 2. Training / meeting on non-event day: 2 consecutive hours (120m) (cl 12.5(c)(i))
-        # 3. Sunday / Public Holiday: 4 consecutive hours (240m) (cl 12.5(c)(ii), cl 56.2)
-        # 4. Standard day: 3 consecutive hours (180m) (cl 12.5(c)(iii))
-        if emp.is_security_role:
-            min_req = CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES
-        elif shift.is_training:
-            min_req = CASUAL_TRAINING_MIN_ENGAGEMENT_MINUTES
-        elif shift.is_sunday or shift.is_public_holiday:
-            min_req = CASUAL_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
-        else:
-            min_req = CASUAL_MIN_ENGAGEMENT_MINUTES
-        if worked_mins < min_req or worked_mins > MAX_DAILY_MINUTES:
+        # Minimum engagement tiers (sourced from the card's loadings; Sch 3 §5.3(e) for Event Security).
+        min_req = policy.min_engagement_for(
+            'CASUAL',
+            is_security=emp.is_security_role,
+            is_training=shift.is_training,
+            is_sunday=shift.is_sunday,
+            is_public_holiday=shift.is_public_holiday,
+        )
+        if worked_mins < min_req or worked_mins > policy.daily_cap_minutes(emp.is_security_role):
             return False
 
     if shift.shift_date in emp.unavailable_dates:
@@ -2737,7 +2775,8 @@ class ScheduleModelBuilder:
                 # (audit M2): the solver now prefers to spread a day's minutes
                 # across people rather than pile >12h on one.
                 day_over = self.model.NewIntVar(0, day_ub, f'daycap_{emp.id[:4]}_{i}')
-                self.model.Add(day_vars[i] - day_over <= MAX_DAILY_MINUTES)
+                daily_cap = self.data.constraints.pricing_policy.daily_cap_minutes(emp.is_security_role)
+                self.model.Add(day_vars[i] - day_over <= daily_cap)
                 # Tier 0: Hard Legal Compliance (100,000,000 penalty per minute)
                 self._hard_legal_slack_terms.append(100_000_000 * day_over)
 

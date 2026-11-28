@@ -82,6 +82,8 @@ export interface SwapEvaluationInput {
 
 export interface SolverConfig {
     max_daily_hours?:          number;
+    /** Security daily ordinary cap (hours) from pay_rate_card_loadings.security_ordinary_cap_hours. */
+    security_max_daily_hours?: number;
     rest_gap_hours?:           number;
     averaging_cycle_weeks?:    number;
     student_visa_enforcement?: boolean;

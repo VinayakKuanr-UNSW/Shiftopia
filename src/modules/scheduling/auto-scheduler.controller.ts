@@ -58,6 +58,8 @@ import {
 } from '@/modules/rosters/domain/fairness-ledger';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import { v8ConfigFromLoadings } from '@/modules/compliance/v8/swap-engine/constraint-engine';
+import type { SolverConfig } from '@/modules/compliance/v8/swap-engine/types';
 import type {
     OptimizeRequest,
     OptimizeResponse,
@@ -129,7 +131,7 @@ function buildSolverConstraints(
     };
 }
 
-/** The card's loadings as the solver's cost model reads them (PricingPolicyReq). */
+/** The card's loadings and operational thresholds as the solver reads them (PricingPolicyReq). */
 export function solverPricingPolicy(l: RateCardLoadings): SolverPricingPolicy {
     return {
         casual_loading: l.casualLoading,
@@ -142,6 +144,12 @@ export function solverPricingPolicy(l: RateCardLoadings): SolverPricingPolicy {
         overtime_first_hours: l.overtimeFirstHours,
         overtime_first_multiplier: l.overtimeFirstMultiplier,
         overtime_after_multiplier: l.overtimeAfterMultiplier,
+        ordinary_daily_cap_hours: l.ordinaryDailyCapHours,
+        security_ordinary_cap_hours: l.securityOrdinaryCapHours,
+        min_engagement_minutes: l.minEngagementMinutes,
+        min_engagement_sunday_minutes: l.minEngagementSundayMinutes,
+        min_engagement_public_holiday_minutes: l.minEngagementPublicHolidayMinutes,
+        min_engagement_training_minutes: l.minEngagementTrainingMinutes,
     };
 }
 
@@ -1128,6 +1136,7 @@ async function greedyFallback(
     fairnessDebts?: ReadonlyMap<string, Partial<Record<FairnessMetric, number>>>,
     validationCtx?: ValidationContextMaps,
     mode: SchedulerMode = 'ALL',
+    card?: PricedCard | null,
 ): Promise<ValidatedProposal[]> {
     const isFtStandard = mode === 'FT_STANDARD';
     const isFtSecurity = mode === 'FT_SECURITY';
@@ -1136,6 +1145,11 @@ async function greedyFallback(
     const isFptMode = mode === 'FPT';
     const isCasualMode = mode === 'CASUAL';
     const isPermanentMode = isFtMode || isPtMode || isFptMode;
+    const cardLoadings = card?.loadings;
+    const dailyCapMins = (isSec: boolean) => cardLoadings
+        ? Math.round((isSec ? cardLoadings.securityOrdinaryCapHours : cardLoadings.ordinaryDailyCapHours) * 60)
+        : FT_MAX_DAILY_NET_MINUTES;
+    const solverConfig: SolverConfig | undefined = cardLoadings ? v8ConfigFromLoadings(cardLoadings) : undefined;
     // Resolve strategy once here with the same defaults used when building
     // the Python optimizer request (see OptimizeRequest construction below).
     // This ensures the greedy fallback honours UI slider values instead of
@@ -1167,7 +1181,8 @@ async function greedyFallback(
     for (const shift of shifts) {
         let assigned = false;
         const netMins = shiftNetMinutes(shift, isFtSecurity);
-        if (isFtMode && (netMins < FT_MIN_DAILY_NET_MINUTES || netMins > FT_MAX_DAILY_NET_MINUTES)) {
+        const ftMaxDaily = dailyCapMins(isFtSecurity);
+        if (isFtMode && (netMins < FT_MIN_DAILY_NET_MINUTES || netMins > ftMaxDaily)) {
             const modePrefix = isFtSecurity ? 'Full-Time Security' : 'Standard Full-Time';
             proposals.push({
                 shiftId: shift.id,
@@ -1184,7 +1199,7 @@ async function greedyFallback(
                     ruleName: netMins < FT_MIN_DAILY_NET_MINUTES ? 'FT Minimum Daily Hours (cl 35.1(c))' : 'FT Maximum Daily Hours (cl 35.1(d) / Sch 3 §3.1(a))',
                     description: netMins < FT_MIN_DAILY_NET_MINUTES
                         ? `${modePrefix} shift paid duration (${(netMins / 60).toFixed(1)}h) is below the 7.6h minimum (ICC EBA cl 35.1(c)).`
-                        : `${modePrefix} shift paid duration (${(netMins / 60).toFixed(1)}h) exceeds the 12.0h maximum (ICC EBA cl 35.1(d) / Sch 3 §3.1(a)).`,
+                        : `${modePrefix} shift paid duration (${(netMins / 60).toFixed(1)}h) exceeds the ${(ftMaxDaily / 60).toFixed(1)}h maximum (ICC EBA cl 35.1(d) / Sch 3 §3.1(a)).`,
                     blocking: true,
                 }],
                 passing: false,
@@ -1200,20 +1215,26 @@ async function greedyFallback(
             netMins,
         );
 
-        const shiftDayType = getShiftDayType(shift.shift_date);
-        const ptMinReq = shiftDayType.isPublicHoliday
-            ? PT_PH_MIN_ENGAGEMENT_MINUTES
-            : PT_MIN_ENGAGEMENT_MINUTES;
+        const shiftDayType = getShiftDayType(shift.shift_date, card?.jurisdiction);
+        const minStd = cardLoadings?.minEngagementMinutes ?? PT_MIN_ENGAGEMENT_MINUTES;
+        const minSun = cardLoadings?.minEngagementSundayMinutes ?? FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES;
+        const minPh  = cardLoadings?.minEngagementPublicHolidayMinutes ?? PT_PH_MIN_ENGAGEMENT_MINUTES;
+        const minTr  = cardLoadings?.minEngagementTrainingMinutes ?? FPT_TRAINING_MIN_ENGAGEMENT_MINUTES;
+        const ptMinReq = shiftDayType.isPublicHoliday ? minPh : minStd;
         const fptMinReq = (shift as any).is_training
-            ? FPT_TRAINING_MIN_ENGAGEMENT_MINUTES
-            : (shiftDayType.isSunday || shiftDayType.isPublicHoliday)
-                ? FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
-                : FPT_MIN_ENGAGEMENT_MINUTES;
+            ? minTr
+            : shiftDayType.isPublicHoliday
+                ? minPh
+                : shiftDayType.isSunday
+                    ? minSun
+                    : minStd;
         const casualMinReq = (shift as any).is_training
-            ? CASUAL_TRAINING_MIN_ENGAGEMENT_MINUTES
-            : (shiftDayType.isSunday || shiftDayType.isPublicHoliday)
-                ? CASUAL_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES
-                : CASUAL_MIN_ENGAGEMENT_MINUTES;
+            ? minTr
+            : shiftDayType.isPublicHoliday
+                ? minPh
+                : shiftDayType.isSunday
+                    ? minSun
+                    : minStd;
 
         // Score each employee for this shift
         const candidateScores = employees.map(emp => {
@@ -1327,7 +1348,7 @@ async function greedyFallback(
                 // Event Security PT per Sch 3 §5.3(a)).
                 if (isPtMode) {
                     const workedMins = shiftNetMinutes(shift, c.empIsSec);
-                    if (workedMins < ptMinReq || workedMins > PT_MAX_DAILY_NET_MINUTES) {
+                    if (workedMins < ptMinReq || workedMins > dailyCapMins(c.empIsSec)) {
                         return false;
                     }
                 }
@@ -1338,7 +1359,7 @@ async function greedyFallback(
                 // Event Security FPT per Sch 3 §5.3(a)).
                 if (isFptMode) {
                     const workedMins = shiftNetMinutes(shift, c.empIsSec);
-                    if (workedMins < fptMinReq || workedMins > FPT_MAX_DAILY_NET_MINUTES) {
+                    if (workedMins < fptMinReq || workedMins > dailyCapMins(c.empIsSec)) {
                         return false;
                     }
                 }
@@ -1354,7 +1375,7 @@ async function greedyFallback(
                     }
                     const workedMins = shiftNetMinutes(shift, c.empIsSec);
                     const minReq = c.empIsSec ? CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES : casualMinReq;
-                    if (workedMins < minReq || workedMins > CASUAL_MAX_DAILY_NET_MINUTES) {
+                    if (workedMins < minReq || workedMins > dailyCapMins(c.empIsSec)) {
                         return false;
                     }
                 }
@@ -1384,6 +1405,7 @@ async function greedyFallback(
                     emp.id,
                     { 
                         mode: 'PARTIAL_APPLY',
+                        solverConfig,
                         injectedData: {
                             candidateShifts: shifts.filter(s => candidateIds.includes(s.id)) as any,
                             existingShifts: existing.map(e => ({
@@ -1437,13 +1459,13 @@ async function greedyFallback(
                 ? shiftNetMinutes(shift, isSecurityRoleName(shift.roleName))
                 : 0;
             const ptBelowMin = isPtMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) < ptMinReq);
-            const ptAboveMax = isPtMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) > PT_MAX_DAILY_NET_MINUTES);
+            const ptAboveMax = isPtMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) > dailyCapMins(c.empIsSec));
 
             const fptWorkedRef = isFptMode
                 ? shiftNetMinutes(shift, isSecurityRoleName(shift.roleName))
                 : 0;
             const fptBelowMin = isFptMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) < fptMinReq);
-            const fptAboveMax = isFptMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) > FPT_MAX_DAILY_NET_MINUTES);
+            const fptAboveMax = isFptMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) > dailyCapMins(c.empIsSec));
 
             const casualWorkedRef = isCasualMode
                 ? shiftNetMinutes(shift, isSecurityRoleName(shift.roleName))
@@ -1452,7 +1474,7 @@ async function greedyFallback(
                 const minReq = c.empIsSec ? CASUAL_EVENT_SECURITY_MIN_ENGAGEMENT_MINUTES : casualMinReq;
                 return shiftNetMinutes(shift, c.empIsSec) < minReq;
             });
-            const casualAboveMax = isCasualMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) > CASUAL_MAX_DAILY_NET_MINUTES);
+            const casualAboveMax = isCasualMode && candidateScores.every(c => shiftNetMinutes(shift, c.empIsSec) > dailyCapMins(c.empIsSec));
 
             proposals.push({
                 shiftId: shift.id,
@@ -1809,8 +1831,27 @@ export class AutoSchedulerController {
 
         console.debug('[AutoScheduler] Scaling limits for %f week(s) (%d days)', weekScale.toFixed(2), diffDays);
 
+        // The organization's published rate card in force at the window's start
+        // drives holiday jurisdiction, candidate rates, split-shift allowance,
+        // solver pricing/threshold policy, and V8 daily caps. No card ⇒ refuse
+        // rather than price at another organization's — or ICC's — rates.
+        const orgId = input.organizationId;
+        let rateCards: RateCardSchedule | undefined;
+        let windowCard: PricedCard | null = null;
+        if (orgId) {
+            rateCards = (await fetchPublishedRateCardSchedules([orgId])).get(orgId) ?? [];
+            windowCard = resolveCardOn(rateCards, dates[0]);
+            if (!windowCard) {
+                throw new Error(
+                    `No published pay rate card covers ${dates[0]} for this organization. ` +
+                    'Publish one in Payroll → Pay Rates, then run the AutoScheduler again.',
+                );
+            }
+        }
+        const v8SolverConfig: SolverConfig | undefined = windowCard ? v8ConfigFromLoadings(windowCard.loadings) : undefined;
+
         const optimizerShifts: OptimizerShift[] = futureShifts.map(s => {
-            const dayType = getShiftDayType(s.shift_date);
+            const dayType = getShiftDayType(s.shift_date, windowCard?.jurisdiction);
             return {
                 id: s.id,
                 shift_date: s.shift_date,
@@ -1829,7 +1870,7 @@ export class AutoSchedulerController {
                 paid_break_minutes: s.paid_break_minutes ?? 0,
                 is_sunday: dayType.isSunday,
                 is_public_holiday: dayType.isPublicHoliday,
-                is_public_holiday_next_day: getShiftDayType(shiftDate(s.shift_date, 1)).isPublicHoliday,
+                is_public_holiday_next_day: getShiftDayType(shiftDate(s.shift_date, 1), windowCard?.jurisdiction).isPublicHoliday,
             };
         });
 
@@ -1879,7 +1920,6 @@ export class AutoSchedulerController {
 
         // Casual fairness ledger: fairness is casual-only. In permanent modes
         // (`FT_STANDARD` / `FT_SECURITY` / `PT`), skip outright with `'not_applicable'`.
-        const orgId = input.organizationId;
         const casualIds = new Set(
             scopedEmployees.filter(e => solverEmploymentType(e) === 'Casual').map(e => e.id),
         );
@@ -1916,24 +1956,6 @@ export class AutoSchedulerController {
             }
         }
 
-        // The organization's published rate card in force at the window's start
-        // prices every candidate: rates, the split-shift allowance and the
-        // solver's pricing policy (keyed on the earliest date, as before). No
-        // card ⇒ refuse rather than price at another organization's — or ICC's
-        // — rates. Without an organization (scoped callers, tests) the embedded
-        // effective-dated schedule still applies.
-        let rateCards: RateCardSchedule | undefined;
-        let windowCard: PricedCard | null = null;
-        if (orgId) {
-            rateCards = (await fetchPublishedRateCardSchedules([orgId])).get(orgId) ?? [];
-            windowCard = resolveCardOn(rateCards, dates[0]);
-            if (!windowCard) {
-                throw new Error(
-                    `No published pay rate card covers ${dates[0]} for this organization. ` +
-                    'Publish one in Payroll → Pay Rates, then run the AutoScheduler again.',
-                );
-            }
-        }
         const windowRateSet = windowCard?.rateSet ?? resolveRateSet(dates[0]);
 
         const optimizerEmployees: OptimizerEmployee[] = scopedEmployees.map(e => {
@@ -2246,6 +2268,7 @@ export class AutoSchedulerController {
                     debtsMap,
                     validationCtx,
                     activeMode,
+                    windowCard,
                 );
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
@@ -2265,6 +2288,7 @@ export class AutoSchedulerController {
                     existingRoster,
                     employeeMap,
                     validationCtx,
+                    v8SolverConfig,
                 );
 
                 // Add back the past shifts as explicitly failed proposals (for UI visibility)
@@ -2293,6 +2317,7 @@ export class AutoSchedulerController {
                     debtsMap,
                     validationCtx,
                     activeMode,
+                    windowCard,
                 );
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
@@ -2320,6 +2345,7 @@ export class AutoSchedulerController {
                 constraints: buildSolverConstraints(input.constraints, optimizerShifts, solverMode, windowCard),
                 budgetSeconds: Math.min(30, Math.max(10, Math.round(solverBudget / 4))),
                 signal: input.signal,
+                solverConfig: v8SolverConfig,
             });
             const after = validatedProposals.filter(p => !p.passing).length;
             console.info(
@@ -2731,10 +2757,11 @@ export class AutoSchedulerController {
         constraints: OptimizerConstraints;
         budgetSeconds: number;
         signal?: AbortSignal;
+        solverConfig?: SolverConfig;
     }): Promise<ValidatedProposal[]> {
         const {
             proposals, optimizerShifts, optimizerEmployees, inputShifts, inputEmployees,
-            employeeDetails, existingRoster, validationCtx, constraints, budgetSeconds, signal,
+            employeeDetails, existingRoster, validationCtx, constraints, budgetSeconds, signal, solverConfig,
         } = args;
         const MAX_ITERS = 3;
         const SEP = '\x00';
@@ -2817,6 +2844,7 @@ export class AutoSchedulerController {
                 augmentedRoster,
                 employeeMap,
                 validationCtx,
+                solverConfig,
             );
 
             const placed = new Set(repairValidated.map(p => p.shiftId));
@@ -2852,6 +2880,7 @@ export class AutoSchedulerController {
         existingRoster: Map<string, ExistingShiftRef[]>,
         employeeMap?: Map<string, EmployeeMeta>,
         validationCtx?: ValidationContextMaps,
+        solverConfig?: SolverConfig,
     ): Promise<ValidatedProposal[]> {
         const all: ValidatedProposal[] = [];
 
@@ -2874,6 +2903,7 @@ export class AutoSchedulerController {
                     group.employeeId, 
                     { 
                         mode: 'PARTIAL_APPLY',
+                        solverConfig,
                         injectedData: {
                             candidateShifts: group.proposals.map(p => ({
                                 id: p.shiftId,

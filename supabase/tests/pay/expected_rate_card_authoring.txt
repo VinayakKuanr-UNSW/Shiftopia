@@ -29,6 +29,7 @@ upsert allowances: 2
 allowance -1: refused (22023)
 allowance unit per_fortnight: refused (22023)
 remove one rate and one allowance: 2
+trainee matrix not an object: refused (22023)
 lines now: 2 rate(s), allowances meal=20.50, trainee schedule ICC 2028–29 trainees, SWS minimum 95
 copy: every line and the loadings, derivation ICC-EA-2026-27 × 1: t
 copy into an organization where the caller is not Administrator: refused (42501)
