@@ -14,10 +14,16 @@
 
 import { supabase } from '@/platform/supabase/client';
 import {
+  mapDbLoadingsRow,
+  RATE_CARD_LOADINGS_SELECT,
+  type RateCardLoadings,
+} from '@/modules/rosters/domain/projections/utils/cost/loadings';
+import {
   TRAINEE_RATE_SCHEDULE,
   type TraineeRateSet,
 } from '@/modules/rosters/domain/projections/utils/cost/trainee_matrix';
 
+export type { RateCardLoadings } from '@/modules/rosters/domain/projections/utils/cost/loadings';
 export type { TraineeRateSet } from '@/modules/rosters/domain/projections/utils/cost/trainee_matrix';
 
 /** One classification's rates at a given effective date (both employment bases). */
@@ -38,11 +44,12 @@ export interface EbaAllowanceRow {
   source: string | null;
 }
 
-/** One published card's rates + allowances, in force from `effectiveFrom` until the next card. */
+/** One published card's rates, allowances and loadings, in force from `effectiveFrom` until the next card. */
 export interface EbaRateSet {
   effectiveFrom: string;           // YYYY-MM-DD
   rates: EbaRateRow[];
   allowances: EbaAllowanceRow[];
+  loadings?: RateCardLoadings | null;
 }
 
 const num = (v: unknown): number => {
@@ -64,7 +71,9 @@ export async function getEbaRateSchedule(organizationId: string | null): Promise
   if (!organizationId) return [];
   const { data, error } = await (supabase as any)
     .from('pay_rate_cards')
-    .select('valid_from, eba_rate(classification, employment_basis, ordinary_hourly_rate, paid_hourly_rate, source), eba_allowance(code, amount, unit, source)')
+    .select(
+      `valid_from, eba_rate(classification, employment_basis, ordinary_hourly_rate, paid_hourly_rate, source), eba_allowance(code, amount, unit, source), pay_rate_card_loadings(${RATE_CARD_LOADINGS_SELECT})`,
+    )
     .eq('organization_id', organizationId)
     .eq('status', 'published')
     .order('valid_from', { ascending: true });
@@ -74,26 +83,32 @@ export async function getEbaRateSchedule(organizationId: string | null): Promise
     return [];
   }
 
-  return ((data ?? []) as any[]).map((card) => ({
-    effectiveFrom: ymd(card.valid_from),
-    rates: ((card.eba_rate ?? []) as any[])
-      .map((r): EbaRateRow => ({
-        classification: String(r.classification),
-        employmentBasis: r.employment_basis,
-        ordinaryHourlyRate: num(r.ordinary_hourly_rate),
-        paidHourlyRate: num(r.paid_hourly_rate),
-        source: r.source ?? null,
-      }))
-      .sort((a, b) => a.classification.localeCompare(b.classification)),
-    allowances: ((card.eba_allowance ?? []) as any[])
-      .map((a): EbaAllowanceRow => ({
-        code: String(a.code),
-        amount: num(a.amount),
-        unit: String(a.unit),
-        source: a.source ?? null,
-      }))
-      .sort((a, b) => a.code.localeCompare(b.code)),
-  }));
+  return ((data ?? []) as any[]).map((card) => {
+    const rawLoadings = Array.isArray(card.pay_rate_card_loadings)
+      ? card.pay_rate_card_loadings[0]
+      : card.pay_rate_card_loadings;
+    return {
+      effectiveFrom: ymd(card.valid_from),
+      rates: ((card.eba_rate ?? []) as any[])
+        .map((r): EbaRateRow => ({
+          classification: String(r.classification),
+          employmentBasis: r.employment_basis,
+          ordinaryHourlyRate: num(r.ordinary_hourly_rate),
+          paidHourlyRate: num(r.paid_hourly_rate),
+          source: r.source ?? null,
+        }))
+        .sort((a, b) => a.classification.localeCompare(b.classification)),
+      allowances: ((card.eba_allowance ?? []) as any[])
+        .map((a): EbaAllowanceRow => ({
+          code: String(a.code),
+          amount: num(a.amount),
+          unit: String(a.unit),
+          source: a.source ?? null,
+        }))
+        .sort((a, b) => a.code.localeCompare(b.code)),
+      loadings: rawLoadings ? mapDbLoadingsRow(rawLoadings) : null,
+    };
+  });
 }
 
 /**

@@ -20,4 +20,11 @@ describe('rate cards', () => {
             .split('\n').map((l) => l.trimEnd()).filter(Boolean);
         expect(actual).toEqual(expected);
     });
+
+    it('02_rate_card_loadings.sql reproduces expected_rate_card_loadings.txt', () => {
+        const actual = sqlFileNotices(stack().dbContainer, 'supabase/tests/pay/02_rate_card_loadings.sql').map((l) => l.trimEnd());
+        const expected = readFileSync(resolve(REPO_ROOT, 'supabase/tests/pay/expected_rate_card_loadings.txt'), 'utf8')
+            .split('\n').map((l) => l.trimEnd()).filter(Boolean);
+        expect(actual).toEqual(expected);
+    });
 });

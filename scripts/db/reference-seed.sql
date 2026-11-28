@@ -35,6 +35,7 @@ WITH spec(ord, sch, rel, blank) AS (VALUES
     (10, 'public', 'rbac_permissions',         '{}'),
     -- pay and calendar (cards first: the rate tables reference them)
     (10.5, 'public', 'pay_rate_cards',         '{}'),
+    (10.6, 'public', 'pay_rate_card_loadings', '{}'),
     (11, 'public', 'eba_rate',                 '{}'),
     (12, 'public', 'eba_allowance',            '{}'),
     (13, 'public', 'eba_trainee_schedule',     '{}'),

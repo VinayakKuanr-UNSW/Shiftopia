@@ -16,6 +16,16 @@
  *     priced dollars can never disagree.
  */
 
+import { ICC_SYDNEY_EA_LOADINGS, type RateCardLoadings } from './loadings';
+
+type MinEngagementLoadings = Pick<
+  RateCardLoadings,
+  | 'minEngagementMinutes'
+  | 'minEngagementSundayMinutes'
+  | 'minEngagementPublicHolidayMinutes'
+  | 'minEngagementTrainingMinutes'
+>;
+
 interface PaymentMinEngagementInput {
   employmentType?: string | null;
   /**
@@ -49,6 +59,8 @@ interface PaymentMinEngagementInput {
    * populates `isMultiHire` yet), fixed ahead of that wiring going live.
    */
   multiHireStartsWithinUsualFinishWindow?: boolean;
+  /** Optional card-level engagement floors; omitted ⇒ ICC Sydney EA defaults. */
+  loadings?: MinEngagementLoadings;
 }
 
 /**
@@ -61,7 +73,9 @@ export function resolvePaymentMinEngagementMinutes(input: PaymentMinEngagementIn
   const isFullTime = /full/i.test(employmentType);
   if (isFullTime) return null;
 
-  if (input.isTraining) return 120;
+  const l = input.loadings ?? ICC_SYDNEY_EA_LOADINGS;
+
+  if (input.isTraining) return l.minEngagementTrainingMinutes;
   if (!input.isSecurityRole && input.isMultiHire && input.multiHireStartsWithinUsualFinishWindow) {
     return 120;
   }
@@ -89,7 +103,7 @@ export function resolvePaymentMinEngagementMinutes(input: PaymentMinEngagementIn
   // cl 12.4(c)/12.5(c)'s OWN "Sunday or public holiday" wording, which IS
   // employment-type-scoped; cl 56.2 is a separate, broader, unqualified rule
   // that independently guarantees the PH floor for everyone. Reverted.)
-  if (input.isPublicHoliday) return 240;
-  if (input.isSunday && !isPlainPartTime) return 240;
-  return 180;
+  if (input.isPublicHoliday) return l.minEngagementPublicHolidayMinutes;
+  if (input.isSunday && !isPlainPartTime) return l.minEngagementSundayMinutes;
+  return l.minEngagementMinutes;
 }
