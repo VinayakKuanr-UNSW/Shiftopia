@@ -17,10 +17,11 @@
  */
 
 import { PageState } from '@/modules/core/ui/components/PageState';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Database, Info,
 } from 'lucide-react';
+import { useAuth } from '@/platform/auth/useAuth';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/modules/core/ui/primitives/tabs';
@@ -58,12 +59,24 @@ type SubTab = (typeof SUB_TABS)[number]['id'];
 
 // ── main ─────────────────────────────────────────────────────────────────────
 export const PayRatesSettings: React.FC = () => {
+  const organizationId = useAuth().accessScope?.organizationId ?? null;
   const { schedule, isLoading, error, refetch } = useEbaRates();
   const { schedule: traineeSchedule } = useTraineeRates();
-  const [activeTab, setActiveTab] = useState<SubTab>('overview');
+  // Null until the user picks a tab — defaults to Versions when the org has
+  // no published rate cards yet (e.g. a newly onboarded venue) so admins are
+  // never locked out of creating and publishing their first card.
+  const [selectedTab, setSelectedTab] = useState<SubTab | null>(null);
   const [resolveDate, setResolveDate] = useState(today());
   // Version selected from a VersionTimeline node (null = show the in-force set).
   const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedTab(null);
+    setSelectedVersion(null);
+  }, [organizationId]);
+
+  const activeTab: SubTab = selectedTab ?? (schedule.length === 0 ? 'versions' : 'overview');
+  const setActiveTab = (tab: SubTab) => setSelectedTab(tab);
 
   const inForceToday = useMemo(() => resolveEbaRateSetOnDate(schedule, today()), [schedule]);
   const applicable = useMemo(
@@ -107,16 +120,18 @@ export const PayRatesSettings: React.FC = () => {
     );
   }
 
-  if (schedule.length === 0) {
-    return (
-      <PageState
-        state="empty"
-        icon={Database}
-        title="No rate schedule found"
-        description="The eba_rate / eba_allowance tables have no rows. Seed them via the Phase-2 migration."
-      />
-    );
-  }
+  const emptyPublishedState = (
+    <PageState
+      state="empty"
+      icon={Database}
+      title="No published rate card yet"
+      description="This organization has no published pay rate cards. Create a draft card and publish it on the Versions tab to populate rates, allowances, and pricing."
+      action={{
+        label: 'Open Versions',
+        onClick: () => setActiveTab('versions'),
+      }}
+    />
+  );
 
   return (
     <div className="space-y-6">
@@ -142,56 +157,64 @@ export const PayRatesSettings: React.FC = () => {
 
         {/* ── Overview ──────────────────────────────────────────────────── */}
         <TabsContent value="overview" className="mt-8 space-y-8">
-          <AwardDashboardHeader schedule={schedule} inForce={inForceToday} />
+          {schedule.length === 0 ? emptyPublishedState : (
+            <>
+              <AwardDashboardHeader schedule={schedule} inForce={inForceToday} />
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-            <div className="xl:col-span-2 space-y-8">
-              <AwardHealthPanel schedule={schedule} />
-            </div>
-            <div className="xl:col-span-1">
-              <VersionTimeline
-                schedule={schedule}
-                inForceFrom={inForceToday?.effectiveFrom ?? null}
-                onSelectVersion={showVersion}
-              />
-            </div>
-          </div>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                <div className="xl:col-span-2 space-y-8">
+                  <AwardHealthPanel schedule={schedule} />
+                </div>
+                <div className="xl:col-span-1">
+                  <VersionTimeline
+                    schedule={schedule}
+                    inForceFrom={inForceToday?.effectiveFrom ?? null}
+                    onSelectVersion={showVersion}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </TabsContent>
 
         {/* ── Base Rates ────────────────────────────────────────────────── */}
         <TabsContent value="base-rates" className="mt-8">
-          {baseRatesSet && (
+          {baseRatesSet ? (
             <BaseRatesSection
               rateSet={baseRatesSet}
               isActive={baseRatesSet.effectiveFrom === inForceToday?.effectiveFrom}
             />
-          )}
+          ) : emptyPublishedState}
         </TabsContent>
 
         {/* ── Allowances ────────────────────────────────────────────────── */}
         <TabsContent value="allowances" className="mt-8">
-          {inForceToday && (
+          {inForceToday ? (
             <AllowancesSection
               allowances={inForceToday.allowances}
               effectiveFrom={inForceToday.effectiveFrom}
             />
-          )}
+          ) : emptyPublishedState}
         </TabsContent>
 
         {/* ── Apprentices & Trainees ────────────────────────────────────── */}
         <TabsContent value="apprentices" className="mt-8 space-y-10">
-          <ApprenticeCards rateSet={inForceToday ? rateSetFromCard({
-            code: 'in force', validFrom: inForceToday.effectiveFrom, validTo: null,
-            rates: inForceToday.rates, allowances: inForceToday.allowances, loadings: null, trainee: null,
-          }) : null} />
+          {schedule.length === 0 ? emptyPublishedState : (
+            <>
+              <ApprenticeCards rateSet={inForceToday ? rateSetFromCard({
+                code: 'in force', validFrom: inForceToday.effectiveFrom, validTo: null,
+                rates: inForceToday.rates, allowances: inForceToday.allowances, loadings: null, trainee: null,
+              }) : null} />
 
-          {/* Detailed trainee matrices */}
-          <div className="pt-8 border-t border-border/40">
-            <h3 className="text-[15px] font-bold text-foreground mb-6">
-              Detailed Trainee Matrices (Schedule 5)
-            </h3>
-            <ScheduleReferenceTables traineeSet={traineeInForce} />
-          </div>
+              {/* Detailed trainee matrices */}
+              <div className="pt-8 border-t border-border/40">
+                <h3 className="text-[15px] font-bold text-foreground mb-6">
+                  Detailed Trainee Matrices (Schedule 5)
+                </h3>
+                <ScheduleReferenceTables traineeSet={traineeInForce} />
+              </div>
+            </>
+          )}
         </TabsContent>
 
         {/* ── Versions ──────────────────────────────────────────────────── */}
