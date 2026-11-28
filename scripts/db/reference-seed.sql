@@ -33,7 +33,8 @@ WITH spec(ord, sch, rel, blank) AS (VALUES
     -- access matrix (these rows exist nowhere but production)
     ( 9, 'public', 'rbac_actions',             '{}'),
     (10, 'public', 'rbac_permissions',         '{}'),
-    -- pay and calendar
+    -- pay and calendar (cards first: the rate tables reference them)
+    (10.5, 'public', 'pay_rate_cards',         '{}'),
     (11, 'public', 'eba_rate',                 '{}'),
     (12, 'public', 'eba_allowance',            '{}'),
     (13, 'public', 'eba_trainee_schedule',     '{}'),

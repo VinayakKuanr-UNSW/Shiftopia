@@ -177,3 +177,12 @@ the order of work, is [global-expansion-scope.md](global-expansion-scope.md).
 | V6 | Scheduled jobs keep their fixed UTC schedules; only their date logic follows the venue. Fine while every venue is in Australia; venues 10+ hours apart would need jobs grouped by region. | Decided 2026-11-28 |
 | V7 | Deferred, because their Sydney date only errs safe (Sydney is never behind Brisbane, so they treat Brisbane's last hour of the day as past): `apply_template_to_date_range_v2` (its `start_at` is recomputed by the trigger anyway), `preview_template_application`, `add/delete/rename_roster_subgroup_*`. Also deferred: the TOIL helpers (salaried staff, ICC only), the `COALESCE(timezone, 'Australia/Sydney')` fallbacks (dead once every shift has its zone), and the client's Sydney helpers (display already uses the naive wall clock; its "has it started" checks are advisory — the database decides). | Deferred |
 | V8 | Moving a shift to another organization by changing only `organization_id` re-stamps its zone but does not recompute `start_at`; shifts do not move between organizations today. | Known limitation |
+## 11. Pay rate cards — phase 1, database (built 2026-11-28)
+
+| ID | Statement | Tag |
+|---|---|---|
+| R1 | `public.pay_rate_cards`: organization, code (unique per organization), name, currency (`AUD`), `rule_set` (only `icc_sydney_ea`), informational term, `is_default` (one per organization), `retired_at`. Members read their organization's cards; only the service role writes. | Built |
+| R2 | `eba_rate`, `eba_allowance`, `eba_trainee_schedule` carry `rate_card_id` (required); their keys and lookups lead with it. Every existing rate belongs to ICC Sydney's card `ICC-EA`. Rates are readable by members of the card's organization (were readable by everyone). | Built |
+| R3 | Pricing (`internal.shift_pay_terms`, `internal.shift_cost`) uses the shift's organization's default card and jurisdiction; the inner functions take them as parameters and refuse to run without them. | Built |
+| R4 | No default card → `shift_pay_terms` returns nothing and `fn_eba_shift_cost` returns NULL, not 0 (P4). BCEC is unpriced until its card exists (B6). | Built |
+| R5 | Deferred (YAGNI): a contract naming its own card; writes from the app (`payroll.manage`); the client engine and rate admin (phase 2 — the embedded `RATE_SCHEDULE` copies and the CPI wizard's SQL snippet, which still emits the old `ON CONFLICT` key). Holiday confirmation status / year-end close: not decided. | Deferred |
