@@ -1,0 +1,59 @@
+name: Public holiday official check
+
+# Monthly automated reconciliation of public.public_holidays against the
+# government's published holiday lists (data.gov.au, nsw.gov.au, qld.gov.au).
+# See docs/architecture/multi-organization.md §13.
+#
+# - Marks matching dates as source = 'gazetted' (with gazetted_at).
+# - Inserts newly proclaimed official dates as 'gazetted' (pricing updates live).
+# - Keeps unconfirmed rule-only dates for human review and notifies active
+#   Administrators (zeta) of affected organizations once per finding.
+# - Strict HTML/CSV parser fails the workflow if a government page changes
+#   structure instead of feeding bad data to the database.
+
+on:
+  schedule:
+    # 20:00 UTC on the 1st of every month (~06:00 AEST / 07:00 AEDT).
+    - cron: '0 20 1 * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Fetch and parse official lists only (do not call reconcile_public_holidays)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-holidays-check
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile public holidays with official lists
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Fetch and strictly parse official holiday lists
+        run: node scripts/holidays/official-holidays.mjs > /tmp/official-holidays.json
+
+      - name: Reconcile with database
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::SUPABASE_DB_URL secret is not set"
+            exit 1
+          fi
+          PAYLOAD="$(cat /tmp/official-holidays.json)"
+          psql "$SUPABASE_DB_URL" -X -At -v ON_ERROR_STOP=1 \
+            -v payload="$PAYLOAD" \
+            -c "SELECT jsonb_pretty(public.reconcile_public_holidays(:'payload'::jsonb));"
