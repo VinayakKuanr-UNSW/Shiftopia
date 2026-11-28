@@ -1,0 +1,5 @@
+a shift takes its organization's zone, whatever is sent: Australia/Perth
+its start_at is the Perth wall clock: t
+today is the venue's date: t
+unknown zone: refused (22023)
+organization without a zone: refused (23502)

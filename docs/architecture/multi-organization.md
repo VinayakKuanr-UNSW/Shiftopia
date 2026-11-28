@@ -164,3 +164,16 @@ the order of work, is [global-expansion-scope.md](global-expansion-scope.md).
 1. **Fix 2, adjusted:** jurisdictions with ISO 3166-2 codes and a country parent (`AU` → `AU-NSW`, `AU-QLD` → `AU-QLD-BNE`), Ekka, per-jurisdiction client holidays.
 2. **Time foundation:** `organizations.timezone` (BCEC `Australia/Brisbane`), every hardcoded `'Australia/Sydney'` (38 SQL functions, ~45 client files) replaced by the shift's or organization's timezone, scheduled jobs by local time.
 3. **Pay:** the rule-set seam (ICC EA as its first entry), then rate cards.
+
+## 10. Venue time (built 2026-11-28)
+
+| ID | Statement | Tag |
+|---|---|---|
+| V1 | Instants are stored in UTC (`timestamptz`); a shift is authored as the venue's wall clock (`shift_date` + `start_time`) plus the venue's IANA zone; `start_at`/`end_at` are derived from them (`trg_recalc_shift_utc_timestamps`). | Verified (existing model) |
+| V2 | `organizations.timezone` (IANA, required, validated on write). ICC Sydney `Australia/Sydney`, BCEC `Australia/Brisbane`. | Built |
+| V3 | A shift's timezone is always its organization's (trigger `trg_01_shift_timezone_from_organization`, ahead of every trigger that reads it); whatever a caller sends is replaced. The column keeps its old default only for trigger-less test sessions. | Built |
+| V4 | "Today" is the venue's date (`organization_today(org)`): contract lifecycle and pay terms, the first-aid history guard, the casual-fairness nightly run. Start, lock and delete checks use the shift's own zone. | Built |
+| V5 | A shift belongs to the date it starts (day divide = start day). An overnight shift across a daylight-saving change is paid by elapsed hours, because `end_at` is derived from the wall clock in the venue's zone. | Assumed (existing behaviour) |
+| V6 | Scheduled jobs keep their fixed UTC schedules; only their date logic follows the venue. Fine while every venue is in Australia; venues 10+ hours apart would need jobs grouped by region. | Decided 2026-11-28 |
+| V7 | Deferred, because their Sydney date only errs safe (Sydney is never behind Brisbane, so they treat Brisbane's last hour of the day as past): `apply_template_to_date_range_v2` (its `start_at` is recomputed by the trigger anyway), `preview_template_application`, `add/delete/rename_roster_subgroup_*`. Also deferred: the TOIL helpers (salaried staff, ICC only), the `COALESCE(timezone, 'Australia/Sydney')` fallbacks (dead once every shift has its zone), and the client's Sydney helpers (display already uses the naive wall clock; its "has it started" checks are advisory — the database decides). | Deferred |
+| V8 | Moving a shift to another organization by changing only `organization_id` re-stamps its zone but does not recompute `start_at`; shifts do not move between organizations today. | Known limitation |
