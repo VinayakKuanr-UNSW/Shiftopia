@@ -103,6 +103,19 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'casual paid off the casual-loading formula: refused (%)', SQLSTATE;
     END;
     PERFORM public.upsert_rate_card_rates(blank, '[{"classification": "LEVEL_1", "employment_basis": "casual", "ordinary_hourly_rate": 30, "paid_hourly_rate": 40, "is_manual_override": true, "notes": "Sch 2 §1"}]');
+    PERFORM public.upsert_rate_card_rates(blank, '[{"classification": "LEVEL_1", "employment_basis": "casual", "ordinary_hourly_rate": 30}]');
+    RAISE NOTICE 'editing an override line without a paid rate keeps the manual rate: %', (
+        SELECT paid_hourly_rate = 40 FROM public.eba_rate WHERE rate_card_id = blank AND classification = 'LEVEL_1' AND employment_basis = 'casual');
+    BEGIN
+        PERFORM public.upsert_rate_card_rates(blank, '[{"classification": "LEVEL_3", "employment_basis": "permanent", "ordinary_hourly_rate": 0.004}]');
+        RAISE NOTICE 'rate 0.004 (0.00 in cents): allowed';
+    EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'rate 0.004 (0.00 in cents): refused (%)', SQLSTATE;
+    END;
+    BEGIN
+        PERFORM public.upsert_rate_card_rates(blank, '[{"classification": "LEVEL_3", "employment_basis": "permanent", "ordinary_hourly_rate": 1000000}]');
+        RAISE NOTICE 'rate 1000000: allowed';
+    EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'rate 1000000: refused (%)', SQLSTATE;
+    END;
     BEGIN
         PERFORM public.upsert_rate_card_rates(blank, '[{"classification": "LEVEL_3", "employment_basis": "permanent", "ordinary_hourly_rate": 0}]');
         RAISE NOTICE 'rate 0: allowed';

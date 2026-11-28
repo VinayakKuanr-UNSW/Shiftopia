@@ -11,6 +11,9 @@ meta of a published card: refused (55000)
 meta updated: t
 upsert 3 rates: 3
 casual paid off the casual-loading formula: refused (22023)
+editing an override line without a paid rate keeps the manual rate: t
+rate 0.004 (0.00 in cents): refused (22023)
+rate 1000000: refused (22023)
 rate 0: refused (22023)
 basis weekly: refused (22023)
 classification "level 3": refused (22023)
@@ -26,7 +29,7 @@ upsert allowances: 2
 allowance -1: refused (22023)
 allowance unit per_fortnight: refused (22023)
 remove one rate and one allowance: 2
-lines now: 2 rate(s), allowances meal=20.5, trainee schedule ICC 2028–29 trainees, SWS minimum 95
+lines now: 2 rate(s), allowances meal=20.50, trainee schedule ICC 2028–29 trainees, SWS minimum 95
 copy: every line and the loadings, derivation ICC-EA-2026-27 × 1: t
 copy into an organization where the caller is not Administrator: refused (42501)
 copy with options: rates scaled t, allowances 0, trainee schedule 0

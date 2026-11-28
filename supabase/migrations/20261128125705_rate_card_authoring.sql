@@ -223,15 +223,16 @@ BEGIN
     FOR it IN SELECT * FROM jsonb_array_elements(p_items) LOOP
         v_class := it->>'classification';
         v_basis := it->>'employment_basis';
-        v_ord   := (it->'ordinary_hourly_rate')::numeric;
-        v_paid  := (it->'paid_hourly_rate')::numeric;
+        -- Validated as stored: numeric(8,2), cents.
+        v_ord   := round((it->'ordinary_hourly_rate')::numeric, 2);
+        v_paid  := round((it->'paid_hourly_rate')::numeric, 2);
         IF v_class IS NULL OR v_class !~ '^[A-Z][A-Z0-9_]*$' THEN
             RAISE EXCEPTION 'classification must look like LEVEL_1, got %', v_class USING ERRCODE = '22023';
         END IF;
         IF v_basis IS NULL OR v_basis NOT IN ('permanent', 'casual', 'annualised') THEN
             RAISE EXCEPTION 'employment basis must be permanent, casual or annualised, got %', v_basis USING ERRCODE = '22023';
         END IF;
-        IF v_ord IS NULL OR v_ord <= 0 THEN
+        IF v_ord IS NULL OR v_ord <= 0 OR v_ord > 999999.99 THEN
             RAISE EXCEPTION '% %: ordinary hourly rate must be greater than 0', v_class, v_basis USING ERRCODE = '22023';
         END IF;
         -- Omitted flag: keep the line's current one.
@@ -246,13 +247,18 @@ BEGIN
             END IF;
             v_formula := round(v_ord * (1 + v_casual), 2);
         END IF;
+        IF v_paid IS NULL AND v_override THEN
+            -- A manual rate is kept unless a new one is given.
+            SELECT r.paid_hourly_rate INTO v_paid FROM public.eba_rate r
+             WHERE r.rate_card_id = v.id AND r.classification = v_class AND r.employment_basis = v_basis;
+        END IF;
         IF v_paid IS NULL THEN
             v_paid := CASE v_basis WHEN 'permanent' THEN v_ord WHEN 'casual' THEN v_formula END;
             IF v_paid IS NULL THEN
                 RAISE EXCEPTION '% annualised: the paid hourly rate is required', v_class USING ERRCODE = '22023';
             END IF;
         END IF;
-        IF v_paid <= 0 THEN
+        IF v_paid <= 0 OR v_paid > 999999.99 THEN
             RAISE EXCEPTION '% %: paid hourly rate must be greater than 0', v_class, v_basis USING ERRCODE = '22023';
         END IF;
         IF v_basis = 'casual' AND NOT v_override AND abs(v_paid - v_formula) > 0.02 THEN
@@ -294,12 +300,12 @@ BEGIN
     END IF;
     FOR it IN SELECT * FROM jsonb_array_elements(p_items) LOOP
         v_code   := it->>'code';
-        v_amount := (it->'amount')::numeric;
+        v_amount := round((it->'amount')::numeric, 2);
         v_unit   := it->>'unit';
         IF v_code IS NULL OR v_code !~ '^[a-z][a-z0-9_]*$' THEN
             RAISE EXCEPTION 'allowance code must look like meal or first_aid_per_hour, got %', v_code USING ERRCODE = '22023';
         END IF;
-        IF v_amount IS NULL OR v_amount <= 0 THEN
+        IF v_amount IS NULL OR v_amount <= 0 OR v_amount > 999999.99 THEN
             RAISE EXCEPTION '%: amount must be greater than 0', v_code USING ERRCODE = '22023';
         END IF;
         IF v_unit IS NULL OR v_unit NOT IN ('per_occasion', 'per_hour', 'per_shift') THEN
@@ -480,6 +486,9 @@ DECLARE
     n     integer;
     m     integer;
 BEGIN
+    -- Both cards in id order first: copy(A <- B) racing copy(B <- A) would
+    -- otherwise each hold one card and wait for the other.
+    PERFORM 1 FROM public.pay_rate_cards WHERE id IN (p_target_card_id, p_source_card_id) ORDER BY id FOR UPDATE;
     v := internal.draft_rate_card_for_write(p_target_card_id);
     v_src := internal.rate_card_for_copy(p_source_card_id);
     IF COALESCE(cardinality(p_classifications), 0) + COALESCE(cardinality(p_allowance_codes), 0) = 0 THEN
