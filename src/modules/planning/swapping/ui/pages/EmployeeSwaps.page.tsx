@@ -36,7 +36,8 @@ import { useSwaps } from '../../state/useSwaps';
 import { ShiftSwap, swapsApi } from '../../api/swaps.api';
 import { format, parse } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { SYDNEY_TZ, parseZonedDateTime, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
+import { venueZone, shiftZone } from '@/modules/core/lib/venue';
 import { ViewOffersModal } from '../components/ViewOffersModal';
 import { UnifiedSwapModal } from '../components/UnifiedSwapModal';
 import { SwapSelectionToolbar } from '../components/SwapSelectionToolbar';
@@ -176,7 +177,7 @@ const listItemSpring = {
 };
 
 // =============================================================================
-// Countdown to the trade closing: it expires at shift start (fn_set_swap_expires_at), in Sydney time
+// Countdown to the trade closing: it expires at shift start (fn_set_swap_expires_at), in the venue's time
 export const getSwapTimer = (now: Date, startAt?: string, shiftDate?: string, startTime?: string, tzIdentifier?: string) => {
     if (!startAt && (!shiftDate || !startTime)) return null;
 
@@ -185,7 +186,7 @@ export const getSwapTimer = (now: Date, startAt?: string, shiftDate?: string, st
 
     const shiftStartUtc = startAt
         ? new Date(startAt)
-        : parseZonedDateTime(shiftDate as string, cleanStartTime as string, tzIdentifier || SYDNEY_TZ);
+        : parseZonedDateTime(shiftDate as string, cleanStartTime as string, tzIdentifier || venueZone());
 
     if (isNaN(shiftStartUtc.getTime())) {
         console.warn('[Timer] Invalid shift start date/time:', { shiftDate, startTime, cleanStartTime });
@@ -224,7 +225,7 @@ const getSwapClose = (
     const start: Date | null = shift?.start_at
         ? new Date(shift.start_at)
         : (shift?.shift_date && shift?.start_time
-            ? parseZonedDateTime(shift.shift_date, shift.start_time, shift.tz_identifier ?? SYDNEY_TZ)
+            ? parseZonedDateTime(shift.shift_date, shift.start_time, shift.tz_identifier ?? shiftZone(shift))
             : null);
 
     if (!start || isNaN(start.getTime())) {

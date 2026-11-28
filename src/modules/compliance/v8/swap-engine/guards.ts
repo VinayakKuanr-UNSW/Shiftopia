@@ -19,7 +19,8 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatInTimezone } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
 // =============================================================================
@@ -115,7 +116,7 @@ async function checkShiftsNotLocked(shiftIds: string[]): Promise<GuardViolation[
 
     const { data, error } = await (supabase as any)
         .from('shifts')
-        .select('id, trading_status, start_at')
+        .select('id, trading_status, start_at, timezone')
         .in('id', shiftIds);
 
     if (error || !data) return violations;
@@ -131,7 +132,7 @@ async function checkShiftsNotLocked(shiftIds: string[]): Promise<GuardViolation[
             if (hoursUntil >= 0 && hoursUntil < 4) {
                 violations.push({
                     code: 'SHIFT_LOCKED',
-                    message: `Shift starting at ${formatInTimezone(shiftStart, SYDNEY_TZ, 'd MMM yyyy, HH:mm')} (AEST/AEDT) starts in less than 4 hours and is time-locked.`,
+                    message: `Shift starting at ${formatInTimezone(shiftStart, shiftZone(row), 'd MMM yyyy, HH:mm')} (${shiftZone(row)}) starts in less than 4 hours and is time-locked.`,
                     entity_id: row.id,
                 });
             }

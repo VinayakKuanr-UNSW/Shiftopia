@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
 import type { ScopeSelection } from '@/platform/auth/types';
-import { getNowInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { getNowInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import { statusFor, type MetricStatus } from '@/modules/insights/model/metric-registry';
 
 import {
@@ -133,7 +134,7 @@ export const getMetricStatus = (metricType: string, value: number): 'good' | 'wa
 export const getCurrentQuarter = () => {
     // Sydney-zoned, not the viewer's device clock — a manager overseas
     // shouldn't default to a different quarter than the roster itself uses.
-    const now = getNowInTimezone(SYDNEY_TZ);
+    const now = getNowInTimezone(venueZone());
     return {
         year: now.getFullYear(),
         quarter: Math.floor(now.getMonth() / 3) + 1,

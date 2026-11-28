@@ -84,7 +84,7 @@ async function run(
     organizationId?: string,
     employees = [casual('e-over'), casual('e-owed'), fullTime('e-ft')],
 ) {
-    return new AutoSchedulerController().run({ shifts: [sundayShift], employees, organizationId } as never);
+    return new AutoSchedulerController().run({ shifts: [sundayShift], employees, organizationId, mode: 'CASUAL' } as never);
 }
 
 function employeesSent(): Map<string, { fairness_debts?: Record<string, number> }> {
@@ -132,7 +132,7 @@ describe('casual fairness ledger → optimizer payload', () => {
         const sent = employeesSent();
         expect(sent.get('e-over')?.fairness_debts).toEqual({ sunday_hours: 8 });
         expect(sent.get('e-owed')?.fairness_debts).toEqual({ sunday_hours: -4, total_hours: -2 });
-        expect(sent.get('e-ft')?.fairness_debts).toEqual({});
+        expect(sent.get('e-ft')).toBeUndefined();
         expect(result.fairnessLedger).toEqual({
             applied: true, reason: 'ok', employeesWithDebts: 2, windowEnd: '2027-01-04', ageDays: 1,
         });
@@ -154,7 +154,7 @@ describe('casual fairness ledger → optimizer payload', () => {
 
         mockOptimize.mockClear();
         const eve = { ...sundayShift, id: 'eve', shift_date: '2027-12-24', start_time: '22:00', end_time: '06:00' };
-        await new AutoSchedulerController().run({ shifts: [eve], employees: [casual('e-over')], organizationId: 'org-1' } as never);
+        await new AutoSchedulerController().run({ shifts: [eve], employees: [casual('e-over')], organizationId: 'org-1', mode: 'CASUAL' } as never);
         const sent = (mockOptimize.mock.calls[0][0] as { shifts: Array<{ is_public_holiday: boolean; is_public_holiday_next_day: boolean }> }).shifts[0];
         expect(sent).toMatchObject({ is_public_holiday: false, is_public_holiday_next_day: true });
     });

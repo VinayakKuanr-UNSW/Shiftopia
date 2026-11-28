@@ -10,7 +10,7 @@ import { surface } from '@/modules/core/ui/layout/pageTokens';
 
 // Components
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
-import { isSydneyPast } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone } from '@/modules/core/lib/date.utils';
 import {
   RosterFunctionBar,
   ViewType,
@@ -521,7 +521,7 @@ const NewRostersPage: React.FC = () => {
     date?: Date,
     rosterId?: string
   ) => {
-    if (date && isSydneyPast(date)) return;
+    if (date && isPastInTimezone(date)) return;
     const context: ShiftContext = {
       mode: 'group',
       launchSource: 'grid', // Date will be locked
@@ -1088,10 +1088,14 @@ const NewRostersPage: React.FC = () => {
       /* Autoscheduler scope: DRAFT + unassigned shifts that have not
          started — published shifts belong to bidding/offers. Must stay in
          sync with the filter in useAutoScheduler.ts. */
-      .filter((s) =>
-        !s.assigned_employee_id && !s.is_cancelled
-        && (s.is_draft ?? true)
-        && computeTTS(s.shift_date, s.start_time) > 0)
+      .filter((s) => {
+        const isDraft = s.lifecycle_status ? s.lifecycle_status === 'Draft' : (s.is_draft ?? true);
+        return (
+          !s.assigned_employee_id && !s.is_cancelled
+          && isDraft
+          && computeTTS(s.shift_date, s.start_time) > 0
+        );
+      })
       .map((s) => ({
         id: s.id,
         shift_date: s.shift_date,
@@ -1276,7 +1280,7 @@ const NewRostersPage: React.FC = () => {
             selectedShifts={selectedV8ShiftIdsArray}
             onToggleShiftSelection={handleToggleShiftSelection}
             onAddShift={(employee, date) => {
-              if (date && isSydneyPast(date)) return;
+              if (date && isPastInTimezone(date)) return;
               const context: ShiftContext = {
                 mode: 'people',
                 launchSource: 'grid', // Date will be locked

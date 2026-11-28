@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { getNowInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { getNowInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 
 /**
  * A single app-wide wall clock, ticking once a minute.
@@ -40,7 +41,7 @@ export interface ClockSnapshot {
 function computeSnapshot(): ClockSnapshot {
   // Zoned Date: its LOCAL fields are Sydney's wall-clock fields. Never
   // `.getTime()` on this — see the timezone note in date.utils.
-  const syd = getNowInTimezone(SYDNEY_TZ);
+  const syd = getNowInTimezone(venueZone());
   const y = syd.getFullYear();
   const m = `${syd.getMonth() + 1}`.padStart(2, '0');
   const d = `${syd.getDate()}`.padStart(2, '0');

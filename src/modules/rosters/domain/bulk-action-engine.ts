@@ -12,7 +12,8 @@
 
 import type { Shift } from './shift.entity';
 import { getShiftRemoval } from './shift-removal';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 
 // ============================================================
 // TYPES
@@ -51,7 +52,7 @@ export function preflightPublish(shifts: Shift[]): BulkPreflightSummary {
     const now = new Date();
 
     for (const s of shifts) {
-        const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
+        const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, shiftZone(s));
         const isPast = now >= shiftStartAt;
 
         if (isPast) {
@@ -88,7 +89,7 @@ export function preflightUnpublish(shifts: Shift[]): BulkPreflightSummary {
     const now = new Date();
 
     for (const s of shifts) {
-        const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
+        const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, shiftZone(s));
         const isPast = now >= shiftStartAt;
 
         if (isPast) {
@@ -216,7 +217,7 @@ export function planPublishRoster(
     const noPermissionIds: string[] = [];
     let alreadyPublishedCount = 0;
 
-    // Real epoch for absolute-instant math. getSydneyNow().getTime() would be a
+    // Real epoch for absolute-instant math. getNowInTimezone().getTime() would be a
     // wall-clock-shifted (fake) epoch and, subtracted from a real start_at epoch,
     // skews TTS by the viewer's offset on any non-Sydney runtime.
     const nowMs = Date.now();
@@ -244,10 +245,10 @@ export function planPublishRoster(
 
         const startMs = s.start_at
             ? new Date(s.start_at).getTime()
-            : parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ).getTime();
+            : parseZonedDateTime(s.shift_date, s.start_time, shiftZone(s)).getTime();
         const endMs = s.end_at
             ? new Date(s.end_at).getTime()
-            : parseZonedDateTime(s.shift_date, s.end_time, SYDNEY_TZ).getTime();
+            : parseZonedDateTime(s.shift_date, s.end_time, shiftZone(s)).getTime();
 
         const isUnassigned = !s.assigned_employee_id;
 

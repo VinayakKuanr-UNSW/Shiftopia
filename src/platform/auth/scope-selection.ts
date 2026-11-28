@@ -30,6 +30,21 @@ export function scopeTreeFor(permissions: PermissionObject | null | undefined, m
     }
 }
 
+/**
+ * The tree inside the organization chosen in the account menu
+ * (docs/architecture/multi-organization.md S4): a person with access in two
+ * organizations sees one at a time, on every page. No choice, or a choice
+ * this tree does not reach (Team Lead in one organization, manager in the
+ * other), leaves the tree as it is. Returns `tree` itself when nothing is cut,
+ * so memoised selections do not refire.
+ */
+export function treeInOrganization(tree: ScopeTree | null, organizationId: string | null | undefined): ScopeTree | null {
+    if (!tree || !organizationId) return tree;
+    const organizations = tree.organizations.filter((o) => o.id === organizationId);
+    if (organizations.length === 0 || organizations.length === tree.organizations.length) return tree;
+    return { ...tree, organizations };
+}
+
 /** Every place in the tree. */
 export function defaultSelectionFromTree(tree: ScopeTree | null | undefined): ScopeSelection {
     const orgs = tree?.organizations ?? [];

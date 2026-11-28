@@ -10,7 +10,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone, todayISO } from '@/modules/core/lib/date.utils';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
@@ -234,9 +234,9 @@ const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleI
     canDrop: (item: any) => {
       // Logic for locking:
       // 1. DND Mode must be active
-      // 2. Target date must not be fully in the past (handled by isSydneyPast if we want to block whole days)
+      // 2. Target date must not be fully in the past (handled by isPastInTimezone if we want to block whole days)
       // 3. For the specific shift's timing, it must not be locked on the target date.
-      const targetIsPastDay = isSydneyPast(parse(date, 'yyyy-MM-dd', new Date())) && !isToday(parse(date, 'yyyy-MM-dd', new Date()));
+      const targetIsPastDay = isPastInTimezone(parse(date, 'yyyy-MM-dd', new Date())) && !isToday(parse(date, 'yyyy-MM-dd', new Date()));
       
       let isStrictlyLocked = targetIsPastDay;
       if (!isStrictlyLocked && item.startTime) {
@@ -470,7 +470,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   };
 
   const handleCellClick = (roleId: string, date: Date) => {
-    if (!canEdit || isSydneyPast(date)) return;
+    if (!canEdit || isPastInTimezone(date)) return;
     openShiftForm({
       context: {
         mode: 'roles',
@@ -579,7 +579,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                             />
                           ))}
                           {/* For cells WITH shifts: Reserved row with + at the bottom right */}
-                          {canEdit && !isBulkMode && !isSydneyPast(date) && cellShifts.length > 0 && (
+                          {canEdit && !isBulkMode && !isPastInTimezone(date) && cellShifts.length > 0 && (
                             <div className="flex items-center justify-end w-full pt-1 mt-auto">
                               <RosterCellAddButton
                                 onClick={(e) => {
@@ -594,7 +594,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                           )}
 
                           {/* For EMPTY cells: Centered add button */}
-                          {canEdit && !isBulkMode && !isSydneyPast(date) && cellShifts.length === 0 && (
+                          {canEdit && !isBulkMode && !isPastInTimezone(date) && cellShifts.length === 0 && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                               <RosterCellAddButton
                                 onClick={() => handleCellClick(role.id, date)}

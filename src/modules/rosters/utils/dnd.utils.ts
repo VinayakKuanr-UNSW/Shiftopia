@@ -2,7 +2,8 @@
  * DnD Utilities — Single Source of Truth for Roster DnD Logic
  */
 import { ShiftDisplay } from '../domain/queries/getGroupsModeGrid.query';
-import { isSydneyStarted } from '@/modules/core/lib/date.utils';
+import { hasStartedInTimezone } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 
 /**
  * Determines if a shift can be dragged.
@@ -22,9 +23,10 @@ export const canDragShift = (
   const isCancelled = 'is_cancelled' in shift ? shift.is_cancelled : (shift as ShiftDisplay).isCancelled;
   const shiftDate = 'shift_date' in shift ? shift.shift_date : (shift as any).rawShift?.shift_date;
   const startTime = 'start_time' in shift ? shift.start_time : (shift as ShiftDisplay).startTime;
+  const zone = shiftZone('shift_date' in shift ? shift : (shift as any).rawShift);
 
   // Granular check: has the shift already started?
-  if (shiftDate && startTime && isSydneyStarted(shiftDate as string, startTime as string)) return false;
+  if (shiftDate && startTime && hasStartedInTimezone(shiftDate as string, startTime as string, zone)) return false;
 
   return status === 'Draft' && !isCancelled;
 };
@@ -33,7 +35,7 @@ export const canDragShift = (
  * Determines if a shift can be dropped onto a target.
  *
  * Granular past-time guard:
- *   If targetDate is today (Sydney) and startTime is earlier than now,
+ *   If targetDate is today (the venue's) and startTime is earlier than now,
  *   the drop is blocked — prevents moving a shift to a time slot that has
  *   already passed even though the date itself is not "past".
  */
@@ -61,9 +63,10 @@ export const canDropOnTarget = (
   if (targetContext?.isPast) return false;
   if (targetContext?.isLocked) return false;
 
-  // Granular: today + start time already passed (Sydney clock)
+  // Granular: today + start time already passed (the shift's venue clock)
   if (targetContext?.targetDate && targetContext?.startTime) {
-    if (isSydneyStarted(targetContext.targetDate, targetContext.startTime)) return false;
+    const zone = shiftZone('shift_date' in shift ? shift : (shift as any).rawShift);
+    if (hasStartedInTimezone(targetContext.targetDate, targetContext.startTime, zone)) return false;
   }
 
   return true;

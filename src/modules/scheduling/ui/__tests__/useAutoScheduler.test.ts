@@ -76,6 +76,18 @@ describe('summariseScope', () => {
         expect(summariseScope([{ ...farFuture }]).eligible).toBe(1);
     });
 
+    it('identifies lifecycle_status === "Published" as published', () => {
+        const breakdown = summariseScope([{ ...farFuture, lifecycle_status: 'Published' }]);
+        expect(breakdown.published).toBe(1);
+        expect(breakdown.eligible).toBe(0);
+    });
+
+    it('identifies lifecycle_status === "Draft" as eligible', () => {
+        const breakdown = summariseScope([{ ...farFuture, lifecycle_status: 'Draft' }]);
+        expect(breakdown.eligible).toBe(1);
+        expect(breakdown.published).toBe(0);
+    });
+
     it('attributes each exclusion to exactly one reason', () => {
         const breakdown = summariseScope([
             { ...farFuture, is_draft: true },

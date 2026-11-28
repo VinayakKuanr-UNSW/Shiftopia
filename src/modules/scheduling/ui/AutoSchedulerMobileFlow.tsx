@@ -422,7 +422,7 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
     validationError,
     applyWindowPreset,
     activeWindowPreset,
-    mode = 'ALL',
+    mode = 'FT_STANDARD',
     setMode,
     isShiftsLoading,
     shiftsInScope,

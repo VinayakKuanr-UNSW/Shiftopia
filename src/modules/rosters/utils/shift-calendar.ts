@@ -4,7 +4,8 @@
  * (6bd75b84 / 8d9a09a4, Jianwei Gao) with one shared description builder and
  * an Outlook link for work accounts.
  */
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 
 const PRODUCT_ID = '-//Shiftopia//Shift Calendar//EN';
@@ -54,7 +55,7 @@ const validTimestamp = (value?: string | null) => {
 
 /** Canonical UTC instants when stored; otherwise wall clock in the shift's zone. */
 const resolveShiftTimes = (shift: Shift) => {
-  const timezone = shift.tz_identifier || shift.timezone || SYDNEY_TZ;
+  const timezone = shift.tz_identifier || shift.timezone || venueZone();
   const start = validTimestamp(shift.start_at) ?? parseZonedDateTime(shift.shift_date, shift.start_time, timezone);
 
   let end = validTimestamp(shift.end_at);

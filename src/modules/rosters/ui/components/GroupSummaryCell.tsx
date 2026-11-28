@@ -5,7 +5,7 @@ import { RosterSummaryCellDTO } from '../../api/rosterSummary.queries';
 import { AlertCircle, Maximize2 } from 'lucide-react';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
-import { isSydneyPast } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone } from '@/modules/core/lib/date.utils';
 import { RosterCellAddButton } from './RosterCellAddButton';
 
 interface GroupSummaryCellProps {
@@ -57,7 +57,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
   // is icons and abbreviations, none of which identifies the group or the date it belongs to.
   const dateLabel = format(date, 'd MMMM yyyy');
 
-  const isPast = isSydneyPast(date);
+  const isPast = isPastInTimezone(date);
 
   if (!summary || summary.total_shifts === 0) {
     if (isBulkMode || isPast || !canEdit) {

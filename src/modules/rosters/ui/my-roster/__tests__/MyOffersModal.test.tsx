@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MyOffersModal } from '../MyOffersModal';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MyOffersModal, formatTimeRemainingNoSeconds } from '../MyOffersModal';
 
 /**
  * This file runs as a viewer OUTSIDE Sydney.
@@ -94,7 +94,7 @@ describe('MyOffersModal', () => {
     // shift cannot read as unheld while it sits in their own inbox.
     pending.data = [offer()];
 
-    render(<MyOffersModal isOpen onClose={vi.fn()} />);
+    render(<MyOffersModal isOpen onClose={vi.fn()} defaultViewMode="card" />);
 
     const card = screen.getByTestId('shift-card');
     expect(card).toHaveAttribute('data-identity-grid', 'true');
@@ -106,11 +106,38 @@ describe('MyOffersModal', () => {
     // could only ever show one of them.
     pending.data = [offer()];
 
-    render(<MyOffersModal isOpen onClose={vi.fn()} />);
+    render(<MyOffersModal isOpen onClose={vi.fn()} defaultViewMode="card" />);
 
     const card = screen.getByTestId('shift-card');
     expect(card).toHaveAttribute('data-group', 'Theatre');
     expect(card).toHaveAttribute('data-sub-dept', 'Set-up');
+  });
+
+  it('renders default list view (table) with all columns matching MyBids grid', () => {
+    pending.data = [offer()];
+
+    render(<MyOffersModal isOpen onClose={vi.fn()} />);
+
+    // Column headers
+    expect(screen.getByRole('columnheader', { name: /^department/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^subdepartment/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^group/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^subgroup/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^role/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^date/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^time/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^net/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^expires in/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^action/i })).toBeInTheDocument();
+
+    // Row contents
+    expect(screen.getByText('Event Delivery')).toBeInTheDocument();
+    expect(screen.getAllByText('Set-up').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Theatre')).toBeInTheDocument();
+    expect(screen.getByText('Team Leader')).toBeInTheDocument();
+    expect(screen.getByText('05:30–16:30')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /accept/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /decline/i })).toBeInTheDocument();
   });
 
   it('does not present a failed fetch as an empty inbox', () => {
@@ -140,7 +167,7 @@ describe('MyOffersModal', () => {
 
     render(<MyOffersModal isOpen onClose={vi.fn()} />);
 
-    expect(screen.getByTestId('shift-card')).toBeInTheDocument();
+    expect(screen.getByText('Team Leader')).toBeInTheDocument();
   });
 
   it('closes at the start on Sydney wall-clock, not on the naive string read as UTC', () => {
@@ -152,7 +179,7 @@ describe('MyOffersModal', () => {
 
     render(<MyOffersModal isOpen onClose={vi.fn()} />);
 
-    expect(screen.queryByTestId('shift-card')).not.toBeInTheDocument();
+    expect(screen.queryByText('Team Leader')).not.toBeInTheDocument();
     expect(screen.getByText('No offers waiting')).toBeInTheDocument();
   });
 
@@ -164,7 +191,7 @@ describe('MyOffersModal', () => {
 
     render(<MyOffersModal isOpen onClose={vi.fn()} />);
 
-    expect(screen.getByTestId('shift-card')).toBeInTheDocument();
+    expect(screen.getByText('Team Leader')).toBeInTheDocument();
   });
 
   it('exposes the status filters as a tablist', () => {
@@ -195,14 +222,192 @@ describe('MyOffersModal', () => {
     expect(closers).toHaveLength(1);
   });
 
-  it('forwards subGroup to SharedShiftCard', () => {
+  it('forwards subGroup to SharedShiftCard in card mode', () => {
     const o = offer();
     (o.shift as any).sub_group_name = 'AM Base';
     pending.data = [o];
 
-    render(<MyOffersModal isOpen onClose={vi.fn()} />);
+    render(<MyOffersModal isOpen onClose={vi.fn()} defaultViewMode="card" />);
 
     const card = screen.getByTestId('shift-card');
     expect(card).toHaveAttribute('data-sub-group', 'AM Base');
+  });
+
+  it('allows accepting an offer directly from the table row', async () => {
+    pending.data = [offer()];
+
+    render(<MyOffersModal isOpen onClose={vi.fn()} />);
+
+    const acceptButton = screen.getByRole('button', { name: /accept/i });
+    fireEvent.click(acceptButton);
+
+    expect(mutation.mutateAsync).toHaveBeenCalledWith('shift-1');
+  });
+
+  it('allows declining an offer via confirmation dialog from table row', async () => {
+    pending.data = [offer()];
+
+    render(<MyOffersModal isOpen onClose={vi.fn()} />);
+
+    const declineButton = screen.getByRole('button', { name: /decline team leader on 2026-08-20/i });
+    fireEvent.click(declineButton);
+
+    // Confirm dialog appears
+    expect(screen.getByText('Decline Shift?')).toBeInTheDocument();
+    const confirmDecline = screen.getByRole('button', { name: /^decline$/i });
+    fireEvent.click(confirmDecline);
+
+    expect(mutation.mutateAsync).toHaveBeenCalledWith('shift-1');
+  });
+
+  it('allows toggling between list and card views', () => {
+    pending.data = [offer()];
+
+    render(<MyOffersModal isOpen onClose={vi.fn()} />);
+
+    // Initially in table view
+    expect(screen.getByRole('columnheader', { name: /^department/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('shift-card')).not.toBeInTheDocument();
+
+    // Toggle to card view
+    const cardToggle = screen.getByRole('button', { name: /card view/i });
+    fireEvent.click(cardToggle);
+
+    expect(screen.getByTestId('shift-card')).toBeInTheDocument();
+  });
+
+  describe('Bulk Mode & Expiration format', () => {
+    it('formatTimeRemainingNoSeconds omits seconds and provides clean duration', () => {
+      // 3 weeks, 1 day, 6 hours, 3 minutes, 45 seconds
+      const formatted = formatTimeRemainingNoSeconds({
+        years: 0,
+        months: 0,
+        weeks: 3,
+        days: 1,
+        hours: 6,
+        minutes: 3,
+        seconds: 45,
+        isExpired: false,
+      });
+      expect(formatted).toBe('3w 1d 6h 3m');
+      expect(formatted).not.toContain('s');
+      expect(formatted).not.toContain('45');
+
+      // Less than 1 minute remaining
+      const subMinute = formatTimeRemainingNoSeconds({
+        years: 0,
+        months: 0,
+        weeks: 0,
+        days: 0,
+        hours: 0,
+        minutes: 0,
+        seconds: 30,
+        isExpired: false,
+      });
+      expect(subMinute).toBe('< 1m');
+      expect(subMinute).not.toContain('30s');
+
+      // Expired
+      const expired = formatTimeRemainingNoSeconds({
+        years: 0,
+        months: 0,
+        weeks: 0,
+        days: 0,
+        hours: 0,
+        minutes: 0,
+        seconds: 0,
+        isExpired: true,
+      });
+      expect(expired).toBe('Closed');
+    });
+
+    it('supports selecting multiple offers and accepting in bulk', async () => {
+      mutation.mutateAsync.mockReset();
+      mutation.mutateAsync.mockResolvedValue({});
+
+      const offer1 = offer({ id: 'o-1', shift_id: 's-1' });
+      const offer2 = offer({
+        id: 'o-2',
+        shift_id: 's-2',
+        shift: {
+          id: 's-2',
+          shift_date: '2026-08-21',
+          start_time: '08:00:00',
+          end_time: '16:00:00',
+          roles: { name: 'Bartender' },
+          departments: { name: 'Hospitality' },
+          sub_departments: { name: 'Retail' },
+        },
+      });
+      pending.data = [offer1, offer2];
+
+      render(<MyOffersModal isOpen onClose={vi.fn()} />);
+
+      // Bulk mode button is present in Pending tab
+      const bulkModeBtn = screen.getByRole('button', { name: /bulk mode/i });
+      expect(bulkModeBtn).toBeInTheDocument();
+      fireEvent.click(bulkModeBtn);
+
+      // Bulk action bar is now visible
+      expect(screen.getByText(/0 selected/i)).toBeInTheDocument();
+
+      // Checkboxes exist in table header and rows
+      const selectAllBtn = screen.getByRole('button', { name: /select all/i });
+      fireEvent.click(selectAllBtn);
+
+      expect(screen.getByText(/2 selected/i)).toBeInTheDocument();
+
+      // Accept Selected button
+      const acceptSelectedBtn = screen.getByRole('button', { name: /accept selected \(2\)/i });
+      expect(acceptSelectedBtn).toBeInTheDocument();
+      fireEvent.click(acceptSelectedBtn);
+
+      expect(mutation.mutateAsync).toHaveBeenCalledWith('s-1');
+      expect(mutation.mutateAsync).toHaveBeenCalledWith('s-2');
+    });
+
+    it('supports selecting multiple offers and declining in bulk via confirmation', async () => {
+      mutation.mutateAsync.mockReset();
+      mutation.mutateAsync.mockResolvedValue({});
+
+      const offer1 = offer({ id: 'o-1', shift_id: 's-1' });
+      const offer2 = offer({
+        id: 'o-2',
+        shift_id: 's-2',
+        shift: {
+          id: 's-2',
+          shift_date: '2026-08-21',
+          start_time: '08:00:00',
+          end_time: '16:00:00',
+          roles: { name: 'Bartender' },
+          departments: { name: 'Hospitality' },
+          sub_departments: { name: 'Retail' },
+        },
+      });
+      pending.data = [offer1, offer2];
+
+      render(<MyOffersModal isOpen onClose={vi.fn()} />);
+
+      // Activate bulk mode
+      const bulkModeBtn = screen.getByRole('button', { name: /bulk mode/i });
+      fireEvent.click(bulkModeBtn);
+
+      // Select all
+      const selectAllBtn = screen.getByRole('button', { name: /select all/i });
+      fireEvent.click(selectAllBtn);
+
+      // Decline Selected button
+      const declineSelectedBtn = screen.getByRole('button', { name: /decline selected \(2\)/i });
+      fireEvent.click(declineSelectedBtn);
+
+      // Bulk decline confirmation dialog
+      expect(screen.getByText(/decline 2 shift offers\?/i)).toBeInTheDocument();
+
+      const confirmBtn = screen.getByRole('button', { name: /^decline \(2\)$/i });
+      fireEvent.click(confirmBtn);
+
+      expect(mutation.mutateAsync).toHaveBeenCalledWith('s-1');
+      expect(mutation.mutateAsync).toHaveBeenCalledWith('s-2');
+    });
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { formatCalendarDate, getShiftInstant } from '@/modules/core/lib/date.utils';
 import {
     AlertDialog,
@@ -31,6 +31,10 @@ import {
     AlertTriangle,
     RotateCw,
     X,
+    Ban,
+    List,
+    LayoutGrid,
+    ListChecks,
 } from 'lucide-react';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/projections/constants';
@@ -44,6 +48,37 @@ import {
     DialogTitle,
 } from '@/modules/core/ui/primitives/dialog';
 import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
+import { Table, tableTokens, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
+import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
+import { useTableSorting } from '@/modules/core/hooks/useTableSorting';
+import { getDeptColor, getRowClass } from '@/modules/planning/bidding/ui/utils/bid-dept-styles';
+import { calculateTimeRemaining } from '@/modules/planning/bidding/ui/views/OpenBidsView/utils';
+import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
+
+/**
+ * Format time remaining without displaying seconds (e.g., '3w 1d 6h 3m' or '< 1m').
+ */
+export const formatTimeRemainingNoSeconds = (timeRemaining: {
+    years: number;
+    months: number;
+    weeks: number;
+    days: number;
+    hours: number;
+    minutes: number;
+    seconds: number;
+    isExpired: boolean;
+}): string => {
+    if (timeRemaining.isExpired) return 'Closed';
+    const parts: string[] = [];
+    if (timeRemaining.years > 0) parts.push(`${timeRemaining.years}y`);
+    if (timeRemaining.months > 0) parts.push(`${timeRemaining.months}mo`);
+    if (timeRemaining.weeks > 0) parts.push(`${timeRemaining.weeks}w`);
+    if (timeRemaining.days > 0) parts.push(`${timeRemaining.days}d`);
+    if (timeRemaining.hours > 0) parts.push(`${timeRemaining.hours}h`);
+    if (timeRemaining.minutes > 0) parts.push(`${timeRemaining.minutes}m`);
+
+    return parts.join(' ') || '< 1m';
+};
 
 /* ═══════════════════════════════════════════════════════════════════════
    TYPES
@@ -59,6 +94,7 @@ interface MyOffersModalProps {
         organizationId?: string;
         departmentId?: string;
     };
+    defaultViewMode?: 'table' | 'card';
 }
 
 interface OfferData {
@@ -298,12 +334,26 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
     onClose,
     onOfferResponded,
     filters,
+    defaultViewMode = 'table',
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
+    const [viewMode, setViewMode] = useState<'table' | 'card'>(defaultViewMode);
     const [activeTab, setActiveTab] = useState<OfferStatus>('Pending');
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [showDeclineConfirm, setShowDeclineConfirm] = useState<string | null>(null);
+    const [now, setNow] = useState<number>(Date.now());
+
+    // Bulk Mode State
+    const [isBulkModeActive, setIsBulkModeActive] = useState<boolean>(false);
+    const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
+    const [showBulkDeclineConfirm, setShowBulkDeclineConfirm] = useState<boolean>(false);
+    const [isProcessingBulk, setIsProcessingBulk] = useState<boolean>(false);
+
+    useEffect(() => {
+        const interval = setInterval(() => setNow(Date.now()), 30_000);
+        return () => clearInterval(interval);
+    }, []);
 
     const employeeId = isOpen && user?.id ? user.id : null;
     const recipientName = user?.fullName || user?.name || undefined;
@@ -332,6 +382,14 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
         activeTab === 'Pending'
             ? activePending
             : ((activeQuery.data ?? []) as OfferData[]);
+
+    const handleTabChange = (tab: OfferStatus) => {
+        setActiveTab(tab);
+        setSelectedShiftIds([]);
+        if (tab !== 'Pending') {
+            setIsBulkModeActive(false);
+        }
+    };
 
     /**
      * A disabled query is neither loading nor loaded — React Query reports
@@ -385,6 +443,172 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
         }
     };
 
+    const handleBulkAccept = async () => {
+        if (selectedShiftIds.length === 0) return;
+        setIsProcessingBulk(true);
+        try {
+            const results = await Promise.allSettled(
+                selectedShiftIds.map(shiftId => acceptOfferMutation.mutateAsync(shiftId))
+            );
+            const succeeded = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+            if (succeeded > 0) {
+                toast({
+                    title: `${succeeded} Shift${succeeded > 1 ? 's' : ''} Accepted`,
+                    description: failed > 0 ? `${failed} failed to accept.` : 'Added to your roster.',
+                });
+                onOfferResponded?.();
+            }
+            if (failed > 0 && succeeded === 0) {
+                toast({
+                    title: 'Error',
+                    description: 'Failed to accept selected offers.',
+                    variant: 'destructive',
+                });
+            }
+            setSelectedShiftIds([]);
+        } catch (err: any) {
+            toast({
+                title: 'Error',
+                description: err?.message || 'Failed to accept offers.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsProcessingBulk(false);
+        }
+    };
+
+    const handleBulkDecline = async () => {
+        if (selectedShiftIds.length === 0) return;
+        setIsProcessingBulk(true);
+        try {
+            const results = await Promise.allSettled(
+                selectedShiftIds.map(shiftId => declineOfferMutation.mutateAsync(shiftId))
+            );
+            const succeeded = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+            if (succeeded > 0) {
+                toast({
+                    title: `${succeeded} Offer${succeeded > 1 ? 's' : ''} Declined`,
+                    description: failed > 0 ? `${failed} failed to decline.` : 'Returned to the pool.',
+                });
+                onOfferResponded?.();
+            }
+            if (failed > 0 && succeeded === 0) {
+                toast({
+                    title: 'Error',
+                    description: 'Failed to decline selected offers.',
+                    variant: 'destructive',
+                });
+            }
+            setSelectedShiftIds([]);
+            setShowBulkDeclineConfirm(false);
+        } catch (err: any) {
+            toast({
+                title: 'Error',
+                description: err?.message || 'Failed to decline offers.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsProcessingBulk(false);
+        }
+    };
+
+    const transformedOffers = useMemo(() => {
+        return currentOffers.map((offer) => {
+            const rawSub = (offer.shift as any).roster_subgroup;
+            const sub = Array.isArray(rawSub) ? rawSub[0] : rawSub;
+            const rawRg = sub?.roster_groups ?? sub?.roster_group;
+            const rg = Array.isArray(rawRg) ? rawRg[0] : rawRg;
+
+            const groupType =
+                rg?.external_id ||
+                offer.shift.group_type ||
+                undefined;
+
+            const group =
+                rg?.name ||
+                GROUP_DISPLAY_NAMES[groupType as keyof typeof GROUP_DISPLAY_NAMES] ||
+                offer.shift.departments?.name ||
+                'General';
+
+            const subGroupName =
+                sub?.name ||
+                offer.shift.sub_group_name ||
+                offer.shift.sub_departments?.name ||
+                'General';
+
+            const department = offer.shift.departments?.name || 'General';
+            const subDepartment = offer.shift.sub_departments?.name || 'General';
+            const role = offer.shift.roles?.name || 'Shift';
+            const date = offer.shift.shift_date;
+            const startTime = offer.shift.start_time?.slice(0, 5) ?? '--:--';
+            const endTime = offer.shift.end_time?.slice(0, 5) ?? '--:--';
+            const netLength = computeNetLength(offer.shift);
+            const deadlineMs = resolveOfferDeadline(offer);
+            const isLocked = isShiftLocked(offer.shift.shift_date, offer.shift.start_time);
+            const subGroupColor = getDeptColor(groupType, department);
+
+            return {
+                id: offer.id,
+                shift_id: offer.shift_id,
+                status: offer.status,
+                department,
+                subDepartment,
+                group,
+                subGroupName,
+                subGroupColor,
+                role,
+                date,
+                startTime,
+                endTime,
+                startAt: `${date}T${startTime}`,
+                netLength,
+                deadlineMs,
+                isLocked,
+                groupType,
+                rawOffer: offer,
+            };
+        });
+    }, [currentOffers]);
+
+    const actionableOffers = useMemo(() => {
+        if (activeTab !== 'Pending') return [];
+        return transformedOffers.filter((item) => {
+            const isExpired = item.deadlineMs ? now >= item.deadlineMs : false;
+            return !item.isLocked && !isExpired;
+        });
+    }, [transformedOffers, activeTab, now]);
+
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            setSelectedShiftIds(actionableOffers.map((o) => o.shift_id));
+        } else {
+            setSelectedShiftIds([]);
+        }
+    };
+
+    const handleToggleSelect = (shiftId: string) => {
+        setSelectedShiftIds((prev) =>
+            prev.includes(shiftId) ? prev.filter((id) => id !== shiftId) : [...prev, shiftId]
+        );
+    };
+
+    const offersTableSort = useTableSorting(transformedOffers, { key: 'date', direction: 'asc' });
+
+    const groupedOffers = useMemo(() => {
+        const buckets = new Map<string, { key: string; label: string; items: typeof transformedOffers }>();
+        for (const item of offersTableSort.sortedData) {
+            const key = item.date;
+            const label = formatCalendarDate(item.date, 'EEE d MMM');
+            if (!buckets.has(key)) {
+                buckets.set(key, { key, label, items: [] });
+            }
+            buckets.get(key)!.items.push(item);
+        }
+        return Array.from(buckets.values());
+    }, [offersTableSort.sortedData]);
+
     const tabs: { label: OfferStatus; count: number }[] = [
         { label: 'Pending', count: activePending.length },
         { label: 'Accepted', count: ((acceptedQuery.data ?? []) as OfferData[]).length },
@@ -405,8 +629,8 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                     // would be a second control for the same action sitting
                     // over the first.
                     hideClose
-                    className="w-[calc(100vw-2rem)] sm:w-full max-h-[85vh] p-0 overflow-hidden bg-card/95 flex flex-col z-[150]"
-                    size="md"
+                    className="w-[calc(100vw-2rem)] sm:w-full max-h-[90vh] p-0 overflow-hidden bg-card/95 flex flex-col z-[150]"
+                    size="full"
                 >
                     <DialogHeader className="sr-only">
                         <DialogTitle>My Shift Offers</DialogTitle>
@@ -438,58 +662,183 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                         </DialogClose>
                     </div>
 
-                    {/* Tab Selector */}
-                    <div className="flex gap-2 px-5 pt-4 pb-2 shrink-0" role="tablist" aria-label="Offer status">
-                        {tabs.map(({ label, count }) => {
-                            const isActive = activeTab === label;
-                            return (
-                                <button
-                                    key={label}
+                    {/* Tab Selector & View Mode Toggle */}
+                    <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0 gap-3 flex-wrap">
+                        <div className="flex gap-2 overflow-x-auto scrollbar-none" role="tablist" aria-label="Offer status">
+                            {tabs.map(({ label, count }) => {
+                                const isActive = activeTab === label;
+                                return (
+                                    <button
+                                        key={label}
+                                        type="button"
+                                        role="tab"
+                                        id={`offers-tab-${label.toLowerCase()}`}
+                                        aria-selected={isActive}
+                                        aria-controls={`offers-panel-${label.toLowerCase()}`}
+                                        onClick={() => handleTabChange(label)}
+                                        className={cn(
+                                            text.label,
+                                            touch.target,
+                                            'flex items-center justify-center gap-2 px-4 rounded-xl uppercase transition-colors shrink-0',
+                                            isActive
+                                                ? 'bg-foreground text-background'
+                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                                        )}
+                                    >
+                                        {label}
+                                        {count > 0 && (
+                                            <span
+                                                className={cn(
+                                                    'h-5 min-w-[1.25rem] rounded-full text-[11px] leading-none flex items-center justify-center px-1.5 font-bold tabular-nums',
+                                                    isActive
+                                                        ? 'bg-background/20 text-background'
+                                                        : 'bg-muted-foreground/20 text-muted-foreground',
+                                                )}
+                                            >
+                                                {count}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                            {/* Bulk Mode toggle (only in Pending tab) */}
+                            {activeTab === 'Pending' && (
+                                <Button
                                     type="button"
-                                    role="tab"
-                                    id={`offers-tab-${label.toLowerCase()}`}
-                                    aria-selected={isActive}
-                                    aria-controls={`offers-panel-${label.toLowerCase()}`}
-                                    onClick={() => setActiveTab(label)}
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        setIsBulkModeActive((prev) => {
+                                            const next = !prev;
+                                            if (!next) setSelectedShiftIds([]);
+                                            return next;
+                                        });
+                                    }}
+                                    aria-pressed={isBulkModeActive}
                                     className={cn(
-                                        text.label,
-                                        touch.target,
-                                        'flex items-center justify-center gap-2 px-4 rounded-xl uppercase transition-colors',
-                                        isActive
-                                            ? 'bg-foreground text-background'
-                                            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                                        "h-8 px-2.5 text-[11px] font-black uppercase tracking-wider rounded-xl transition-colors gap-1.5",
+                                        isBulkModeActive
+                                            ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+                                            : "text-muted-foreground hover:text-foreground"
                                     )}
                                 >
-                                    {label}
-                                    {count > 0 && (
-                                        <span
-                                            className={cn(
-                                                'h-5 min-w-[1.25rem] rounded-full text-[11px] leading-none flex items-center justify-center px-1.5 font-bold tabular-nums',
-                                                isActive
-                                                    ? 'bg-background/20 text-background'
-                                                    : 'bg-muted-foreground/20 text-muted-foreground',
-                                            )}
-                                        >
-                                            {count}
-                                        </span>
+                                    <ListChecks className="h-4 w-4" aria-hidden="true" />
+                                    <span>Bulk Mode</span>
+                                </Button>
+                            )}
+
+                            {/* View Mode Toggle: Table (default) vs Card */}
+                            <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/40 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => setViewMode('table')}
+                                    aria-label="Table view"
+                                    aria-pressed={viewMode === 'table'}
+                                    className={cn(
+                                        'p-1.5 rounded-lg transition-colors',
+                                        viewMode === 'table'
+                                            ? 'bg-background text-foreground shadow-sm'
+                                            : 'text-muted-foreground hover:text-foreground',
                                     )}
+                                >
+                                    <List className="h-4 w-4" aria-hidden="true" />
                                 </button>
-                            );
-                        })}
+                                <button
+                                    type="button"
+                                    onClick={() => setViewMode('card')}
+                                    aria-label="Card view"
+                                    aria-pressed={viewMode === 'card'}
+                                    className={cn(
+                                        'p-1.5 rounded-lg transition-colors',
+                                        viewMode === 'card'
+                                            ? 'bg-background text-foreground shadow-sm'
+                                            : 'text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Bulk Mode Action Bar */}
+                    {isBulkModeActive && activeTab === 'Pending' && (
+                        <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-muted/30 border-y border-border/40 shrink-0 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="flex items-center gap-3">
+                                <span className="text-[12px] font-bold text-foreground">
+                                    {selectedShiftIds.length} selected
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-[11px] font-semibold uppercase text-muted-foreground hover:text-foreground"
+                                    onClick={() => {
+                                        if (actionableOffers.length > 0 && actionableOffers.every((o) => selectedShiftIds.includes(o.shift_id))) {
+                                            setSelectedShiftIds([]);
+                                        } else {
+                                            setSelectedShiftIds(actionableOffers.map((o) => o.shift_id));
+                                        }
+                                    }}
+                                >
+                                    {actionableOffers.length > 0 && actionableOffers.every((o) => selectedShiftIds.includes(o.shift_id))
+                                        ? 'Deselect All'
+                                        : 'Select All'}
+                                </Button>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    className="h-8 px-3 text-[11px] font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm gap-1.5"
+                                    disabled={selectedShiftIds.length === 0 || isProcessingBulk}
+                                    onClick={handleBulkAccept}
+                                >
+                                    {isProcessingBulk ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                                    ) : (
+                                        <CheckCircle className="h-3.5 w-3.5" />
+                                    )}
+                                    Accept Selected ({selectedShiftIds.length})
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 px-3 text-[11px] font-black uppercase tracking-wider text-rose-500 hover:text-rose-600 border-rose-500/30 hover:bg-rose-500/10 shadow-sm gap-1.5"
+                                    disabled={selectedShiftIds.length === 0 || isProcessingBulk}
+                                    onClick={() => setShowBulkDeclineConfirm(true)}
+                                >
+                                    <XCircle className="h-3.5 w-3.5" />
+                                    Decline Selected ({selectedShiftIds.length})
+                                </Button>
+
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+                                    onClick={() => {
+                                        setIsBulkModeActive(false);
+                                        setSelectedShiftIds([]);
+                                    }}
+                                    aria-label="Close bulk mode"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Offer List */}
                     <div
-                        className="flex-1 overflow-y-auto px-5 pb-5 space-y-3 min-h-0"
+                        className="flex-1 overflow-y-auto px-5 pb-5 min-h-0"
                         role="tabpanel"
                         id={panelId}
                         aria-labelledby={`offers-tab-${activeTab.toLowerCase()}`}
                     >
-                        {isFetchingFirstPage ? (
-                            [1, 2, 3].map((i) => (
-                                <Skeleton key={i} className="h-52 w-full rounded-xl" />
-                            ))
-                        ) : hasFailed ? (
+                        {hasFailed ? (
                             <div className="flex flex-col items-center justify-center py-14 text-center gap-3">
                                 <AlertTriangle className="h-8 w-8 text-amber-500" aria-hidden="true" />
                                 <div>
@@ -510,7 +859,7 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                     Try again
                                 </Button>
                             </div>
-                        ) : currentOffers.length === 0 ? (
+                        ) : currentOffers.length === 0 && !isFetchingFirstPage ? (
                             <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
                                 <Inbox className="h-8 w-8 stroke-[1.5] text-muted-foreground" aria-hidden="true" />
                                 <p className={text.overline}>
@@ -519,18 +868,225 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                         : `No ${activeTab.toLowerCase()} offers`}
                                 </p>
                             </div>
+                        ) : viewMode === 'table' ? (
+                            /* Desktop & Responsive Table: Traditional sortable table exactly like MyBids grid */
+                            <div className="overflow-x-auto border border-border/60 rounded-xl bg-card">
+                                <Table className="text-foreground min-w-[900px]">
+                                    <TableHeader sticky>
+                                        <TableRow>
+                                            {isBulkModeActive && activeTab === 'Pending' && (
+                                                <TableHead className="w-[40px]">
+                                                    <Checkbox
+                                                        checked={
+                                                            actionableOffers.length > 0 &&
+                                                            actionableOffers.every((o) => selectedShiftIds.includes(o.shift_id))
+                                                        }
+                                                        onCheckedChange={(checked) => handleSelectAll(checked === true)}
+                                                        aria-label="Select all offers"
+                                                    />
+                                                </TableHead>
+                                            )}
+                                            <SortableTableHeader sortKey="department" currentSort={offersTableSort.sortConfig} onSort={offersTableSort.handleSort}>Department</SortableTableHeader>
+                                            <SortableTableHeader sortKey="subDepartment" currentSort={offersTableSort.sortConfig} onSort={offersTableSort.handleSort}>SubDepartment</SortableTableHeader>
+                                            <SortableTableHeader sortKey="group" currentSort={offersTableSort.sortConfig} onSort={offersTableSort.handleSort}>Group</SortableTableHeader>
+                                            <SortableTableHeader sortKey="subGroupName" currentSort={offersTableSort.sortConfig} onSort={offersTableSort.handleSort}>SubGroup</SortableTableHeader>
+                                            <SortableTableHeader sortKey="role" currentSort={offersTableSort.sortConfig} onSort={offersTableSort.handleSort}>Role</SortableTableHeader>
+                                            <SortableTableHeader sortKey="date" currentSort={offersTableSort.sortConfig} onSort={offersTableSort.handleSort}>Date</SortableTableHeader>
+                                            <SortableTableHeader sortKey="startTime" currentSort={offersTableSort.sortConfig} onSort={offersTableSort.handleSort}>Time</SortableTableHeader>
+                                            <SortableTableHeader sortKey="netLength" currentSort={offersTableSort.sortConfig} onSort={offersTableSort.handleSort}>Net</SortableTableHeader>
+                                            <TableHead className="w-[120px]">Expires in</TableHead>
+                                            <TableHead className="w-[180px]">Action</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    {isFetchingFirstPage ? (
+                                        <TableBody>
+                                            {[1, 2, 3, 4].map((i) => (
+                                                <TableRow key={i}>
+                                                    <TableCell colSpan={isBulkModeActive && activeTab === 'Pending' ? 11 : 10}>
+                                                        <Skeleton className="h-9 w-full rounded" />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    ) : (
+                                        groupedOffers.map((g) => (
+                                            <TableBody key={g.key}>
+                                                <tr>
+                                                    <td colSpan={isBulkModeActive && activeTab === 'Pending' ? 11 : 10} className={tableTokens.band}>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-foreground/80">{g.label}</span>
+                                                            <span className="tabular-nums">{g.items.length}</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {g.items.map((item) => {
+                                                    const isProcessingThis = processingId === item.shift_id;
+                                                    const isExpired = item.deadlineMs ? now >= item.deadlineMs : false;
+                                                    const isActionDisabled = !!processingId || item.isLocked || isExpired;
+                                                    return (
+                                                        <TableRow
+                                                            key={item.id}
+                                                            className={cn(
+                                                                getRowClass(item.groupType, item.group || item.department),
+                                                                isBulkModeActive && activeTab === 'Pending' && !isActionDisabled && 'cursor-pointer'
+                                                            )}
+                                                            onClick={() => {
+                                                                if (isBulkModeActive && activeTab === 'Pending' && !isActionDisabled) {
+                                                                    handleToggleSelect(item.shift_id);
+                                                                }
+                                                            }}
+                                                        >
+                                                            {isBulkModeActive && activeTab === 'Pending' && (
+                                                                <TableCell className="w-[40px]" onClick={(e) => e.stopPropagation()}>
+                                                                    <Checkbox
+                                                                        checked={selectedShiftIds.includes(item.shift_id)}
+                                                                        disabled={isActionDisabled}
+                                                                        onCheckedChange={() => handleToggleSelect(item.shift_id)}
+                                                                        aria-label={`Select offer for ${item.role} on ${item.date}`}
+                                                                    />
+                                                                </TableCell>
+                                                            )}
+                                                            <TableCell className="font-medium">{item.department}</TableCell>
+                                                            <TableCell className="text-muted-foreground/80">{item.subDepartment}</TableCell>
+                                                            <TableCell className="font-medium text-foreground/80">{item.group}</TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", item.subGroupColor || 'bg-slate-400')} />
+                                                                    <span>{item.subGroupName}</span>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="font-bold text-primary">{item.role}</TableCell>
+                                                            <TableCell>{formatCalendarDate(item.date, 'EEE d MMM')}</TableCell>
+                                                            <TableCell className="tabular-nums font-mono">{item.startTime}–{item.endTime}</TableCell>
+                                                            <TableCell className="font-mono text-muted-foreground">
+                                                                {(() => {
+                                                                    const h = Math.floor(item.netLength / 60);
+                                                                    const m = Math.round(item.netLength % 60);
+                                                                    return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
+                                                                })()}
+                                                            </TableCell>
+                                                            <TableCell className="font-mono tabular-nums">
+                                                                {(() => {
+                                                                    if (item.status !== 'Pending') {
+                                                                        return <span className="text-muted-foreground/50">—</span>;
+                                                                    }
+                                                                    if (!item.deadlineMs) return <span className="text-muted-foreground/50">—</span>;
+                                                                    const totalMs = item.deadlineMs - now;
+                                                                    if (totalMs <= 0 || item.isLocked) {
+                                                                        return <span className="text-muted-foreground/50 italic">Closed</span>;
+                                                                    }
+                                                                    const tr = calculateTimeRemaining(new Date(item.deadlineMs).toISOString());
+                                                                    if (tr.isExpired) return <span className="text-muted-foreground/50 italic">Closed</span>;
+                                                                    const urgent = totalMs <= 24 * 60 * 60 * 1000;
+                                                                    return (
+                                                                        <span className={cn(urgent ? 'text-amber-500 font-bold' : 'text-foreground/70')}>
+                                                                            {formatTimeRemainingNoSeconds(tr)}
+                                                                        </span>
+                                                                    );
+                                                                })()}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {item.status === 'Pending' && (
+                                                                    (item.isLocked || isExpired) ? (
+                                                                        <span className="text-[11px] text-muted-foreground flex items-center gap-1 font-medium italic">
+                                                                            <Ban size={12} aria-hidden="true" /> Window Closed
+                                                                        </span>
+                                                                    ) : (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Button
+                                                                                size="sm"
+                                                                                className="h-8 text-[11px] font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                                                                                disabled={isActionDisabled}
+                                                                                onClick={() => handleAccept(item.shift_id)}
+                                                                                aria-label={`Accept ${item.role} on ${item.date}`}
+                                                                            >
+                                                                                {isProcessingThis ? (
+                                                                                    <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />
+                                                                                ) : (
+                                                                                    <CheckCircle className="mr-1 h-3 w-3" aria-hidden="true" />
+                                                                                )}
+                                                                                Accept
+                                                                            </Button>
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                className="h-8 text-[11px] font-black uppercase tracking-wider text-rose-500 hover:text-rose-600 border-rose-500/30 hover:bg-rose-500/10 shadow-sm"
+                                                                                disabled={isActionDisabled}
+                                                                                onClick={() => setShowDeclineConfirm(item.shift_id)}
+                                                                                aria-label={`Decline ${item.role} on ${item.date}`}
+                                                                            >
+                                                                                <XCircle className="mr-1 h-3 w-3" aria-hidden="true" />
+                                                                                Decline
+                                                                            </Button>
+                                                                        </div>
+                                                                    )
+                                                                )}
+                                                                {item.status === 'Accepted' && (
+                                                                    <span className="text-[11px] text-emerald-500 flex items-center gap-1 font-bold">
+                                                                        <CheckCircle size={14} aria-hidden="true" /> Accepted
+                                                                    </span>
+                                                                )}
+                                                                {item.status === 'Declined' && (
+                                                                    <span className="text-[11px] text-rose-500 flex items-center gap-1 font-bold">
+                                                                        <XCircle size={14} aria-hidden="true" /> Declined
+                                                                    </span>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        ))
+                                    )}
+                                </Table>
+                            </div>
                         ) : (
-                            currentOffers.map((offer) => (
-                                <OfferItem
-                                    key={offer.id}
-                                    offer={offer}
-                                recipientName={recipientName}
-                                    showActions={activeTab === 'Pending'}
-                                    processingId={processingId}
-                                    onAccept={handleAccept}
-                                    onDeclineRequest={(id) => setShowDeclineConfirm(id)}
-                                />
-                            ))
+                            /* Card view: responsive grid */
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {isFetchingFirstPage ? (
+                                    [1, 2, 3].map((i) => (
+                                        <Skeleton key={i} className="h-52 w-full rounded-xl" />
+                                    ))
+                                ) : (
+                                    currentOffers.map((offer) => {
+                                        const isLocked = isShiftLocked(offer.shift.shift_date, offer.shift.start_time);
+                                        const deadline = resolveOfferDeadline(offer);
+                                        const isExpired = deadline ? now >= deadline : false;
+                                        const isActionDisabled = !!processingId || isLocked || isExpired;
+                                        return (
+                                            <div
+                                                key={offer.id}
+                                                className={cn(
+                                                    'relative rounded-2xl transition-all',
+                                                    isBulkModeActive && activeTab === 'Pending' && selectedShiftIds.includes(offer.shift_id) && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                                                )}
+                                            >
+                                                {isBulkModeActive && activeTab === 'Pending' && (
+                                                    <div
+                                                        className="absolute top-3 right-3 z-20 bg-background/80 backdrop-blur-sm p-1.5 rounded-lg border border-border/50 shadow-sm"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <Checkbox
+                                                            checked={selectedShiftIds.includes(offer.shift_id)}
+                                                            disabled={isActionDisabled}
+                                                            onCheckedChange={() => handleToggleSelect(offer.shift_id)}
+                                                            aria-label={`Select offer for ${offer.shift.roles?.name || 'Shift'} on ${offer.shift.shift_date}`}
+                                                        />
+                                                    </div>
+                                                )}
+                                                <OfferItem
+                                                    offer={offer}
+                                                    recipientName={recipientName}
+                                                    showActions={activeTab === 'Pending'}
+                                                    processingId={processingId}
+                                                    onAccept={handleAccept}
+                                                    onDeclineRequest={(id) => setShowDeclineConfirm(id)}
+                                                />
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
                         )}
                     </div>
                 </DialogContent>
@@ -570,6 +1126,43 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                 <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
                             ) : null}
                             Decline
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Bulk Decline Confirmation */}
+            <AlertDialog
+                open={showBulkDeclineConfirm}
+                onOpenChange={setShowBulkDeclineConfirm}
+            >
+                <AlertDialogContent className="z-[200]" aria-describedby={undefined}>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className={cn(text.title, 'text-foreground')}>
+                            Decline {selectedShiftIds.length} Shift Offer{selectedShiftIds.length > 1 ? 's' : ''}?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className={text.bodyMuted}>
+                            These shifts will be returned to the pool for bidding. This cannot be
+                            undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="mt-6 gap-3">
+                        <AlertDialogCancel className={cn(text.label, touch.target, 'uppercase rounded-xl')}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            className={cn(
+                                text.label,
+                                touch.target,
+                                'bg-destructive text-destructive-foreground uppercase rounded-xl',
+                            )}
+                            onClick={handleBulkDecline}
+                            disabled={isProcessingBulk}
+                        >
+                            {isProcessingBulk ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
+                            ) : null}
+                            Decline ({selectedShiftIds.length})
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

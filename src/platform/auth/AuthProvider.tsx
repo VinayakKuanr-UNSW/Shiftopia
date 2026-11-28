@@ -18,6 +18,8 @@ import {
   clearOrganizationJurisdictions,
   registerOrganizationJurisdictions,
 } from '@/modules/core/lib/jurisdiction-registry';
+import { setActiveVenue, setVenues } from '@/modules/core/lib/venue';
+import { loadVenues } from '@/modules/core/lib/venue.api';
 
 // Re-export types for backward compatibility with existing imports
 
@@ -159,6 +161,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // a profile whose token the server has already rejected.
     clearCachedProfile();
     clearOrganizationJurisdictions();
+    setVenues([]);
+    setActiveVenue(null);
     setUser(null);
     setPermissionObject(null);
     setActiveContractId(null);
@@ -170,7 +174,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const fetchPermissions = async () => {
     setIsPermissionsLoading(true);
     try {
-      const permissions = await authService.fetchPermissions();
+      // The venue registry (each organization's timezone and holiday
+      // jurisdiction) loads beside the permissions, so it has landed by the
+      // time the scope-gated pages render and read it.
+      const [permissions] = await Promise.all([authService.fetchPermissions(), loadVenues()]);
       if (permissions) {
         setPermissionObject(permissions);
         console.log('[Auth] Permissions loaded:', {
@@ -367,6 +374,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // from cache on a device with no network.
     clearCachedProfile();
     clearOrganizationJurisdictions();
+    setVenues([]);
+    setActiveVenue(null);
     setUser(null);
     setActiveContractId(null);
     setActiveCertificateId(null);
@@ -495,6 +504,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     return DEFAULT_JURISDICTION;
   }, [accessScope, activeContract, organizationJurisdictions]);
+
+  // Written during render, not in an effect: children read the active venue
+  // while they render, and effects run child-first. Idempotent.
+  setActiveVenue(accessScope?.organizationId);
 
   return (
     <AuthContext.Provider

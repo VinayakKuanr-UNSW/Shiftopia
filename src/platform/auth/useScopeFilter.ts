@@ -9,6 +9,7 @@ import {
     reconcileScope,
     scopeKeyOf,
     scopeTreeFor,
+    treeInOrganization,
     type ScopeMode,
 } from './scope-selection';
 import type { ScopeSelection, ScopeTree } from './types';
@@ -60,7 +61,15 @@ export function useScopeFilter(
     const savedScope = mode === 'personal' ? personalScope : managerialScope;
     const setSavedScope = mode === 'personal' ? setPersonalScope : setManagerialScope;
 
-    const scopeTree = useMemo(() => scopeTreeFor(permissionObject, mode), [permissionObject, mode]);
+    // Several organizations ⇒ the one chosen in the account menu; dependent
+    // choices reset on a switch because the saved selection is reconciled below.
+    const chosenOrganizationId = (context?.organizations?.length ?? 0) > 1
+        ? context?.accessScope?.organizationId ?? null
+        : null;
+    const scopeTree = useMemo(
+        () => treeInOrganization(scopeTreeFor(permissionObject, mode), chosenOrganizationId),
+        [permissionObject, mode, chosenOrganizationId],
+    );
 
     // The saved choice, kept to what this person's contracts reach now.
     const scope = useMemo(() => reconcileScope(savedScope, scopeTree), [savedScope, scopeTree]);

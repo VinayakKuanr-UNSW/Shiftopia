@@ -2,7 +2,7 @@ import * as React from 'react';
 import { format } from 'date-fns';
 
 import { cn } from '@/modules/core/lib/utils';
-import { isSydneyToday } from '@/modules/core/lib/date.utils';
+import { isTodayInTimezone } from '@/modules/core/lib/date.utils';
 import { getPublicHolidayName, isPublicHoliday } from '@/modules/core/lib/holidays';
 import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { getWeekDays } from '@/modules/core/lib/date/week';
@@ -73,7 +73,7 @@ export function WeekStrip({
       )}
 
       {days.map((day) => {
-        const isToday = isSydneyToday(day);
+        const isToday = isTodayInTimezone(day);
         const holidayName = isPublicHoliday(day, jurisdiction) ? getPublicHolidayName(day, jurisdiction) : null;
         const isSelected = selected ? format(selected, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd') : false;
 

@@ -614,3 +614,22 @@ def test_fatigue_plugin_active_and_balances_circadian_load_in_ft_standard():
     }
     assert counts == {"ft1": 2, "ft2": 2}
     assert out.pillars["fatigue"]["critical"] == 0
+    # Both FT staff fulfilled equal 2 shifts (~912m each against target) -> top workload balance
+    assert out.pillars["fairness"]["score"] == 100
+
+
+def test_ft_workload_balance_scorecard_reflects_unequal_fulfillment():
+    """Scorecard improvement: When FT staff have unequal contract fulfillment ratios,
+    the workload balance score reflects that spread rather than blind 100."""
+    shifts = [make_ft_shift(f"d{i}", date_offset("2026-06-01", i)) for i in range(5)]
+    ft1 = make_ft_employee("ft1", hourly_rate=20.0, min_contract_minutes=0, max_weekly_minutes=2280)
+    ft2 = make_ft_employee("ft2", hourly_rate=50.0, min_contract_minutes=0, max_weekly_minutes=2280)
+
+    out = solve(shifts, [ft1, ft2], constraints=ft_constraints(min_rest_minutes=480))
+    # ft1 gets all 5 shifts due to cheaper cost, ft2 gets 0
+    assert len(out.assignments) == 5
+    assert out.pillars is not None
+    # 5 shifts to ft1 vs 0 to ft2 -> workload balance penalized
+    assert out.pillars["fairness"]["score"] < 100
+    assert out.pillars["fairness"]["spread_minutes"] > 0
+

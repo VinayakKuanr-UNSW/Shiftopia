@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
-import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import type { TimesheetRow } from '../../model/timesheet.types';
 
 // ── Column definition (shared between both exporters) ─────────────────────────
@@ -134,7 +135,7 @@ export async function exportTimesheetPDF(entries: TimesheetRow[], date: Date): P
             doc.setFontSize(7);
             doc.setTextColor(150);
             doc.text(
-                `Page ${data.pageNumber} of ${pageCount}  ·  Exported ${formatInTimezone(new Date(), SYDNEY_TZ, 'dd MMM yyyy, HH:mm')} AEST`,
+                `Page ${data.pageNumber} of ${pageCount}  ·  Exported ${formatInTimezone(new Date(), venueZone(), 'dd MMM yyyy, HH:mm')} (${venueZone()})`,
                 data.settings.margin.left,
                 doc.internal.pageSize.height - 6,
             );

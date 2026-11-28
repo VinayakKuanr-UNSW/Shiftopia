@@ -1,47 +1,37 @@
-import { useState } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import {
     Dialog,
     DialogContent,
-    DialogOverlay,
     DialogTitle,
     DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
+import { tableTokens } from '@/modules/core/ui/primitives/table';
 import {
     Loader2,
     CheckCircle2,
     AlertTriangle,
-    XCircle,
     Cpu,
-    ShieldCheck,
-    Zap,
-    Users,
-    AlertCircle,
-    WifiOff,
-    Calendar,
-    ArrowUpDown,
-    ChevronUp,
+    Calendar as CalendarIcon,
     ChevronDown,
+    Check,
     Download,
-    HelpCircle,
+    Search,
+    ArrowUpDown,
+    X,
 } from 'lucide-react';
-import { Input } from '@/modules/core/ui/primitives/input';
-import { Label } from '@/modules/core/ui/primitives/label';
-import { formatCalendarDate } from '@/modules/core/lib/date.utils';
+import { parseISO, format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
+import { DatePicker } from '@/modules/core/ui/calendar';
+import { CommandSelector } from '@/modules/users/ui/components/CommandSelector';
 import { AutoSchedulerInsights } from './AutoSchedulerInsights';
 import { AutoSchedulerMobileFlow } from './AutoSchedulerMobileFlow';
-import { useAutoScheduler, sortEmployeeGroups, complianceRateOf, SCHEDULER_MODE_OPTIONS } from './useAutoScheduler';
-import type { SortField, SortDirection } from './useAutoScheduler';
-import { BLOCKER_LABELS } from '@/modules/scheduling/audit/auditor';
+import { useAutoScheduler, complianceRateOf, SCHEDULER_MODE_OPTIONS } from './useAutoScheduler';
 import type { ShiftMeta, EmployeeMeta } from '@/modules/scheduling';
 import { type ShiftFilters } from '@/modules/rosters/state/useRosterShifts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/modules/core/ui/primitives/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/modules/core/ui/primitives/popover";
 
 // =============================================================================
 // TYPES & PROPS
@@ -61,14 +51,14 @@ interface AutoSchedulerModalProps {
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-    'L0': '#64748b', // Slate
-    'L1': '#3b82f6', // Blue
-    'L2': '#10b981', // Emerald
-    'L3': '#f59e0b', // Amber
-    'L4': '#ef4444', // Red
-    'L5': '#8b5cf6', // Violet
-    'L6': '#ec4899', // Pink
-    'L7': '#f97316', // Orange
+    'L0': '#64748b',
+    'L1': '#3b82f6',
+    'L2': '#10b981',
+    'L3': '#f59e0b',
+    'L4': '#ef4444',
+    'L5': '#8b5cf6',
+    'L6': '#ec4899',
+    'L7': '#f97316',
     'default': '#94a3b8'
 };
 
@@ -78,7 +68,6 @@ const getRoleColor = (roleName: string) => {
     const match = roleName.match(/\(L([0-7])\)/i);
     if (match) return LEVEL_COLORS[`L${match[1].toUpperCase()}`] || LEVEL_COLORS.default;
     
-    // Fallback for names without L pattern
     let hash = 0;
     for (let i = 0; i < roleName.length; i++) {
         hash = roleName.charCodeAt(i) + ((hash << 5) - hash);
@@ -86,11 +75,28 @@ const getRoleColor = (roleName: string) => {
     return ROLE_COLORS[Math.abs(hash) % ROLE_COLORS.length];
 };
 
-// =============================================================================
-// SUB-COMPONENTS (PREMIUM DESIGN)
-// =============================================================================
-
-
+const slideVariants = {
+    initial: (custom: number) => ({
+        opacity: 0,
+        x: custom > 0 ? 28 : -28,
+    }),
+    animate: {
+        opacity: 1,
+        x: 0,
+        transition: {
+            duration: 0.22,
+            ease: [0.16, 1, 0.3, 1],
+        },
+    },
+    exit: (custom: number) => ({
+        opacity: 0,
+        x: custom > 0 ? -28 : 28,
+        transition: {
+            duration: 0.18,
+            ease: [0.16, 1, 0.3, 1],
+        },
+    }),
+};
 
 // =============================================================================
 // MAIN MODAL
@@ -106,8 +112,6 @@ export function AutoSchedulerModal({
     queryFilters,
     initialRange,
 }: AutoSchedulerModalProps) {
-    // All run behaviour lives in useAutoScheduler so the desktop console below and
-    // the mobile flow are two views of ONE pipeline. Only view state stays here.
     const {
         health,
         phase,
@@ -132,7 +136,6 @@ export function AutoSchedulerModal({
         preRunCapacity,
         canRun,
         runBlockedReason,
-        totals,
         employeeGroups,
         handleRun,
         handleCancel,
@@ -142,32 +145,18 @@ export function AutoSchedulerModal({
     } = useAutoScheduler({ open, onClose, onComplete, shifts: initialShifts, employees, organizationId, queryFilters, initialRange });
 
     const isMobile = useIsMobile();
-    const [sortField, setSortField] = useState<SortField>('name');
-    const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-    const [hoveredDistId, setHoveredDistId] = useState<string | null>(null);
 
-    /* ── MOBILE ──────────────────────────────────────────────────────────
-       A 320px control rail beside a results canvas has nowhere to go on a
-       phone; shrinking it gives two unreadable columns. The mobile flow is a
-       full-screen, one-thing-at-a-time sequence over the same pipeline. */
+    /* ── MOBILE ── */
     if (isMobile) {
         return (
             <Dialog open={open} onOpenChange={o => !o && handleClose()}>
                 <DialogContent
                     hideClose
                     overlayClassName="bg-background/80 backdrop-blur-sm"
-                    // The mobile bottom nav is z-[60] and this dialog is z-50, so
-                    // without this the nav floats OVER the sticky primary action.
-                    // BottomNavbar watches for this attribute and slides itself out.
                     data-hide-bottom-nav="true"
                     className={cn(
                         'left-0 top-0 flex h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0',
                         'flex-col gap-0 overflow-hidden rounded-none border-0 bg-background p-0 text-foreground',
-                        // The built-in close sits under our own app-bar X.
-                        // DialogContent's defaults slide a *centred* panel in from
-                        // left-1/2 / top-48%. Applied to a full-screen surface that
-                        // reads as flying in from off-corner, so the translate legs
-                        // are zeroed and the panel just fades in.
                         'data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0',
                         'data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0',
                         'sm:rounded-none',
@@ -213,857 +202,757 @@ export function AutoSchedulerModal({
         );
     }
 
+    const isReviewMode = ['reviewing', 'done'].includes(phase) && !!result;
+    const isRunning = phase === 'optimizing' || phase === 'validating';
+    const activeModeOption = SCHEDULER_MODE_OPTIONS.find(o => o.value === mode) ?? SCHEDULER_MODE_OPTIONS[0];
+
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterCompliance, setFilterCompliance] = useState<'all' | 'compliant' | 'warning'>('all');
+    const [tableSortField, setTableSortField] = useState<'name' | 'shifts' | 'hours' | 'compliance' | 'fatigue'>('name');
+    const [tableSortDirection, setTableSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [expandedStaffIds, setExpandedStaffIds] = useState<Set<string>>(new Set());
+
+    const toggleExpandStaff = (id: string) => {
+        setExpandedStaffIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleTableSort = (field: 'name' | 'shifts' | 'hours' | 'compliance' | 'fatigue') => {
+        if (tableSortField === field) {
+            setTableSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setTableSortField(field);
+            setTableSortDirection('asc');
+        }
+    };
+
+    const parseTimeToMinutes = (t: string) => {
+        const parts = t.split(':').map(Number);
+        return (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+    };
+
+    const calculateShiftHours = (startTime: string, endTime: string) => {
+        let startMin = parseTimeToMinutes(startTime);
+        let endMin = parseTimeToMinutes(endTime);
+        if (endMin <= startMin) endMin += 24 * 60;
+        return Math.round(((endMin - startMin) / 60) * 10) / 10;
+    };
+
+    const staffGridData = useMemo(() => {
+        return employeeGroups.map(group => {
+            const compliancePct = Math.round(complianceRateOf(group) * 100);
+            const totalHours = group.proposals.reduce(
+                (sum, p) => sum + calculateShiftHours(p.startTime, p.endTime),
+                0
+            );
+            return {
+                ...group,
+                compliancePct,
+                totalHours,
+            };
+        });
+    }, [employeeGroups]);
+
+    const compliantCount = staffGridData.filter(g => g.compliancePct === 100).length;
+    const warningCount = staffGridData.filter(g => g.compliancePct < 100).length;
+
+    const filteredAndSortedStaff = useMemo(() => {
+        let list = staffGridData;
+
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase().trim();
+            list = list.filter(g =>
+                g.name.toLowerCase().includes(q) ||
+                g.employmentType.toLowerCase().includes(q) ||
+                g.assignedRoles.some(r => r.toLowerCase().includes(q))
+            );
+        }
+
+        if (filterCompliance === 'compliant') {
+            list = list.filter(g => g.compliancePct === 100);
+        } else if (filterCompliance === 'warning') {
+            list = list.filter(g => g.compliancePct < 100);
+        }
+
+        return [...list].sort((a, b) => {
+            let diff = 0;
+            switch (tableSortField) {
+                case 'name':
+                    diff = a.name.localeCompare(b.name);
+                    break;
+                case 'shifts':
+                    diff = a.proposals.length - b.proposals.length;
+                    break;
+                case 'hours':
+                    diff = a.totalHours - b.totalHours;
+                    break;
+                case 'compliance':
+                    diff = a.compliancePct - b.compliancePct;
+                    break;
+                case 'fatigue':
+                    diff = a.avgFatigue - b.avgFatigue;
+                    break;
+                default:
+                    diff = 0;
+            }
+            return tableSortDirection === 'asc' ? diff : -diff;
+        });
+    }, [staffGridData, searchQuery, filterCompliance, tableSortField, tableSortDirection]);
+
     return (
         <Dialog open={open} onOpenChange={o => !o && handleClose()}>
-            <DialogOverlay className="bg-background/80 backdrop-blur-2xl" />
             <DialogContent
-                size="full"
-                className="h-[min(900px,90vh)] p-0 overflow-hidden flex flex-row"
+                hideClose={isReviewMode}
+                size={isReviewMode ? 'full' : 'md'}
+                overlayClassName="bg-black/60 dark:bg-black/75 backdrop-blur-md"
+                style={isReviewMode ? {
+                    width: 'min(1380px, 94vw)',
+                    height: 'min(880px, 88dvh)',
+                    maxHeight: '88dvh',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    padding: 0,
+                    overflow: 'hidden',
+                } : undefined}
+                className={cn(
+                    isReviewMode
+                        ? "!p-0 !gap-0 !overflow-hidden flex flex-col border border-border/80 bg-card text-card-foreground shadow-2xl"
+                        : "max-w-[560px] w-full rounded-3xl p-0 overflow-hidden border border-border/80 bg-card text-card-foreground shadow-2xl transition-all duration-300"
+                )}
+                aria-labelledby="autoscheduler-modal-title"
+                aria-describedby="autoscheduler-modal-description"
             >
-                <TooltipProvider delayDuration={0}>
-                
-                {/* ── LEFT SIDEBAR: CONTROL & METRICS ─────────────────────────── */}
-                <div className="w-[320px] flex-shrink-0 border-r border-border/50 bg-muted/20 flex flex-col p-8 overflow-y-auto">
-                    {/* Brand/Identity */}
-                    <div className="flex items-center gap-3 mb-10">
-                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shadow-lg shadow-primary/20">
-                            <Cpu className="h-5 w-5" strokeWidth={2} />
-                        </div>
-                        <div className="flex flex-col">
-                            <DialogTitle>Auto-Schedule</DialogTitle>
-                            <DialogDescription className="sr-only">Evaluate and audit shift assignments generated by the V8 optimizer.</DialogDescription>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                                {!health ? (
-                                    <span className="text-[11px] font-bold text-muted-foreground/40 uppercase tracking-widest animate-pulse">Syncing...</span>
-                                ) : health.available ? (
-                                    <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
-                                        <div className="h-1 w-1 rounded-full bg-emerald-500" /> V8.0 Active
-                                    </span>
-                                ) : (
-                                    <span className="text-[11px] font-bold text-red-500 uppercase tracking-widest">Offline</span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Pipeline Progress (Vertical) */}
-                    <div className="space-y-6 mb-12">
-                        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50 mb-4">Pipeline Status</div>
-                        {/* `awaitingUser` separates "the machine is working" from
-                            "it is your turn". The run ends at `reviewing` — the
-                            proposals are ready and nothing further happens until
-                            Commit is pressed — but the indicator put a spinner on
-                            whichever step was active, so the last one spun forever
-                            and read as a hang. */}
-                        {[
-                            { id: 'optimizing', label: 'Optimization', icon: Cpu, active: phase === 'optimizing', done: ['validating', 'reviewing', 'done'].includes(phase), awaitingUser: false },
-                            { id: 'validating', label: 'Compliance', icon: ShieldCheck, active: phase === 'validating', done: ['reviewing', 'done'].includes(phase), awaitingUser: false },
-                            { id: 'reviewing',  label: 'Review & Audit', icon: Users, active: phase === 'reviewing', done: phase === 'done', awaitingUser: true },
-                        ].map((step, idx, arr) => (
-                            <div key={step.id} className="relative flex items-center gap-4">
-                                {idx < arr.length - 1 && (
-                                    <div className={cn("absolute left-4 top-8 w-px h-6 bg-border/50", step.done && "bg-emerald-500/20")} />
-                                )}
-                                <div className={cn(
-                                    "h-8 w-8 rounded-lg flex items-center justify-center transition-all",
-                                    step.done ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" :
-                                    step.active && step.awaitingUser ? "bg-primary/10 text-primary ring-2 ring-primary/20" :
-                                    step.active ? "bg-primary/10 text-primary animate-pulse ring-2 ring-primary/20" :
-                                    "bg-muted text-muted-foreground/40"
-                                )}>
-                                    {step.active && !step.awaitingUser
-                                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                                        : <step.icon className="h-4 w-4" />}
+                <AnimatePresence mode="wait" initial={false}>
+                        {/* ─────────────────────────────────────────────────────────────
+                            SCREEN 1: COMPUTE SCHEDULE (Configuration & Pre-Check)
+                           ───────────────────────────────────────────────────────────── */}
+                        {phase === 'idle' && (
+                            <motion.div
+                                key="screen-config"
+                                custom={-1}
+                                variants={slideVariants}
+                                initial="initial"
+                                animate="animate"
+                                exit="exit"
+                                className="p-7 space-y-6"
+                            >
+                                {/* Header (Accessible Dialog Title & Subtitle) */}
+                                <div className="space-y-1 pr-8">
+                                    <DialogTitle id="autoscheduler-modal-title" className="text-[20px] font-bold tracking-tight text-foreground">
+                                        Compute Schedule
+                                    </DialogTitle>
+                                    <DialogDescription id="autoscheduler-modal-description" className="text-[14px] text-muted-foreground leading-relaxed">
+                                        Configure the scheduling period and select an employment mode.
+                                    </DialogDescription>
                                 </div>
-                                <span className={cn("text-[11px] font-bold uppercase tracking-widest", step.active ? "text-foreground" : "text-muted-foreground/60")}>
-                                    {step.active && step.awaitingUser ? 'Review & Commit' : step.label}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
 
-                    <div className="space-y-6 mb-6">
-                        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Staff Mode</div>
-                        <div className="space-y-2">
-                            <div className="grid grid-cols-1 gap-1.5">
-                                {SCHEDULER_MODE_OPTIONS.map(opt => {
-                                    const active = mode === opt.value;
-                                    return (
-                                        <button
-                                            key={opt.value}
-                                            type="button"
-                                            disabled={phase === 'optimizing' || phase === 'validating'}
-                                            aria-pressed={active}
-                                            onClick={() => setMode(opt.value)}
-                                            className={cn(
-                                                'flex items-center justify-between rounded-xl border px-3 py-2 text-left text-[11px] font-bold transition-all disabled:opacity-50',
-                                                active
-                                                    ? 'border-primary/40 bg-primary/10 text-primary shadow-sm'
-                                                    : 'border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-muted/40',
-                                            )}
-                                        >
-                                            <span>{opt.label}</span>
-                                            {active && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            <p className="text-[11px] leading-snug text-muted-foreground/70 px-0.5">
-                                {SCHEDULER_MODE_OPTIONS.find(o => o.value === mode)?.description}
-                            </p>
-                        </div>
-                    </div>
+                                <div className="h-px bg-border/60 w-full" aria-hidden="true" />
 
-                    <div className="space-y-6">
-                        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Active Window</div>
-                        <div className="space-y-3">
-                            <div className="space-y-1.5">
-                                <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 ml-1">Range Start</Label>
-                                <Input 
-                                    type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                                    className={cn(
-                                        "h-10 bg-background border-border rounded-xl text-[11px] font-bold focus:ring-primary/20",
-                                        validationError && "border-red-500/50 focus:ring-red-500/20"
+                                {/* Choose Mode Section (GlobalScopeFilter UI/UX via CommandSelector) */}
+                                <div className="space-y-1.5">
+                                    <CommandSelector
+                                        label="Mode"
+                                        placeholder="Select mode..."
+                                        value={mode}
+                                        onValueChange={(val) => setMode(val as any)}
+                                        options={SCHEDULER_MODE_OPTIONS.map(opt => ({
+                                            id: opt.value,
+                                            name: opt.label,
+                                        }))}
+                                        className="w-full"
+                                    />
+                                </div>
+
+                                {/* Scheduling Period Section (WCAG Accessible Fieldset) */}
+                                <fieldset className="space-y-2 border-0 p-0 m-0">
+                                    <legend className="text-[14px] font-bold text-foreground">Scheduling Period</legend>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <label
+                                                id="autoscheduler-start-date-label"
+                                                htmlFor="autoscheduler-start-date"
+                                                className="text-[12px] text-muted-foreground font-medium block"
+                                            >
+                                                Start Date
+                                            </label>
+                                            <DatePicker
+                                                value={startDate ? parseISO(startDate) : undefined}
+                                                onChange={(d) => setStartDate(format(d, 'yyyy-MM-dd'))}
+                                                label="Start Date"
+                                                displayFormat="dd/MM/yy"
+                                            >
+                                                <button
+                                                    type="button"
+                                                    id="autoscheduler-start-date"
+                                                    aria-labelledby="autoscheduler-start-date-label"
+                                                    aria-invalid={!!validationError}
+                                                    aria-errormessage={validationError ? "autoscheduler-date-error" : undefined}
+                                                    className="flex items-center justify-between w-full h-12 px-4 rounded-2xl bg-muted/40 hover:bg-muted/70 dark:bg-[#1a2130] dark:hover:bg-[#232c3f] border border-border/80 dark:border-white/10 text-foreground text-[14px] font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                                >
+                                                    <div className="flex items-center gap-2.5">
+                                                        <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                                                        <span>{startDate ? format(parseISO(startDate), 'dd/MM/yy') : 'Select date'}</span>
+                                                    </div>
+                                                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
+                                                </button>
+                                            </DatePicker>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label
+                                                id="autoscheduler-end-date-label"
+                                                htmlFor="autoscheduler-end-date"
+                                                className="text-[12px] text-muted-foreground font-medium block"
+                                            >
+                                                End Date
+                                            </label>
+                                            <DatePicker
+                                                value={endDate ? parseISO(endDate) : undefined}
+                                                onChange={(d) => setEndDate(format(d, 'yyyy-MM-dd'))}
+                                                label="End Date"
+                                                displayFormat="dd/MM/yy"
+                                            >
+                                                <button
+                                                    type="button"
+                                                    id="autoscheduler-end-date"
+                                                    aria-labelledby="autoscheduler-end-date-label"
+                                                    aria-invalid={!!validationError}
+                                                    aria-errormessage={validationError ? "autoscheduler-date-error" : undefined}
+                                                    className="flex items-center justify-between w-full h-12 px-4 rounded-2xl bg-muted/40 hover:bg-muted/70 dark:bg-[#1a2130] dark:hover:bg-[#232c3f] border border-border/80 dark:border-white/10 text-foreground text-[14px] font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                                >
+                                                    <div className="flex items-center gap-2.5">
+                                                        <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                                                        <span>{endDate ? format(parseISO(endDate), 'dd/MM/yy') : 'Select date'}</span>
+                                                    </div>
+                                                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
+                                                </button>
+                                            </DatePicker>
+                                        </div>
+                                    </div>
+                                    {validationError && (
+                                        <p id="autoscheduler-date-error" role="alert" className="text-[12px] text-destructive font-medium px-1 mt-1">
+                                            {validationError}
+                                        </p>
                                     )}
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 ml-1">Range End</Label>
-                                <Input 
-                                    type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                                    className={cn(
-                                        "h-10 bg-background border-border rounded-xl text-[11px] font-bold focus:ring-primary/20",
-                                        validationError && "border-red-500/50 focus:ring-red-500/20"
-                                    )}
-                                />
-                            </div>
-                            {validationError && (
-                                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-red-500/5 border border-red-500/20 text-red-500 mt-1">
-                                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                                    <span className="text-[11px] font-medium leading-tight">{validationError}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                                </fieldset>
 
-                    {/* Tuning Sidebar — Fixes 4, 5, 7 + Gap 9 (presets) */}
-                    <div className="space-y-6 mt-8">
-                        {/* Single-mode notice — the cost/fatigue/fairness/coverage
-                            sensitivity sliders + presets were removed in favour of one
-                            fixed lexicographic policy (coverage » wellbeing » cost).
-                            After a run, AutoSchedulerInsights shows the achieved scores
-                            and the Pareto alternatives. */}
-                        <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-1">
-                            <div className="flex items-center gap-1.5">
-                                <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">One optimal mode</span>
-                            </div>
-                            <p className="text-[11px] leading-relaxed text-muted-foreground">
-                                The scheduler optimises a fixed priority —{' '}
-                                <span className="font-semibold text-foreground">coverage → wellbeing → cost</span>{' '}
-                                — so there are no weights to tune. After it runs you'll see exactly how it
-                                scored on each, and what the alternatives would have cost.
-                            </p>
-                        </div>
-
-                        {/* Min-Rest-Hours + Relax-Blockers controls removed: rest is
-                            always the 10h EBA default (per-case 8h exemption handled
-                            elsewhere) and constraint relaxation is not exposed. The
-                            solver uses its hard defaults (600m rest, no relaxation). */}
-                    </div>
-
-                    {/* Quick Metrics Section (Only visible after run) */}
-                    {result && (
-                        <div className="mt-auto pt-8 border-t border-border/50 space-y-4">
-                            <div className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Solution Health</div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col">
-                                    <span className="text-[11px] font-black text-emerald-600/70 dark:text-emerald-500/60 uppercase">Passing</span>
-                                    <span className="text-[15px] font-black text-emerald-600 dark:text-emerald-400">{result.passing}</span>
-                                </div>
-                                <div className="p-3 rounded-xl bg-red-500/5 border border-red-500/20 flex flex-col">
-                                    <span className="text-[11px] font-black text-red-600/70 dark:text-red-500/60 uppercase">Failing</span>
-                                    <span className="text-[15px] font-black text-red-600 dark:text-red-400">{result.failing}</span>
-                                </div>
-                            </div>
-                            {/* Bug 1 fix: source Fairness from the SAME pillar score as the
-                                AutoSchedulerInsights card (workload-evenness, 0-100), so the two
-                                surfaces always agree. On the greedy fallback path pillars may be
-                                absent — there we show the average-utilization value but RELABEL it
-                                honestly ("Avg Utilization") so it is never mislabeled as Fairness. */}
-                            <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-between">
-                                <div className="flex flex-col">
-                                    <span className="text-[11px] font-black text-primary/60 uppercase">
-                                        {result.pillars
-                                            ? (result.mode === 'FT_STANDARD' || result.mode === 'FT_SECURITY' || result.mode === 'PT' || result.mode === 'FPT' ? 'Workload Balance' : 'Fairness')
-                                            : 'Avg Utilization'}
-                                    </span>
-                                    {result.pillars ? (
-                                        <span className="text-[15px] font-black text-primary">
-                                            {result.pillars.fairness.score.toFixed(0)}
-                                            <span className="text-[11px] font-bold text-primary/50">/100</span>
-                                        </span>
-                                    ) : (
-                                        <span className="text-[15px] font-black text-primary">{totals.fairness.toFixed(0)}%</span>
-                                    )}
-                                </div>
-                                <Zap className="h-5 w-5 text-primary/30" />
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* ── RIGHT CANVAS: CONTENT & RESULTS ─────────────────────────── */}
-                <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
-                    
-                    {/* Toolbar / Actions Header */}
-                    <div className="h-16 px-8 flex items-center justify-between border-b border-border/50 bg-muted/10">
-                        <div className="flex-1 flex items-center gap-4">
-                            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted border border-border">
-                                <Calendar className="h-3 w-3 text-muted-foreground/60" />
-                                <span className="text-[11px] font-bold text-muted-foreground tracking-tight">
-                                    {isShiftsLoading ? 'Loading shifts...' : `${filteredShifts.length} Shifts`} · {scopedEmployees.length} Staff
-                                </span>
-                            </div>
-                            {mode === 'FT_STANDARD' && (
-                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
-                                    FT Standard · cl 35.1
-                                </Badge>
-                            )}
-                            {mode === 'FT_SECURITY' && (
-                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
-                                    FT Security · Sch 3
-                                </Badge>
-                            )}
-                            {mode === 'PT' && (
-                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
-                                    Part-Time · cl 35.2
-                                </Badge>
-                            )}
-                            {mode === 'FPT' && (
-                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
-                                    Flexible Part-Time · cl 35.3
-                                </Badge>
-                            )}
-                            {mode === 'CASUAL' && (
-                                <Badge variant="outline" className="h-6 px-2.5 text-[11px] font-bold border-primary/30 bg-primary/10 text-primary">
-                                    Casual · cl 35.4
-                                </Badge>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            {result && (
-                                <Button onClick={handleDownloadAudit} disabled={isDownloading} variant="outline" className="h-8 gap-2 rounded-lg bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
-                                    {isDownloading
-                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                        : <Download className="h-3.5 w-3.5" />}
-                                    <span className="text-[11px] font-bold uppercase tracking-widest">
-                                        {isDownloading ? 'Preparing…' : 'Audit Report'}
-                                    </span>
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Scrollable Canvas Area */}
-                    <ScrollArea className="flex-1">
-                        <div className="p-8">
-                            <AnimatePresence mode="wait">
-                                {phase === 'idle' &&
-                                    <motion.div 
-                                        className="max-w-3xl mx-auto space-y-8 py-12"
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.95 }}
+                                {/* Dynamic Supply Indicator (Single Line, Icon + One Phrase Only, No AI slop) */}
+                                {filteredShifts.length === 0 ? (
+                                    <div
+                                        role="status"
+                                        aria-live="polite"
+                                        className="flex items-center h-11 px-4 rounded-xl border border-border/70 bg-muted/30 text-muted-foreground"
                                     >
-                                        <div className="flex flex-col items-center text-center gap-4 mb-12">
-                                            <div className="h-20 w-20 rounded-3xl bg-primary/10 flex items-center justify-center text-primary shadow-2xl shadow-primary/20 mb-4">
-                                                <Cpu className="h-10 w-10" />
-                                            </div>
-                                            <h3 className="text-[24px] font-black tracking-tight text-foreground">Ready to Optimize</h3>
-                                            <p className="text-muted-foreground/60 max-w-sm text-[13px] leading-relaxed">
-                                                The CP-SAT solver will evaluate billions of combinations to find the highest-fairness, lowest-fatigue roster possible.
-                                            </p>
-                                        </div>
+                                        <span className="text-[13px] font-medium">
+                                            No shifts in scope for this mode in this range.
+                                        </span>
+                                    </div>
+                                ) : preRunCapacity && preRunCapacity.deficitDays.length > 0 ? (
+                                    <div
+                                        role="alert"
+                                        aria-live="polite"
+                                        className="flex items-center gap-2.5 h-11 px-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                                    >
+                                        <AlertTriangle className="w-4 h-4 shrink-0 stroke-[2.5]" aria-hidden="true" />
+                                        <span className="text-[13px] font-semibold truncate">
+                                            Demand Warning: Deficit detected on {preRunCapacity.deficitDays.length} day{preRunCapacity.deficitDays.length === 1 ? '' : 's'}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div
+                                        role="status"
+                                        aria-live="polite"
+                                        className="flex items-center gap-2.5 h-11 px-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                    >
+                                        <Check className="w-4 h-4 shrink-0 stroke-[2.5]" aria-hidden="true" />
+                                        <span className="text-[13px] font-semibold truncate">
+                                            Optimal Supply Found
+                                        </span>
+                                    </div>
+                                )}
 
-                                        {preRunCapacity && preRunCapacity.deficitDays.length > 0 ? (
-                                            <div className="p-8 rounded-[2rem] bg-amber-500/10 border border-amber-500/20 space-y-4">
-                                                <div className="flex items-center gap-3">
-                                                    <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-500" />
-                                                    <span className="text-[15px] font-black text-amber-700 dark:text-amber-400">Demand Warning</span>
-                                                </div>
-                                                <p className="text-[13px] text-muted-foreground/80 leading-relaxed">
-                                                    Detected capacity shortages on <span className="text-amber-600 dark:text-amber-400 font-bold">{preRunCapacity.deficitDays.length} days</span>. This means some shifts will remain uncovered regardless of assignment strategy.
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <div className="p-8 rounded-[2rem] bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-6">
-                                                <div className="h-12 w-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-500 flex-shrink-0">
-                                                    <CheckCircle2 className="h-6 w-6" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="text-[15px] font-black text-emerald-700 dark:text-emerald-400">Optimal Supply Found</span>
-                                                    <span className="text-[11px] text-muted-foreground/60">Total workforce minutes satisfy current shift demand.</span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </motion.div>
-                                }
+                                {/* Action Button */}
+                                <Button
+                                    type="button"
+                                    onClick={handleRun}
+                                    disabled={!canRun}
+                                    aria-disabled={!canRun}
+                                    aria-label="Compute Solution"
+                                    title={runBlockedReason ?? undefined}
+                                    className={cn(
+                                        "w-full h-12 rounded-2xl font-bold text-[14px] tracking-wide transition-all active:scale-[0.99] gap-2.5",
+                                        "bg-blue-600 hover:bg-blue-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    )}
+                                >
+                                    <Cpu className="w-4 h-4" aria-hidden="true" />
+                                    Compute Solution
+                                </Button>
+                            </motion.div>
+                        )}
 
-                                {phase === 'optimizing' &&
-                                    <div className="py-24 flex flex-col items-center gap-8 max-w-xl mx-auto">
-                                        <div className="relative">
-                                            <div className="h-32 w-32 rounded-full border-2 border-primary/20 animate-ping absolute" />
-                                            <div className="h-32 w-32 rounded-[2.5rem] bg-primary/10 flex items-center justify-center text-primary relative shadow-2xl shadow-primary/20">
-                                                <Cpu className="h-12 w-12 animate-pulse" />
-                                            </div>
-                                        </div>
-                                        <div className="text-center space-y-4 w-full">
-                                            <div className="space-y-2">
-                                                <p className="text-[20px] font-black tracking-tight text-foreground">Computing Optimal Set</p>
-                                                <p className="text-[13px] text-muted-foreground/60 font-mono tracking-widest uppercase">Solving Constraint Logic...</p>
-                                            </div>
-                                            
-                                            {/* Progress Bar & Est. Time */}
-                                            <div className="space-y-3 pt-4">
-                                                <div className="h-2 w-full bg-muted rounded-full overflow-hidden border border-border">
-                                                    <motion.div 
-                                                        className="h-full bg-primary shadow-[0_0_15px_rgba(59,130,246,0.5)]"
-                                                        initial={{ width: 0 }}
-                                                        animate={{ 
-                                                            width: elapsedTime < ESTIMATED_TOTAL_SECONDS 
-                                                                ? `${(elapsedTime / ESTIMATED_TOTAL_SECONDS) * 100}%` 
-                                                                : "98%" 
-                                                        }}
-                                                        transition={{ duration: 1, ease: "linear" }}
-                                                    />
+                        {/* ─────────────────────────────────────────────────────────────
+                            SCREEN 2: LOADING & OPTIMIZATION IN FLIGHT
+                           ───────────────────────────────────────────────────────────── */}
+                        {isRunning && (
+                            <motion.div
+                                key="screen-loading"
+                                custom={1}
+                                variants={slideVariants}
+                                initial="initial"
+                                animate="animate"
+                                exit="exit"
+                                role="status"
+                                aria-live="polite"
+                                className="p-7 space-y-6 flex flex-col items-center text-center"
+                            >
+                                <div className="space-y-1 w-full text-left">
+                                    <DialogTitle className="text-[20px] font-bold tracking-tight text-foreground">
+                                        Computing Schedule
+                                    </DialogTitle>
+                                    <DialogDescription className="text-[14px] text-muted-foreground">
+                                        Solving optimal {activeModeOption.label} roster
+                                    </DialogDescription>
+                                </div>
+
+                                <div className="h-px bg-border/60 w-full" aria-hidden="true" />
+
+                                {/* Centered Clean CPU Indicator */}
+                                <div className="py-4 flex flex-col items-center gap-4">
+                                    <div className="h-20 w-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary" aria-hidden="true">
+                                        <Cpu className="h-9 w-9 animate-pulse" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[16px] font-bold text-foreground">
+                                            {phase === 'validating' ? 'Auditing Legal Compliance...' : 'Evaluating CP-SAT Combinations...'}
+                                        </p>
+                                        <p className="text-[12px] text-muted-foreground">
+                                            {filteredShifts.length} Shifts · {scopedEmployees.length} Eligible Staff
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Progress Bar & Elapsed / Estimated */}
+                                <div className="space-y-3 w-full">
+                                    <div
+                                        className="h-2 w-full bg-muted/60 dark:bg-muted/40 rounded-full overflow-hidden border border-border/40"
+                                        role="progressbar"
+                                        aria-valuenow={Math.min(100, Math.round((elapsedTime / ESTIMATED_TOTAL_SECONDS) * 100))}
+                                        aria-valuemin={0}
+                                        aria-valuemax={100}
+                                        aria-label="Optimization progress"
+                                    >
+                                        <motion.div
+                                            className="h-full bg-primary rounded-full"
+                                            initial={{ width: '5%' }}
+                                            animate={{
+                                                width: elapsedTime < ESTIMATED_TOTAL_SECONDS
+                                                    ? `${Math.max(5, (elapsedTime / ESTIMATED_TOTAL_SECONDS) * 100)}%`
+                                                    : "98%"
+                                            }}
+                                            transition={{ duration: 0.5, ease: "linear" }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between items-center px-1 text-[12px]">
+                                        <span className="text-muted-foreground font-medium">
+                                            Elapsed: <span className="font-mono font-bold text-foreground">{elapsedTime}s</span>
+                                        </span>
+                                        <span className="text-muted-foreground font-medium">
+                                            Estimated: <span className="font-mono font-bold text-foreground">~{ESTIMATED_TOTAL_SECONDS}s</span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Cancel Button */}
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleCancel}
+                                    aria-label="Cancel optimization"
+                                    className="w-full h-12 rounded-2xl font-semibold text-[14px] border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                    Cancel Optimization
+                                </Button>
+                            </motion.div>
+                        )}
+
+                        {/* ─────────────────────────────────────────────────────────────
+                            SCREEN 3: PROPOSALS REVIEW & COMMIT (After Solve)
+                           ───────────────────────────────────────────────────────────── */}
+                        {isReviewMode && result && (
+                            <motion.div
+                                key="screen-review"
+                                custom={1}
+                                variants={slideVariants}
+                                initial="initial"
+                                animate="animate"
+                                exit="exit"
+                                className="flex-1 flex flex-col h-full overflow-hidden"
+                            >
+                                {/* Accessible Header Bar */}
+                                <header className="h-16 px-6 md:px-8 flex items-center justify-between border-b border-border/60 bg-card shrink-0 select-none">
+                                    <div className="flex items-center gap-3">
+                                        <DialogTitle id="autoscheduler-modal-title" className="text-[18px] font-bold text-foreground tracking-tight">
+                                            Schedule Review
+                                        </DialogTitle>
+                                        <DialogDescription id="autoscheduler-modal-description" className="sr-only">
+                                            Review the generated roster and compliance audit under ICC Sydney EBA before publishing assignments.
+                                        </DialogDescription>
+                                        <Badge variant="outline" className="border-border/70 bg-muted/30 text-foreground text-[12px] font-medium">
+                                            {activeModeOption.label}
+                                        </Badge>
+                                        <span className="text-[12px] text-muted-foreground font-medium hidden sm:inline">
+                                            {result.passing === 1 ? '1 shift ready' : `${result.passing} shifts ready`}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <Button
+                                            type="button"
+                                            onClick={handleDownloadAudit}
+                                            disabled={isDownloading}
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 gap-1.5 rounded-xl text-[12px] font-medium cursor-pointer border-border/80 hover:bg-muted"
+                                        >
+                                            {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                                            Export CSV
+                                        </Button>
+                                        <div className="w-px h-5 bg-border/60 mx-1 hidden sm:block" aria-hidden="true" />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleClose}
+                                            aria-label="Close review dialog"
+                                            className="h-9 w-9 p-0 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                                        >
+                                            <X className="w-4 h-4" aria-hidden="true" />
+                                            <span className="sr-only">Close review dialog</span>
+                                        </Button>
+                                    </div>
+                                </header>
+
+                                {/* Main Workspace Container */}
+                                <main
+                                    tabIndex={0}
+                                    aria-label="Roster review content"
+                                    className="flex-1 overflow-y-auto overscroll-contain px-6 md:px-10 py-6 space-y-6 focus-visible:outline-none"
+                                >
+                                    <div className="space-y-6 w-full max-w-none">
+                                        <AutoSchedulerInsights result={result} />
+
+                                        {/* ─────────────────────────────────────────────────────────────
+                                            SECTION 3: STRUCTURED STAFF ASSIGNMENTS DATA GRID
+                                           ───────────────────────────────────────────────────────────── */}
+                                        <div className="rounded-2xl border border-border/70 bg-card overflow-hidden shadow-sm">
+                                            {/* Grid Toolbar */}
+                                            <div className="p-4 md:px-6 border-b border-border/60 bg-muted/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2.5">
+                                                    <h3 className="text-[15px] font-bold text-foreground">
+                                                        Staff Assignments
+                                                    </h3>
+                                                    <Badge variant="outline" className="border-border/70 bg-muted/40 text-[11px] font-medium text-muted-foreground">
+                                                        {searchQuery.trim() ? `${filteredAndSortedStaff.length} of ${employeeGroups.length}` : employeeGroups.length} {employeeGroups.length === 1 ? 'staff member' : 'staff members'}
+                                                    </Badge>
                                                 </div>
-                                                <div className="flex justify-between items-center px-1">
-                                                    <span className="text-[11px] font-bold text-muted-foreground/40 uppercase tracking-widest">Elapsed: {elapsedTime}s</span>
-                                                    <span className="text-[11px] font-black text-primary uppercase tracking-widest animate-pulse">
-                                                        {elapsedTime < ESTIMATED_TOTAL_SECONDS 
-                                                            ? `Est. ${ESTIMATED_TOTAL_SECONDS - elapsedTime}s Left`
-                                                            : "Almost there... Wrapping up"}
-                                                    </span>
+
+                                                <div className="flex flex-wrap items-center gap-2.5">
+                                                    {/* Search Input */}
+                                                    <div className="relative w-56 sm:w-64">
+                                                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                                                        <input
+                                                            type="text"
+                                                            value={searchQuery}
+                                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                                            placeholder="Search staff or role..."
+                                                            className="w-full h-8 pl-8 pr-7 text-[12px] bg-background border border-border/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 text-foreground placeholder:text-muted-foreground"
+                                                        />
+                                                        {searchQuery && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSearchQuery('')}
+                                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-[11px] font-bold cursor-pointer"
+                                                                aria-label="Clear search"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Filter Pills — only shown if there is an actual distinction (warnings exist) */}
+                                                    {warningCount > 0 && (
+                                                        <div className="flex items-center bg-muted/60 p-0.5 rounded-xl border border-border/60">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFilterCompliance('all')}
+                                                                className={cn(
+                                                                    "px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer",
+                                                                    filterCompliance === 'all'
+                                                                        ? "bg-card text-foreground shadow-2xs font-bold"
+                                                                        : "text-muted-foreground hover:text-foreground"
+                                                                )}
+                                                            >
+                                                                All ({employeeGroups.length})
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFilterCompliance('compliant')}
+                                                                className={cn(
+                                                                    "px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer",
+                                                                    filterCompliance === 'compliant'
+                                                                        ? "bg-card text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold"
+                                                                        : "text-muted-foreground hover:text-foreground"
+                                                                )}
+                                                            >
+                                                                Compliant ({compliantCount})
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFilterCompliance('warning')}
+                                                                className={cn(
+                                                                    "px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer",
+                                                                    filterCompliance === 'warning'
+                                                                        ? "bg-card text-amber-600 dark:text-amber-400 shadow-2xs font-bold"
+                                                                        : "text-muted-foreground hover:text-foreground"
+                                                                )}
+                                                            >
+                                                                Warnings ({warningCount})
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
+                                            </div>
+
+                                            {/* Table Container */}
+                                            <div className={tableTokens.scroll}>
+                                                <table className={cn(tableTokens.table, "min-w-[700px]")} aria-label="Staff roster assignment details">
+                                                    <thead className={tableTokens.header}>
+                                                        <tr className="border-b border-border/60 bg-muted/20 text-[11px] font-bold uppercase tracking-wider text-muted-foreground select-none">
+                                                            <th scope="col" className={tableTokens.head}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleTableSort('name')}
+                                                                    aria-label="Sort by staff member"
+                                                                    className="flex items-center gap-1.5 hover:text-foreground cursor-pointer font-bold"
+                                                                >
+                                                                    <span>Staff Member</span>
+                                                                    <ArrowUpDown className="w-3 h-3 opacity-60" aria-hidden="true" />
+                                                                </button>
+                                                            </th>
+                                                            <th scope="col" className={tableTokens.head}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleTableSort('shifts')}
+                                                                    aria-label="Sort by number of assignments"
+                                                                    className="flex items-center gap-1.5 hover:text-foreground cursor-pointer font-bold"
+                                                                >
+                                                                    <span>Shifts</span>
+                                                                    <ArrowUpDown className="w-3 h-3 opacity-60" aria-hidden="true" />
+                                                                </button>
+                                                            </th>
+                                                            <th scope="col" className={tableTokens.head}>
+                                                                <span>Total Hours</span>
+                                                            </th>
+                                                            <th scope="col" className={tableTokens.head}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleTableSort('compliance')}
+                                                                    aria-label="Sort by compliance rate"
+                                                                    className="flex items-center gap-1.5 hover:text-foreground cursor-pointer font-bold"
+                                                                >
+                                                                    <span>Compliance</span>
+                                                                    <ArrowUpDown className="w-3 h-3 opacity-60" aria-hidden="true" />
+                                                                </button>
+                                                            </th>
+                                                            <th scope="col" className={cn(tableTokens.head, "text-right")}>Schedule</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className={tableTokens.body}>
+                                                        {filteredAndSortedStaff.length === 0 ? (
+                                                            <tr>
+                                                                <td colSpan={5} className={cn(tableTokens.cell, "py-8 text-center text-muted-foreground text-[13px]")}>
+                                                                    No staff members match the selected filter criteria.
+                                                                </td>
+                                                            </tr>
+                                                        ) : (
+                                                            filteredAndSortedStaff.map(group => {
+                                                                const isExpanded = expandedStaffIds.has(group.id);
+                                                                return (
+                                                                    <Fragment key={group.id}>
+                                                                        <tr className={cn(tableTokens.row, "hover:bg-muted/20 transition-colors group")}>
+                                                                            {/* 1. Staff Member (Name, Type, and Roles Grouped) */}
+                                                                            <th scope="row" className={cn(tableTokens.cell, "text-left font-normal py-3")}>
+                                                                                <div className="flex items-center gap-2.5">
+                                                                                    <div className="h-7 w-7 rounded-lg bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0">
+                                                                                        {group.name.slice(0, 2).toUpperCase()}
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <div className="font-semibold text-foreground text-[13px]">
+                                                                                            {group.name}
+                                                                                        </div>
+                                                                                        <div className="text-[11px] text-muted-foreground truncate max-w-[260px]">
+                                                                                            {group.employmentType || 'Casual'} · {group.assignedRoles.join(', ') || 'Staff'}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </th>
+
+                                                                            {/* 2. Shifts Count */}
+                                                                            <td className={tableTokens.cell}>
+                                                                                <span className="font-medium text-foreground text-[13px]">
+                                                                                    {group.proposals.length === 1 ? '1 shift' : `${group.proposals.length} shifts`}
+                                                                                </span>
+                                                                            </td>
+
+                                                                            {/* 3. Total Scheduled Hours */}
+                                                                            <td className={tableTokens.cell}>
+                                                                                <span className="font-mono text-muted-foreground text-[12px]">
+                                                                                    {group.totalHours.toFixed(1)} hrs
+                                                                                </span>
+                                                                            </td>
+
+                                                                            {/* 4. Compliance Status (Quiet by default, alerts on exceptions) */}
+                                                                            <td className={tableTokens.cell}>
+                                                                                {group.compliancePct === 100 ? (
+                                                                                    <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">
+                                                                                        <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                                                                                        Compliant
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <Badge
+                                                                                        variant="outline"
+                                                                                        className="text-[11px] font-bold gap-1 py-0.5 px-2 border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                                                                    >
+                                                                                        <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+                                                                                        {group.compliancePct}% Compliant
+                                                                                    </Badge>
+                                                                                )}
+                                                                            </td>
+
+                                                                            {/* 5. Schedule Details Action */}
+                                                                            <td className={cn(tableTokens.cell, "text-right")}>
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    onClick={() => toggleExpandStaff(group.id)}
+                                                                                    aria-expanded={isExpanded}
+                                                                                    aria-controls={`staff-details-${group.id}`}
+                                                                                    aria-label={`${isExpanded ? 'Hide' : 'View'} shifts for ${group.name}`}
+                                                                                    className="h-7 px-2.5 rounded-lg text-[11px] font-medium gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                                                                                >
+                                                                                    <span>{isExpanded ? 'Hide' : `View ${group.proposals.length} ${group.proposals.length === 1 ? 'shift' : 'shifts'}`}</span>
+                                                                                    <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-200", isExpanded && "rotate-180")} aria-hidden="true" />
+                                                                                </Button>
+                                                                            </td>
+                                                                        </tr>
+
+                                                                        {/* Expandable Shift Schedule Sub-Table (Compact & Scannable) */}
+                                                                        {isExpanded && (
+                                                                            <tr id={`staff-details-${group.id}`} className={cn(tableTokens.row, "bg-muted/10 border-b border-border/50")}>
+                                                                                <td colSpan={5} className={cn(tableTokens.cell, "p-3 px-4 md:px-8")}>
+                                                                                    <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-2xs">
+                                                                                        <table className="w-full text-left" aria-label={`Assigned shifts for ${group.name}`}>
+                                                                                            <thead>
+                                                                                                <tr className="border-b border-border/40 text-[11px] font-semibold text-muted-foreground bg-muted/30">
+                                                                                                    <th scope="col" className="py-2 px-3.5">Date</th>
+                                                                                                    <th scope="col" className="py-2 px-3.5">Shift Window</th>
+                                                                                                    <th scope="col" className="py-2 px-3.5">Duration</th>
+                                                                                                    <th scope="col" className="py-2 px-3.5">Assigned Role</th>
+                                                                                                    <th scope="col" className="py-2 px-3.5 text-right">EBA Status</th>
+                                                                                                </tr>
+                                                                                            </thead>
+                                                                                            <tbody className="divide-y divide-border/30 text-[12px]">
+                                                                                                {group.proposals.map((prop, propIdx) => {
+                                                                                                    const shiftHours = calculateShiftHours(prop.startTime, prop.endTime);
+                                                                                                    const roleColor = getRoleColor(prop.roleName ?? 'Shift');
+                                                                                                    return (
+                                                                                                        <tr key={`${prop.shiftId}-${propIdx}`} className="hover:bg-muted/20 transition-colors">
+                                                                                                            <td className="py-2 px-3.5 font-medium text-foreground">
+                                                                                                                {format(parseISO(prop.shiftDate), 'EEE, dd MMM yyyy')}
+                                                                                                            </td>
+                                                                                                            <td className="py-2 px-3.5 font-mono text-muted-foreground">
+                                                                                                                {prop.startTime.slice(0, 5)} – {prop.endTime.slice(0, 5)}
+                                                                                                            </td>
+                                                                                                            <td className="py-2 px-3.5 font-mono text-muted-foreground">
+                                                                                                                {shiftHours} hrs
+                                                                                                            </td>
+                                                                                                            <td className="py-2 px-3.5">
+                                                                                                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                                                                                                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: roleColor }} />
+                                                                                                                    <span className="truncate max-w-[160px]">{prop.roleName ?? 'Shift'}</span>
+                                                                                                                </div>
+                                                                                                            </td>
+                                                                                                            <td className="py-2 px-3.5 text-right">
+                                                                                                                {prop.passing ? (
+                                                                                                                    <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                                                                                                                        ✓ Compliant
+                                                                                                                    </span>
+                                                                                                                ) : (
+                                                                                                                    <span className="text-[11px] font-semibold text-rose-500">
+                                                                                                                        {prop.violations?.[0]?.ruleName || 'Breach'}
+                                                                                                                    </span>
+                                                                                                                )}
+                                                                                                            </td>
+                                                                                                        </tr>
+                                                                                                    );
+                                                                                                })}
+                                                                                            </tbody>
+                                                                                        </table>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        )}
+                                                                    </Fragment>
+                                                                );
+                                                            })
+                                                        )}
+                                                    </tbody>
+                                                </table>
                                             </div>
                                         </div>
                                     </div>
-                                }
+                                </main>
 
-                                {['reviewing', 'done'].includes(phase) && result &&
-                                    <motion.div
-                                        className="space-y-12"
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                    >
-
-                                        {/* U2/U3/U5 — single-mode transparency: four-pillar scorecard,
-                                            constraint banner, and Pareto trade-off explorer. */}
-                                        <AutoSchedulerInsights result={result} />
-
-                                        {/* The second stats grid (Total Cost / Avg Fatigue / Uncovered /
-                                            Coverage / Compliance) was removed: it duplicated Coverage and
-                                            Cost from the scorecard above, restated Uncovered as the inverse
-                                            of Coverage, and showed a SECOND, conflicting fatigue number
-                                            (avg 14.0) next to the Wellbeing pillar (62). Compliance is now a
-                                            pillar in AutoSchedulerInsights; per-person fatigue/cost live in
-                                            the staff table below. One uniform scorecard = one source of truth. */}
-
-                                        {/* Objective breakdown — shows which strategy term drove the solver's score */}
-                                        {(() => {
-                                            const breakdown = result.objective_breakdown;
-                                            if (!breakdown) return null;
-                                            // The cost term is money (cents) — shown in Gross Pay alone
-                                            // (decision 2026-10-09), so it is left out of this breakdown.
-                                            const entries = Object.entries(breakdown)
-                                                .filter(([cat, v]) => cat !== 'cost' && Number.isFinite(v));
-                                            const total = entries.reduce((s, [, v]) => s + Math.abs(v), 0);
-                                            if (total === 0) return null;
-
-                                            const colorOf = (cat: string): string => {
-                                                switch (cat) {
-                                                    case 'fairness': return 'bg-purple-500';
-                                                    case 'fatigue': return 'bg-amber-500';
-                                                    case 'coverage': return 'bg-rose-500';
-                                                    case 'continuity': return 'bg-emerald-500';
-                                                    case 'other': return 'bg-indigo-500';
-                                                    case 'legal_hard': return 'bg-red-500';
-                                                    case 'undesirable_balance': return 'bg-fuchsia-500';
-                                                    case 'longitudinal_fairness': return 'bg-violet-500';
-                                                    case 'ft_days_off': return 'bg-teal-500';
-                                                    default: return 'bg-muted-foreground/40';
-                                                }
-                                            };
-
-                                            const labelOf = (cat: string): string => {
-                                                if (cat === 'other') return 'Soft Limits (Hours/Contract)';
-                                                if (cat === 'legal_hard') return 'Hard Legal Limits';
-                                                if (cat === 'ft_days_off') return 'Paired Days Off (cl 35.1(e))';
-                                                return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                                            };
-
-                                            const tooltipOf = (cat: string): string => {
-                                                switch (cat) {
-                                                    case 'coverage':
-                                                        return 'Penalty points from leaving shifts uncovered. The solver treats covering shifts as a Tier-2 priority (100M points per uncovered shift).';
-                                                    case 'other':
-                                                        return 'Penalty points from soft limits (100M points/min over maximum hours; 100k points/min under contract floor). These are Tier-3 priority, meaning the solver will exceed them to guarantee coverage.';
-                                                    case 'legal_hard':
-                                                        return 'Penalty points from hard legal constraints (e.g. 12-hour daily spread). These are Tier-1 priority: the solver never auto-generates illegal shifts; unavoidable breaches are left uncovered.';
-                                                    case 'fatigue':
-                                                        return 'Fatigue penalty points used to balance staff fatigue. Part of Tier-4 (Wellbeing) to distribute hours and prevent burnout.';
-                                                    case 'ft_days_off':
-                                                        return 'Guardrail penalty when a Full-Time employee does not receive at least 2 consecutive rostered days off in a 7-day week (ICC EBA cl 35.1(e)).';
-                                                    case 'fairness':
-                                                    case 'longitudinal_fairness':
-                                                        return 'Casual fairness penalty points. Each casual is measured against their fair share of the shifts they were eligible and available for (billed hours − fair share), across this roster and the last 13 weeks of approved work.';
-                                                    case 'undesirable_balance':
-                                                        return 'Penalty points to avoid assigning excessive consecutive weekend or night shifts.';
-                                                    case 'continuity':
-                                                        return 'Penalty points to encourage consistent schedules and team structure.';
-                                                    default:
-                                                        return 'Raw scheduler penalty term.';
-                                                }
-                                            };
-
-                                            const fmtValue = (_cat: string, v: number): string => Math.round(v).toLocaleString();
-                                            const sorted = [...entries].sort(([, a], [, b]) => Math.abs(b) - Math.abs(a));
-
-                                            return (
-                                                <div className="p-5 rounded-[2rem] bg-card/40 dark:bg-card/20 border border-border/40 shadow-xl flex flex-col gap-4">
-                                                    <div className="flex flex-col gap-1">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/70">Objective Breakdown</span>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <button type="button" className="inline-flex focus:outline-none">
-                                                                            <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground cursor-help" />
-                                                                        </button>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent className="bg-popover border border-border/40 p-4 max-w-sm shadow-2xl text-[11px] leading-normal">
-                                                                        <div className="flex flex-col gap-2">
-                                                                            <span className="font-bold text-foreground">How the Optimizer Decides</span>
-                                                                            <p className="text-muted-foreground">
-                                                                                Shiftopia uses a <strong>lexicographic (priority-tiered) solver</strong>. Instead of trading off between categories, it locks them in order:
-                                                                            </p>
-                                                                            <ol className="list-decimal pl-4 flex flex-col gap-1 text-muted-foreground font-medium">
-                                                                                <li><strong>Tier 1: Legal Hard</strong> (Never break laws)</li>
-                                                                                <li><strong>Tier 2: Coverage</strong> (Cover shifts if possible)</li>
-                                                                                <li><strong>Tier 3: Soft limits</strong> (Max hours, min contract)</li>
-                                                                                <li><strong>Tier 4: Wellbeing</strong> (Fatigue, fairness)</li>
-                                                                                <li><strong>Tier 5: Cost</strong> (Cheapest choice)</li>
-                                                                            </ol>
-                                                                            <p className="text-muted-foreground text-[11px] mt-1 pt-1 border-t border-border/30">
-                                                                                * Higher-tier rules are satisfied at all costs, which can result in large penalty scores in lower tiers (e.g. "Soft Limits") if coverage requirements force them to be violated.
-                                                                            </p>
-                                                                        </div>
-                                                                    </TooltipContent>
-                                                                </Tooltip>
-                                                            </div>
-                                                            <span className="text-[11px] font-bold text-muted-foreground/40 tracking-wide">Total Score: {Math.round(total).toLocaleString()}</span>
-                                                        </div>
-                                                        {/* Bug 2 fix: clarify these are penalty magnitudes, not priority weights.
-                                                            The solver optimises in strict lexicographic tiers, so categories in
-                                                            different tiers are never traded off against each other — presenting
-                                                            them as competing percentages of one total would imply a false ranking. */}
-                                                        <p className="text-[11px] leading-snug text-muted-foreground/50">
-                                                            Share of total penalty magnitude by category — not priority weights. The solver optimises in fixed tiers: coverage » wellbeing » cost. Hover over items below for details.
-                                                        </p>
-                                                    </div>
-                                                    <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted/30">
-                                                        {sorted.map(([cat, v]) => (
-                                                            <div
-                                                                key={cat}
-                                                                className={`${colorOf(cat)} h-full transition-all`}
-                                                                style={{ width: `${(Math.abs(v) / total) * 100}%` }}
-                                                                title={`${labelOf(cat)}: ${fmtValue(cat, v)}`}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2">
-                                                        {sorted.map(([cat, v]) => (
-                                                            <Tooltip key={cat}>
-                                                                <TooltipTrigger asChild>
-                                                                    <div className="flex items-center gap-2 min-w-0 cursor-help hover:bg-muted/30 dark:hover:bg-muted/10 p-1.5 rounded-xl transition-all border border-transparent hover:border-border/30">
-                                                                        <span className={`${colorOf(cat)} h-2 w-2 rounded-sm shrink-0`} />
-                                                                        <span className="text-[11px] font-bold text-muted-foreground/70 uppercase tracking-wide truncate">{labelOf(cat)}</span>
-                                                                        <span className="text-[11px] font-black text-foreground/90 ml-auto tabular-nums">
-                                                                            {((Math.abs(v) / total) * 100).toFixed(0)}%
-                                                                        </span>
-                                                                        <span className="text-[11px] font-bold text-muted-foreground/50 tabular-nums shrink-0">{fmtValue(cat, v)}</span>
-                                                                    </div>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent className="bg-popover border border-border/40 p-3 max-w-xs shadow-2xl text-[11px] leading-normal">
-                                                                    <div className="flex flex-col gap-1.5">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className={`${colorOf(cat)} h-2.5 w-2.5 rounded-sm`} />
-                                                                            <span className="font-bold text-foreground">{labelOf(cat)}</span>
-                                                                        </div>
-                                                                        <p className="text-muted-foreground leading-normal">{tooltipOf(cat)}</p>
-                                                                        <div className="mt-1.5 pt-1.5 border-t border-border/30 flex justify-between text-[11px] text-muted-foreground font-medium">
-                                                                            <span>Share: {((Math.abs(v) / total) * 100).toFixed(1)}%</span>
-                                                                            <span>Raw Score: {Math.round(v).toLocaleString()}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                </TooltipContent>
-                                                            </Tooltip>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
-
-                                        {/* Optimizer Fallback Notice — surfaces silently-degraded runs */}
-                                        {(result.usedFallback || result.optimizerStatus === 'INFEASIBLE' || result.optimizerStatus === 'UNKNOWN' || result.optimizerStatus === 'MODEL_INVALID') && (
-                                            <div className="p-6 rounded-[2rem] bg-rose-500/5 border border-rose-500/20 flex items-start gap-5 shadow-2xl">
-                                                <div className="h-12 w-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0 mt-0.5">
-                                                    <WifiOff className="h-6 w-6" />
-                                                </div>
-                                                <div className="flex flex-col gap-1.5">
-                                                    <span className="text-[15px] font-black text-rose-700 dark:text-rose-300 tracking-tight uppercase">
-                                                        {result.usedFallback ? 'Greedy Fallback Engaged' : `Optimizer Status: ${result.optimizerStatus}`}
-                                                    </span>
-                                                    <p className="text-muted-foreground/80 dark:text-white/60 leading-relaxed text-[13px]">
-                                                        {result.usedFallback
-                                                            ? <>The CP-SAT optimizer was unreachable or returned no solution, so a greedy first-fit engine produced these proposals. Quality (cost, fatigue, fairness) will be lower than a full optimization. Start the service: <code className="text-rose-600 dark:text-rose-300 bg-rose-500/10 px-1.5 py-0.5 rounded text-[11px]">cd optimizer-service &amp;&amp; python ortools_runner.py</code></>
-                                                            : <>The solver returned <span className="text-rose-600 dark:text-rose-300 font-bold">{result.optimizerStatus}</span>. Coverage may be partial — review uncovered shifts below.</>
-                                                        }
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Physical Capacity Alert (Explains uncovered shifts) */}
-                                        {result.capacityCheck && !result.capacityCheck.sufficient && (
-                                            <div className="p-8 rounded-[2.5rem] bg-amber-500/5 border border-amber-500/20 flex items-start gap-6 shadow-2xl">
-                                                <div className="h-14 w-14 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-500 shrink-0 mt-1">
-                                                    <AlertTriangle className="h-8 w-8" />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <span className="text-[17px] font-black text-amber-700 dark:text-amber-400 tracking-tight uppercase">Labor Deficit Detected</span>
-                                                    <p className="text-muted-foreground/80 dark:text-white/60 leading-relaxed text-[13px]">
-                                                        Your workforce is short by <span className="text-amber-700 dark:text-amber-400 font-bold">{(result.capacityCheck.deficitDays.reduce((a, d) => a + d.deficitMinutes, 0) / 60).toFixed(0)} hours</span> for this period. 
-                                                        Even with perfect optimization, <span className="text-foreground font-bold">{result.uncoveredV8ShiftIds.length} shifts</span> cannot be covered because there are physically more shift hours than staff hours available.
-                                                    </p>
-                                                    <div className="flex items-center gap-4 mt-2">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[11px] font-black uppercase text-muted-foreground/40 tracking-widest">Total Demand</span>
-                                                            <span className="text-[11px] font-bold text-foreground">{(result.capacityCheck.totalDemandMinutes / 60).toFixed(0)}h</span>
-                                                        </div>
-                                                        <div className="h-4 w-px bg-border" />
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[11px] font-black uppercase text-muted-foreground/40 tracking-widest">Total Supply</span>
-                                                            <span className="text-[11px] font-bold text-foreground">{(result.capacityCheck.totalSupplyMinutes / 60).toFixed(0)}h</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Employee Results Cards */}
-                                        <div className="space-y-2">
-                                            {/* Header for List View */}
-                                            <div className="flex items-center px-6 py-3 border-b border-border/30 text-[11px] font-black uppercase tracking-widest text-muted-foreground/40 gap-4">
-                                                <div className="w-10" />
-                                                <button 
-                                                    onClick={() => {
-                                                        if (sortField === 'name') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-                                                        else { setSortField('name'); setSortDirection('asc'); }
-                                                    }}
-                                                    className="flex-1 min-w-[150px] flex items-center gap-1.5 hover:text-foreground transition-colors group"
-                                                >
-                                                    Staff Member
-                                                    {sortField === 'name' ? (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />}
-                                                </button>
-                                                <div className="w-24 text-center">Employment</div>
-                                                <div className="w-20 text-center">Contract</div>
-                                                <button 
-                                                    onClick={() => {
-                                                        if (sortField === 'utilization') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-                                                        else { setSortField('utilization'); setSortDirection('desc'); }
-                                                    }}
-                                                    className="w-24 flex items-center justify-center gap-1.5 hover:text-foreground transition-colors group"
-                                                >
-                                                    Utilization
-                                                    {sortField === 'utilization' ? (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />}
-                                                </button>
-                                                <button 
-                                                    onClick={() => {
-                                                        if (sortField === 'fatigue') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-                                                        else { setSortField('fatigue'); setSortDirection('desc'); }
-                                                    }}
-                                                    className="w-20 flex items-center justify-center gap-1.5 hover:text-foreground transition-colors group"
-                                                >
-                                                    Fatigue
-                                                    {sortField === 'fatigue' ? (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />}
-                                                </button>
-                                                <button 
-                                                    onClick={() => {
-                                                        if (sortField === 'shifts') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-                                                        else { setSortField('shifts'); setSortDirection('desc'); }
-                                                    }}
-                                                    className="w-20 flex items-center justify-center gap-1.5 hover:text-foreground transition-colors group"
-                                                >
-                                                    Shifts
-                                                    {sortField === 'shifts' ? (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />}
-                                                </button>
-                                                <button 
-                                                    onClick={() => {
-                                                        if (sortField === 'compliance') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-                                                        else { setSortField('compliance'); setSortDirection('desc'); }
-                                                    }}
-                                                    className="w-28 flex items-center justify-center gap-1.5 hover:text-foreground transition-colors group"
-                                                >
-                                                    Compliance
-                                                    {sortField === 'compliance' ? (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />}
-                                                </button>
-                                            </div>
-                                            
-                                            {sortEmployeeGroups(employeeGroups, sortField, sortDirection).map(group => {
-                                                const passing = group.proposals.filter(p => p.complianceStatus === 'PASS').length;
-                                                const total = group.proposals.length;
-                                                const rate = complianceRateOf(group) * 100;
-                                                
-                                                return (
-                                                    <div key={group.id} className="group flex items-center px-6 py-4 rounded-[1.25rem] bg-muted/10 border border-border/40 hover:bg-muted/20 hover:border-primary/30 transition-all duration-300 gap-4">
-                                                        <div className="h-10 w-10 shrink-0 rounded-lg bg-gradient-to-br from-background to-muted border border-border flex items-center justify-center font-black text-[11px] uppercase text-primary">
-                                                            {group.name.split(' ').map(n => n[0]).join('')}
-                                                        </div>
-                                                        
-                                                        <div className="flex-1 min-w-[150px] flex flex-col">
-                                                            <span className="text-[13px] font-black tracking-tight text-foreground">{group.name}</span>
-                                                            <div className="flex flex-wrap gap-1 mt-1">
-                                                                {group.assignedRoles.slice(0, 2).map(role => (
-                                                                    <Badge key={role} variant="outline" className="h-3.5 px-1.5 text-[11px] font-black uppercase border-none bg-muted/50 text-muted-foreground/60">
-                                                                        {role}
-                                                                    </Badge>
-                                                                ))}
-                                                                {group.assignedRoles.length > 2 && <span className="text-[11px] font-bold text-muted-foreground/30 ml-1">+{group.assignedRoles.length - 2}</span>}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="w-24 flex justify-center">
-                                                            <Badge className="bg-muted text-muted-foreground/60 text-[11px] font-black border-none uppercase tracking-widest">{group.employmentType}</Badge>
-                                                        </div>
-
-                                                        <div className="w-20 text-center">
-                                                            <span className="text-[11px] font-bold text-foreground/70">{group.contractedHours}h</span>
-                                                        </div>
-                                                        
-                                                        <div className="w-24 flex justify-center">
-                                                            <div className="flex flex-col items-center">
-                                                                <span className="text-[11px] font-black text-foreground">{group.utilization.toFixed(0)}%</span>
-                                                                <div className="h-1 w-12 bg-muted rounded-full mt-1 overflow-hidden">
-                                                                    <div 
-                                                                        className={cn(
-                                                                            "h-full transition-all",
-                                                                            group.utilization > 90 ? "bg-red-500" : group.utilization > 70 ? "bg-amber-500" : "bg-emerald-500"
-                                                                        )} 
-                                                                        style={{ width: `${Math.min(group.utilization, 100)}%` }} 
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="w-20 text-center">
-                                                            <span className={cn(
-                                                                "text-[11px] font-black",
-                                                                group.avgFatigue > 8 ? "text-red-500" : group.avgFatigue > 5 ? "text-amber-500" : "text-emerald-500"
-                                                            )}>
-                                                                {group.avgFatigue.toFixed(1)}
-                                                            </span>
-                                                        </div>
-                                                        
-                                                        <div className="w-20 flex justify-center">
-                                                            <Popover open={hoveredDistId === group.id} onOpenChange={(o) => !o && setHoveredDistId(null)}>
-                                                                <PopoverTrigger asChild>
-                                                                    <div 
-                                                                        className="cursor-help"
-                                                                        onMouseEnter={() => setHoveredDistId(group.id)}
-                                                                        onMouseLeave={() => setHoveredDistId(null)}
-                                                                    >
-                                                                        <Badge variant="outline" className="bg-muted text-muted-foreground/60 text-[11px] font-black border-none hover:bg-muted/50 transition-colors">
-                                                                            {group.proposals.length}
-                                                                        </Badge>
-                                                                    </div>
-                                                                </PopoverTrigger>
-                                                                <PopoverContent 
-                                                                    side="top" 
-                                                                    align="center"
-                                                                    className="w-[240px] p-0 overflow-hidden bg-background border-border shadow-2xl rounded-2xl z-[1000] pointer-events-none"
-                                                                    onMouseEnter={() => setHoveredDistId(group.id)}
-                                                                >
-                                                                    <div className="p-4 space-y-3">
-                                                                        <div className="flex items-center justify-between border-b border-border/50 pb-2">
-                                                                            <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/40">Shift Distribution</span>
-                                                                            <span className="text-[11px] font-black text-primary">{group.proposals.length} Total</span>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-2 gap-2">
-                                                                            {group.roleDistribution.map(rd => (
-                                                                                <div key={rd.name} className="flex items-center justify-between p-2 rounded-lg bg-muted/20 border border-border/50">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: getRoleColor(rd.name) }} />
-                                                                                        <span className="text-[11px] font-bold text-foreground/80">{rd.name}</span>
-                                                                                    </div>
-                                                                                    <span className="text-[11px] font-black text-primary">{rd.value}</span>
-                                                                                </div>
-                                                                            ))}
-                                                                            {group.roleDistribution.length === 0 && (
-                                                                                <div className="col-span-2 text-center py-2 text-[11px] text-muted-foreground/40 italic">No role data</div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </PopoverContent>
-                                                            </Popover>
-                                                        </div>
-                                                        
-                                                        <div className="w-28 flex flex-col items-center gap-1">
-                                                            <div className="flex items-center gap-1">
-                                                                <div className={cn("h-1.5 w-1.5 rounded-full", rate === 100 ? "bg-emerald-500" : rate > 0 ? "bg-amber-500" : "bg-red-500")} />
-                                                                <span className="text-[11px] font-black text-foreground">{rate.toFixed(0)}% Clear</span>
-                                                            </div>
-                                                            <span className="text-[11px] font-bold text-muted-foreground/40 uppercase tracking-widest">{passing}/{total} Passing</span>
-                                                        </div>
-                                                        
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-
-                                            {/* Coverage Gaps Card */}
-                                            {result.uncoveredAudit && result.uncoveredAudit.length > 0 && (
-                                                <div className="p-6 rounded-[2.5rem] bg-amber-500/5 border border-amber-500/20 shadow-xl">
-                                                    <div className="flex items-center gap-4 mb-8">
-                                                        <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-500">
-                                                            <AlertTriangle className="h-6 w-6" />
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[15px] font-black tracking-tight text-amber-700 dark:text-amber-400">Coverage Gaps</span>
-                                                            <span className="text-[11px] font-black uppercase text-amber-600/40 dark:text-amber-500/40 tracking-widest">{result.uncoveredV8ShiftIds.length} Unstaffed Shifts</span>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div className="space-y-4">
-                                                        {result.uncoveredAudit.slice(0, 5).map(audit => (
-                                                            <div key={audit.shiftId} className="p-4 rounded-2xl bg-muted/30 border border-border/50 space-y-3">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex flex-col">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-[11px] font-black uppercase text-muted-foreground/40 tracking-widest">{formatCalendarDate(audit.shiftDate, 'EEE dd MMM')}</span>
-                                                                            {audit.roleName && <Badge variant="outline" className="h-3.5 px-1.5 text-[11px] border-border bg-muted text-muted-foreground uppercase font-black">{audit.roleName}</Badge>}
-                                                                        </div>
-                                                                        <span className="text-[11px] font-bold text-foreground">{audit.startTime} – {audit.endTime}</span>
-                                                                    </div>
-                                                                    <Badge variant="outline" className="text-[11px] border-amber-500/20 text-amber-600 dark:text-amber-400">UNRESOLVED</Badge>
-                                                                </div>
-                                                                <div className="pt-2 border-t border-border/50">
-                                                                    <p className="text-[11px] font-black uppercase text-muted-foreground/30 mb-2 tracking-widest">Primary Blockers</p>
-                                                                    <div className="flex flex-wrap gap-1.5">
-                                                                        {Object.entries(audit.rejectionSummary).map(([reason, count]) => (
-                                                                                <Tooltip key={reason}>
-                                                                                    <TooltipTrigger asChild>
-                                                                                        <div className="px-2 py-1 rounded-md bg-muted/50 text-[11px] text-muted-foreground border border-border cursor-help hover:bg-muted transition-colors">
-                                                                                            {reason}: {count} staff
-                                                                                        </div>
-                                                                                    </TooltipTrigger>
-                                                                                    <TooltipContent className="bg-popover border-border p-3 max-w-xs shadow-2xl">
-                                                                                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">
-                                                                                            {BLOCKER_LABELS[reason]?.label ?? reason}
-                                                                                        </p>
-                                                                                        <p className="text-[11px] text-popover-foreground leading-relaxed">
-                                                                                            {BLOCKER_LABELS[reason]?.fix
-                                                                                                ? BLOCKER_LABELS[reason].fix
-                                                                                                : reason === 'CAPACITY_CONFLICT'
-                                                                                                ? "The optimizer assigned this staff member to a different shift at the same time to maximize overall roster efficiency."
-                                                                                                : reason === 'OPTIMIZER_TRADEOFF'
-                                                                                                ? "The solver prioritized other shifts to satisfy complex labor rules or cost targets."
-                                                                                                : "Multiple staff were rejected due to compliance rules (rest gaps, weekly hours, or role mismatch)."}
-                                                                                        </p>
-                                                                                    </TooltipContent>
-                                                                                </Tooltip>
-                                                                        ))}
-                                                                        {Object.keys(audit.rejectionSummary).length === 0 && (
-                                                                            <span className="text-[11px] text-muted-foreground/30 italic">No specific reasons provided by solver</span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                        {result.uncoveredV8ShiftIds.length > 5 && (
-                                                            <p className="text-center text-[11px] font-black uppercase text-muted-foreground/20 tracking-widest py-2">
-                                                                + {result.uncoveredV8ShiftIds.length - 5} more gaps (See full audit CSV)
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </motion.div>
-                                    }
-                                </AnimatePresence>
-                            </div>
-                        </ScrollArea>
-
-                    {/* ACTION DECK: FLOATING FOOTER */}
-                    <div className="p-8 flex justify-center bg-gradient-to-t from-background to-transparent pt-12">
-                        <div className="bg-muted/80 backdrop-blur-2xl rounded-full p-2 border border-border flex items-center gap-2 shadow-2xl shadow-background/80 ring-1 ring-border/50">
-                            {phase === 'idle' && (
-                                <Button
-                                    onClick={handleRun}
-                                    disabled={!canRun}
-                                    title={runBlockedReason ?? undefined}
-                                    className="rounded-full px-10 h-14 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-widest text-[11px] gap-3 shadow-lg shadow-primary/30 group"
-                                >
-                                    <Zap className="h-4 w-4 fill-current group-hover:scale-125 transition-transform" />
-                                    Compute Optimal Solution
-                                </Button>
-                            )}
-                            {phase === 'optimizing' && (
-                                <Button 
-                                    onClick={handleCancel}
-                                    variant="destructive"
-                                    className="rounded-full px-10 h-14 bg-red-500/20 hover:bg-red-500/30 text-red-500 border border-red-500/20 font-black uppercase tracking-widest text-[11px] gap-3 shadow-lg shadow-red-500/10 group"
-                                >
-                                    <XCircle className="h-4 w-4" />
-                                    Cancel Optimization
-                                </Button>
-                            )}
-                            {['reviewing', 'done'].includes(phase) && (
-                                <>
-                                    <Button 
-                                        onClick={handleRun}
-                                        variant="ghost"
-                                        className="rounded-full h-14 px-6 text-muted-foreground/60 hover:text-foreground hover:bg-muted font-black uppercase tracking-widest text-[11px]"
-                                    >
-                                        Re-Optimise
-                                    </Button>
-                                    <Button 
-                                        onClick={handleCommit}
-                                        disabled={isCommitting || result?.passing === 0}
-                                        className="rounded-full px-10 h-14 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-[11px] gap-3 shadow-lg shadow-emerald-500/30"
-                                    >
-                                        {isCommitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
-                                        Apply {result?.passing} Assignments
-                                    </Button>
-                                </>
-                            )}
-                            {phase !== 'idle' && phase !== 'done' && (
-                                <Button 
-                                    onClick={handleClose}
-                                    variant="ghost"
-                                    className="rounded-full h-14 px-6 text-muted-foreground/60 hover:text-foreground hover:bg-muted font-black uppercase tracking-widest text-[11px]"
-                                >
-                                    Cancel
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                </TooltipProvider>
+                                {/* Review Actions Footer */}
+                                <footer className="h-16 px-6 md:px-8 border-t border-border/60 bg-muted/20 flex items-center justify-between shrink-0 select-none">
+                                    <p className="text-[12px] text-muted-foreground">
+                                        All assignments validated under ICC Sydney EBA. Nothing is saved until applied.
+                                    </p>
+                                    <div className="flex items-center gap-2.5">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={handleRun}
+                                            className="h-9 px-3 rounded-xl font-medium text-[12px] text-muted-foreground hover:text-foreground cursor-pointer"
+                                        >
+                                            Re-optimise
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={handleClose}
+                                            className="h-9 px-3 rounded-xl font-medium text-[12px] border-border hover:bg-muted cursor-pointer"
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={handleCommit}
+                                            disabled={isCommitting || result.passing === 0}
+                                            className="h-9 rounded-xl font-bold text-[12px] bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 px-5 shadow-2xs cursor-pointer"
+                                        >
+                                            {isCommitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                            Apply {result.passing} {result.passing === 1 ? 'Assignment' : 'Assignments'}
+                                        </Button>
+                                    </div>
+                                </footer>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
             </DialogContent>
         </Dialog>
     );
 }
-

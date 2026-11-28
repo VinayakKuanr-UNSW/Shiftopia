@@ -785,7 +785,7 @@ export interface AutoSchedulerInput {
     employees: EmployeeMeta[];
     /**
      * Employment-mode partition (ICC Sydney EBA 2025).
-     * Defaults to 'ALL' (mixed pool). When 'FT_STANDARD', strictly isolates
+     * Defaults to 'FT_STANDARD'. When 'FT_STANDARD', strictly isolates
      * Standard Non-Security Full-Time shifts & employees (cl 35.1, 12.2),
      * skips the Casual Fairness Ledger, sizes HC-7 demand on NET paid minutes,
      * and enforces 1-shift/day + SC-13 paired consecutive RDOs.
@@ -1144,7 +1144,7 @@ async function greedyFallback(
     /** Casual employees' confidence-weighted ledger debts — the solver's `fairness_debts`. */
     fairnessDebts?: ReadonlyMap<string, Partial<Record<FairnessMetric, number>>>,
     validationCtx?: ValidationContextMaps,
-    mode: SchedulerMode = 'ALL',
+    mode: SchedulerMode = 'FT_STANDARD',
     card?: PricedCard | null,
     /** Public-holiday jurisdiction resolver per shift (matches the optimizer's day typing). */
     jurisdictionFor?: (shift: ShiftMeta) => string,
@@ -1596,7 +1596,7 @@ export class AutoSchedulerController {
             throw new Error('No shifts to schedule in this range — widen the dates or the scope filter.');
         }
 
-        const activeMode: SchedulerMode = input.mode ?? 'ALL';
+        const activeMode: SchedulerMode = input.mode ?? 'FT_STANDARD';
         const isFtStandard = activeMode === 'FT_STANDARD';
         const isFtSecurity = activeMode === 'FT_SECURITY';
         const isFtMode = isFtStandard || isFtSecurity;
@@ -1604,7 +1604,7 @@ export class AutoSchedulerController {
         const isFptMode = activeMode === 'FPT';
         const isCasualMode = activeMode === 'CASUAL';
         const isPermanentMode = isFtMode || isPtMode || isFptMode;
-        const solverMode: SolverSchedulerMode | undefined = activeMode === 'ALL' ? undefined : activeMode;
+        const solverMode: SolverSchedulerMode = activeMode;
 
         // ── Layer -0.5: Mode Partitioning (FT_STANDARD / FT_SECURITY / PT / FPT) ──
         // Best-effort Security role derivation runs against the FULL input batch

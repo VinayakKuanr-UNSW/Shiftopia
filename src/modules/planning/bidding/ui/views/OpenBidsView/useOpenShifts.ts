@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/platform/auth/useAuth';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 import { computeShiftUrgency, isOnBidding } from '@/modules/rosters/domain/bidding-urgency';
 import type { ManagerBidShift, BidToggle } from './types';
@@ -56,7 +57,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
 
         const shiftStart = s.start_at
           ? new Date(s.start_at)
-          : parseZonedDateTime(s.shift_date, s.start_time || '00:00', s.tz_identifier || SYDNEY_TZ);
+          : parseZonedDateTime(s.shift_date, s.start_time || '00:00', s.tz_identifier || shiftZone(s));
         const biddingDeadline = shiftStart.toISOString();
 
         const stateId = determineShiftState(s);
@@ -92,6 +93,15 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           ? `${assignedProfile.first_name || ''} ${assignedProfile.last_name || ''}`.trim()
           : undefined;
 
+        const rawSub = (s as any).roster_subgroup;
+        const sub = Array.isArray(rawSub) ? rawSub[0] : rawSub;
+        const rawRg = sub?.roster_groups ?? sub?.roster_group;
+        const rg = Array.isArray(rawRg) ? rawRg[0] : rawRg;
+
+        const groupType = rg?.external_id || (s as any).group_type || undefined;
+        const subGroupName = sub?.name || (s as any).sub_group_name || 'General';
+        const group = rg?.name || (s as any).group || 'General';
+
         return {
           // Spread the raw row FIRST (same idiom as swaps' `mapDbShift`).
           //
@@ -125,7 +135,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           department: s.departments?.name || 'Department',
           subDepartment: s.sub_departments?.name || '',
           organization: s.organizations?.name || '',
-          remunerationLevel: s.remuneration_levels?.level_name,
+          remunerationLevel: (s.roles as any)?.remuneration_level ? `Level-${(s.roles as any).remuneration_level}` : s.remuneration_levels?.level_name,
           bidCount,
           biddingDeadline,
           stateId,
@@ -136,7 +146,11 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           organizationId: s.organization_id,
           departmentId: s.department_id,
           subDepartmentId: s.sub_department_id,
-          groupType: s.group_type,
+          groupType,
+          group,
+          subGroupName,
+          subGroup: subGroupName,
+          sub_group_name: subGroupName,
           lifecycleStatus: s.lifecycle_status,
         };
       });

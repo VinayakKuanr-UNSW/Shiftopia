@@ -33,7 +33,7 @@ import { ClipboardList, Grid3X3 } from 'lucide-react';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { getSydneyNow } from '@/modules/core/lib/date.utils';
+import { getNowInTimezone } from '@/modules/core/lib/date.utils';
 import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
 
 import { buildLedger, dailyHoursFor } from '../../domain/leave-ledger';
@@ -69,7 +69,7 @@ const LeaveApprovalsPage: React.FC = () => {
     const [view, setView] = React.useState<View>('requests');
     const [tab, setTab] = React.useState<RequestTab>('pending');
 
-    const today = React.useMemo(() => format(getSydneyNow(), 'yyyy-MM-dd'), []);
+    const today = React.useMemo(() => format(getNowInTimezone(), 'yyyy-MM-dd'), []);
     const year = Number(today.slice(0, 4));
     /*
      * One year back. That covers everything the ledger counts — capped and
@@ -77,7 +77,7 @@ const LeaveApprovalsPage: React.FC = () => {
      * FDV per EMPLOYMENT year, whose start can be up to 12 months ago — and
      * leaves the Rejected tab with recent history in January.
      */
-    const since = React.useMemo(() => format(subDays(getSydneyNow(), 366), 'yyyy-MM-dd'), []);
+    const since = React.useMemo(() => format(subDays(getNowInTimezone(), 366), 'yyyy-MM-dd'), []);
 
     const scopeSelected = scope.org_ids.length + scope.dept_ids.length + scope.subdept_ids.length > 0;
     const employees = useScopedEmployees(scope, scopeSelected);

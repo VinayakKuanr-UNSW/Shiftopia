@@ -2052,11 +2052,15 @@ class ScheduleModelBuilder:
                 )
         casual_ids = {e.id for e in self.data.employees if e.employment_type == 'Casual'}
         used = len(mins_by_emp)
-        loads = [m for e_id, m in mins_by_emp.items() if e_id in casual_ids]
+        eligible_casual_ids = {e_id for (e_id, _) in getattr(self, '_x', {}).keys() if e_id in casual_ids}
+        if eligible_casual_ids:
+            loads = [mins_by_emp.get(e_id, 0.0) for e_id in eligible_casual_ids]
+        else:
+            loads = [m for e_id, m in mins_by_emp.items() if e_id in casual_ids]
         casual_used = len(loads)
 
-        # Fairness = workload evenness across the CASUALS used (fairness is
-        # casual-only). Coefficient of variation 0 (perfectly even) → 100;
+        # Fairness = workload evenness across eligible CASUALS (or contract fulfillment
+        # ratio across permanent staff). Coefficient of variation 0 (perfectly even) → 100;
         # higher spread → lower score.
         if loads and casual_used > 1 and sum(loads) > 0:
             mean = sum(loads) / casual_used
@@ -2064,6 +2068,26 @@ class ScheduleModelBuilder:
             cv = sd / mean if mean else 0.0
             fairness_score = max(0, round(100 * (1 - min(1.0, cv))))
             spread = round(max(loads) - min(loads))
+        elif not casual_ids:
+            # Permanent modes (FT/PT): compute workload balance from contract ratios
+            perm_candidate_ids = {e_id for (e_id, _) in getattr(self, '_x', {}).keys() if e_id not in casual_ids}
+            if not perm_candidate_ids:
+                perm_candidate_ids = set(mins_by_emp.keys())
+            ratios = []
+            for e_id in perm_candidate_ids:
+                emp = emp_map.get(e_id)
+                target = getattr(emp, 'contract_weekly_minutes', 0) or 2280
+                actual = mins_by_emp.get(e_id, 0.0)
+                ratios.append(actual / max(1.0, float(target)))
+            if len(ratios) > 1 and sum(ratios) > 0:
+                mean_r = sum(ratios) / len(ratios)
+                sd_r = (sum((r - mean_r) ** 2 for r in ratios) / len(ratios)) ** 0.5
+                cv_r = sd_r / mean_r if mean_r else 0.0
+                fairness_score = max(0, round(100 * (1 - min(1.0, cv_r))))
+                perm_loads = [mins_by_emp.get(e_id, 0.0) for e_id in perm_candidate_ids]
+                spread = round(max(perm_loads) - min(perm_loads)) if perm_loads else 0
+            else:
+                fairness_score, spread = 100, 0
         else:
             fairness_score, spread = 100, 0
 

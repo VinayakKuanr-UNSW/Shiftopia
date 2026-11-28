@@ -50,12 +50,12 @@ describe('pending-offer queries are bounded', () => {
     expect(floorOf(list)).toBe(floorOf(count));
   });
 
-  it('the floor is derived in Sydney, not from the browser timezone', () => {
+  it('the floor is derived in the venue timezone, not from the browser timezone', () => {
     const raw = readFileSync(SRC, 'utf8');
     const helper = raw.slice(raw.indexOf('function actionableOfferFloor'));
-    expect(helper).toMatch(/getTodayInTimezone\(\s*SYDNEY_TZ\s*\)/);
+    expect(helper).toMatch(/getTodayInTimezone\(\s*venueZone\(\)\s*\)/);
     // Never `toISOString()`: that shifts to UTC and rolls the day for a viewer
-    // west of Sydney, hiding an offer for today.
+    // west of the venue, hiding an offer for today.
     expect(helper.slice(0, helper.indexOf('}'))).not.toMatch(/toISOString/);
   });
 });

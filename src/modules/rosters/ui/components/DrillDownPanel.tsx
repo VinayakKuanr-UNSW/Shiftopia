@@ -15,7 +15,8 @@ import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils
 import { X, Loader2, Edit2, Trash2, Send, Undo2, Lock, Ban } from 'lucide-react';
 import { CancelShiftDialog, type CancelShiftTarget } from '../dialogs/CancelShiftDialog';
 import { getShiftRemoval } from '../../domain/shift-removal';
-import { isSydneyPast, isSydneyStarted, formatCalendarDate } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone, hasStartedInTimezone, formatCalendarDate } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
@@ -69,7 +70,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   const isPastDate = useMemo(() => {
     if (!date) return false;
     try {
-      return isSydneyPast(new Date(date + 'T00:00:00'));
+      return isPastInTimezone(new Date(date + 'T00:00:00'));
     } catch {
       return false;
     }
@@ -238,7 +239,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   const selectableShifts = useMemo(() => {
     return filteredShifts.filter(s => {
       const startTimeStr = s.start_time || (s as any).startTime || (s as any).start || '00:00';
-      const hasStarted = isSydneyStarted(s.shift_date, startTimeStr);
+      const hasStarted = hasStartedInTimezone(s.shift_date, startTimeStr, shiftZone(s));
       return !isPastDate && !hasStarted;
     });
   }, [filteredShifts, isPastDate]);
@@ -563,7 +564,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
               >
                 {filteredShifts.map((shift, idx) => {
                   const startTimeStr = shift.start_time || (shift as any).startTime || (shift as any).start || '00:00';
-                  const hasStarted = isSydneyStarted(shift.shift_date, startTimeStr);
+                  const hasStarted = hasStartedInTimezone(shift.shift_date, startTimeStr, shiftZone(shift));
                   const isPast = isPastDate || hasStarted;
                   const isUnassigned = !shift.assigned_employee_id;
                   const isDraft = shift.lifecycle_status === 'Draft';

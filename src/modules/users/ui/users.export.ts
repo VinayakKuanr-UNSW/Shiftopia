@@ -3,10 +3,11 @@
  * or PDF. The libraries load only when an export is asked for. No dollar
  * figures: remuneration is the basis only.
  */
-import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import { EXPORT_COLUMNS, type ExportRow } from '../domain/usersTable';
 
-const stamp = () => formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd');
+const stamp = () => formatInTimezone(new Date(), venueZone(), 'yyyy-MM-dd');
 
 function downloadBlob(blob: Blob, filename: string): void {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -61,7 +62,7 @@ export async function exportUsersPDF(rows: readonly ExportRow[], scopeLabel: str
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100);
-    doc.text(`${scopeLabel} · ${rows.length} ${rows.length === 1 ? 'row' : 'rows'} · exported ${formatInTimezone(new Date(), SYDNEY_TZ, 'd MMM yyyy, h:mm aaa')}`, 14, 25);
+    doc.text(`${scopeLabel} · ${rows.length} ${rows.length === 1 ? 'row' : 'rows'} · exported ${formatInTimezone(new Date(), venueZone(), 'd MMM yyyy, h:mm aaa')}`, 14, 25);
     doc.setTextColor(0);
 
     autoTable(doc, {

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { getSydneyNow, isSydneyToday } from '@/modules/core/lib/date.utils';
+import { getNowInTimezone, isTodayInTimezone } from '@/modules/core/lib/date.utils';
 import { WeekStrip } from '@/modules/core/ui/calendar';
 import { cn } from '@/modules/core/lib/utils';
 import { getPublicHolidayName, isPublicHoliday } from '@/modules/core/lib/holidays';
@@ -20,11 +20,11 @@ interface TimeGridProps {
 const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts, jurisdiction: jurisdictionProp }) => {
   const jurisdiction = useJurisdiction({ jurisdiction: jurisdictionProp });
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [now, setNow] = useState(getSydneyNow());
+  const [now, setNow] = useState(getNowInTimezone());
 
   // Update time every minute
   useEffect(() => {
-    const id = setInterval(() => setNow(getSydneyNow()), 60000);
+    const id = setInterval(() => setNow(getNowInTimezone()), 60000);
     return () => clearInterval(id);
   }, []);
 
@@ -37,7 +37,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts, jurisdiction: j
   }, []);
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  const hasToday = days.some(isSydneyToday);
+  const hasToday = days.some((day) => isTodayInTimezone(day));
   const nowTop = (now.getHours() + now.getMinutes() / 60) * HOUR_HEIGHT;
 
   const formatHour = (h: number) => {
@@ -81,7 +81,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts, jurisdiction: j
 
             {/* Day columns with grid cells */}
             {days.map((day) => {
-              const isTodayCol = isSydneyToday(day);
+              const isTodayCol = isTodayInTimezone(day);
               const holidayName = isPublicHoliday(day, jurisdiction) ? getPublicHolidayName(day, jurisdiction) : null;
               return (
                 <div
@@ -142,7 +142,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts, jurisdiction: j
                   key={day.toISOString()}
                   className="flex-1 flex items-center"
                 >
-                  {isSydneyToday(day) ? (
+                  {isTodayInTimezone(day) ? (
                     <>
                       <div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-1 shadow-lg shadow-red-500/50" />
                       <div className="flex-1 h-0.5 bg-red-500 shadow-sm shadow-red-500/50" />

@@ -1,6 +1,7 @@
 import { supabase } from '@/platform/supabase/client';
 import { Shift, isValidUuid } from '../domain/shift.entity';
-import { getTodayInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { getTodayInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import { completedBreakMinutes, parseScheduledBreaks, parseTimesheetBreaks } from '@/modules/rosters/domain/break-items';
 
 /**
@@ -17,7 +18,7 @@ import { completedBreakMinutes, parseScheduledBreaks, parseTimesheetBreaks } fro
  * these client-side via `resolveOfferDeadline`, after downloading them.
  */
 function actionableOfferFloor(): string {
-    const today = getTodayInTimezone(SYDNEY_TZ);
+    const today = getTodayInTimezone(venueZone());
     const y = today.getFullYear();
     const m = `${today.getMonth() + 1}`.padStart(2, '0');
     const d = `${today.getDate()}`.padStart(2, '0');
@@ -228,7 +229,7 @@ export class ShiftRangeIncompleteError extends Error {
 export type PublishCheckRow = Pick<
     Shift,
     | 'id' | 'shift_date' | 'start_time' | 'end_time' | 'start_at' | 'unpaid_break_minutes'
-    | 'assigned_employee_id' | 'target_employment_type' | 'version'
+    | 'assigned_employee_id' | 'target_employment_type' | 'version' | 'timezone'
 >;
 
 interface DateRangeFilters {
@@ -655,7 +656,7 @@ export const shiftsQueries = {
         const results = await Promise.all(batches.map(async (ids) => {
             const { data, error } = await supabase
                 .from('shifts')
-                .select('id, shift_date, start_time, end_time, start_at, unpaid_break_minutes, assigned_employee_id, target_employment_type, version')
+                .select('id, shift_date, start_time, end_time, start_at, unpaid_break_minutes, assigned_employee_id, target_employment_type, version, timezone')
                 .in('id', ids);
             if (error) throw new Error(error.message);
             return (data ?? []) as PublishCheckRow[];
@@ -1408,6 +1409,7 @@ export const shiftsQueries = {
                     departments(name),
                     sub_departments(name),
                     roles(name, remuneration_level),
+                    roster_subgroup:roster_subgroups(name, roster_groups(name, external_id)),
                     assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                     shift_bids(id, status)
                 `)

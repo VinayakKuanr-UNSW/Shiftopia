@@ -27,7 +27,7 @@ import type { RawLeaveDay } from '@/modules/office/domain/types';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
-import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone, todayISO } from '@/modules/core/lib/date.utils';
 import { 
   PeopleModeEmployee, 
   PeopleModeShift, 
@@ -740,7 +740,7 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   const dateKey = format(date, 'yyyy-MM-dd');
   const shifts = employee.shifts[dateKey] ?? [];
   const leave = getLeave(employee.id, dateKey);
-  const datePast = isSydneyPast(date);
+  const datePast = isPastInTimezone(date);
   /** Approved leave closes the day to rostering. */
   const closed = datePast || Boolean(leave);
 

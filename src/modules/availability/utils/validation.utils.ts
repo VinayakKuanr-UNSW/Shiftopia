@@ -13,7 +13,8 @@
  */
 
 import { RepeatType, AvailabilityFormPayload } from '../model/availability.types';
-import { SYDNEY_TZ, isPastInTimezone } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 
 // ============================================================================
 // ERROR MESSAGES
@@ -54,7 +55,7 @@ interface ValidationResult {
 /**
  * Validate date range
  */
-function validateDateRange(startDate: Date, endDate: Date, timezone: string = SYDNEY_TZ): ValidationResult {
+function validateDateRange(startDate: Date, endDate: Date, timezone: string = venueZone()): ValidationResult {
   const errors: string[] = [];
 
   if (startDate > endDate) {
@@ -166,7 +167,7 @@ export function validateAvailabilityForm(
   const allErrors: string[] = [];
 
   // Validate date range
-  const dateValidation = validateDateRange(payload.start_date, payload.end_date, SYDNEY_TZ);
+  const dateValidation = validateDateRange(payload.start_date, payload.end_date, venueZone());
   allErrors.push(...dateValidation.errors);
 
   // Validate time range

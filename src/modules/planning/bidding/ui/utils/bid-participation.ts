@@ -1,4 +1,5 @@
-import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import type { BidStatus, ParticipationStatus } from '../../model/bid.types';
 
 type ShiftLike = {
@@ -22,7 +23,7 @@ const CLOSED_WITHOUT_OUTCOME: ReadonlySet<BidStatus> = new Set(['withdrawn', 'ex
 export function getBiddingClosesAt(shift: Pick<ShiftLike, 'date' | 'startTime' | 'startAt'>): Date {
     return shift.startAt
         ? new Date(shift.startAt)
-        : parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
+        : parseZonedDateTime(shift.date, shift.startTime, venueZone());
 }
 
 export function getParticipationStatus(

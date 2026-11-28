@@ -29,7 +29,7 @@ import { PageState } from '@/modules/core/ui/components/PageState';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { getSydneyNow } from '@/modules/core/lib/date.utils';
+import { getNowInTimezone } from '@/modules/core/lib/date.utils';
 import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
 import { useMyContractBasis } from '@/modules/availability/state/useMyContractBasis';
 
@@ -62,7 +62,7 @@ const MyLeavePage: React.FC = () => {
     const meId = user?.id ?? '';
 
     // Sydney, like every roster date. Fixed for the page's lifetime.
-    const today = React.useMemo(() => format(getSydneyNow(), 'yyyy-MM-dd'), []);
+    const today = React.useMemo(() => format(getNowInTimezone(), 'yyyy-MM-dd'), []);
 
     const mine = useMyLeave(meId || undefined);
     const contractBasis = useMyContractBasis(meId || undefined);

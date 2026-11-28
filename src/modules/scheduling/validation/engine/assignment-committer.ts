@@ -103,15 +103,24 @@ export class AssignmentCommitter {
             failedEmployees,
         });
 
+        const conflictCount = concurrencyConflicts.length;
+        const successCount = response.success_count ?? 0;
+        let message = `Committed ${successCount} shift${successCount === 1 ? '' : 's'}`;
+        if (conflictCount > 0 && successCount === 0) {
+            message = `${conflictCount} shift${conflictCount === 1 ? '' : 's'} could not be committed due to lifecycle or concurrency conflicts (shift is already assigned, published, or modified).`;
+        } else if (conflictCount > 0) {
+            message = `Committed ${successCount} shift${successCount === 1 ? '' : 's'}, but ${conflictCount} had conflicts.`;
+        }
+
         // NOTE: fairness-ledger write-back is done by the caller
         // (AutoSchedulerController.commit), which owns the org ID + shift dates.
         return {
             success: true,
-            totalCommitted: response.success_count ?? 0,
+            totalCommitted: successCount,
             concurrencyConflicts,
             failedEmployees,
             perEmployee,
-            message: `Committed ${response.success_count ?? 0} shifts`,
+            message,
         };
     }
 }
