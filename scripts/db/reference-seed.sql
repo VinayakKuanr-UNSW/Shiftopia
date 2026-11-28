@@ -17,6 +17,10 @@
 SELECT '-- Reference data for local and CI databases (no personal data).';
 SELECT '-- GENERATED from production by scripts/db/rebaseline-from-prod.sh on '
        || to_char(now() AT TIME ZONE 'Australia/Sydney', 'YYYY-MM-DD') || ' — do not edit by hand.';
+-- Published rate cards are write-locked by trigger (*_rate_card_published_lock);
+-- the seed inserts a published card before its lines, so it opens the lock for
+-- its own session.
+SELECT 'SELECT set_config(''pay.rate_card_lock'', ''off'', false);  -- published rate-card lines are seeded after their card';
 
 WITH spec(ord, sch, rel, blank) AS (VALUES
     -- first: public_holidays and organizations reference jurisdictions
@@ -61,3 +65,6 @@ SELECT format(
   FROM resolved
  ORDER BY ord
 \gexec
+
+-- Close the lock again, so later seed files (and pooled sessions) run locked.
+SELECT E'\nSELECT set_config(''pay.rate_card_lock'', '''', false);  -- lock back on';

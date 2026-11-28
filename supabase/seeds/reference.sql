@@ -1,5 +1,6 @@
 -- Reference data for local and CI databases (no personal data).
 -- GENERATED from production by scripts/db/rebaseline-from-prod.sh on 2026-11-28 — do not edit by hand.
+SELECT set_config('pay.rate_card_lock', 'off', false);  -- published rate-card lines are seeded after their card
 
 -- public.jurisdictions
 INSERT INTO public.jurisdictions (code, name, parent_code, created_at) SELECT code, name, parent_code, created_at FROM jsonb_populate_record(NULL::public.jurisdictions, '{"code": "AU-NSW", "name": "New South Wales", "created_at": "2026-11-27T23:59:49.48285+00:00", "parent_code": "AU"}') ON CONFLICT DO NOTHING;
@@ -1244,3 +1245,5 @@ INSERT INTO public.system_config (id, config_key, config_value, description, las
 INSERT INTO public.system_config (id, config_key, config_value, description, last_modified_by, last_modified_at) SELECT id, config_key, config_value, description, last_modified_by, last_modified_at FROM jsonb_populate_record(NULL::public.system_config, '{"id": "7ae55b9f-3d88-4006-bfeb-2aa99396ff75", "config_key": "app_name", "description": "Application name", "config_value": {"value": "ICC Sydney Workforce Management"}, "last_modified_at": "2026-01-02T11:03:00.94715+00:00"}') ON CONFLICT DO NOTHING;
 INSERT INTO public.system_config (id, config_key, config_value, description, last_modified_by, last_modified_at) SELECT id, config_key, config_value, description, last_modified_by, last_modified_at FROM jsonb_populate_record(NULL::public.system_config, '{"id": "dcdc534d-2a91-4c8e-be22-e66909d83a44", "config_key": "date_format", "description": "Default date format", "config_value": {"value": "DD/MM/YYYY"}, "last_modified_at": "2026-01-02T11:03:00.94715+00:00"}') ON CONFLICT DO NOTHING;
 INSERT INTO public.system_config (id, config_key, config_value, description, last_modified_by, last_modified_at) SELECT id, config_key, config_value, description, last_modified_by, last_modified_at FROM jsonb_populate_record(NULL::public.system_config, '{"id": "eabdbf21-464c-40a9-9071-43a918fe616b", "config_key": "payroll_frequency", "description": "Payroll payment frequency", "config_value": {"value": "fortnightly"}, "last_modified_at": "2026-01-02T11:03:00.94715+00:00"}') ON CONFLICT DO NOTHING;
+
+SELECT set_config('pay.rate_card_lock', '', false);  -- lock back on

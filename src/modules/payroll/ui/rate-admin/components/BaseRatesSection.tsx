@@ -21,13 +21,13 @@ import RateDetailDrawer, { type ClassificationDetail } from './RateDetailDrawer'
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
-const CLASS_RANK: Record<string, number> = {
+export const CLASS_RANK: Record<string, number> = {
   TRAINEE: 0, LEVEL_1: 1, LEVEL_2: 2, LEVEL_3: 3, LEVEL_4: 4,
   LEVEL_5: 5, LEVEL_6: 6, LEVEL_7: 7,
   SECURITY_LEVEL_3: 8, SECURITY_LEVEL_4: 9, SECURITY_LEVEL_5: 10, SECURITY_LEVEL_6: 11,
 };
 
-const classLabel = (c: string) =>
+export const classLabel = (c: string) =>
   c.replace('SECURITY_LEVEL_', 'Security L').replace('LEVEL_', 'Level ').replace('TRAINEE', 'Trainee');
 
 interface ClassRow {
