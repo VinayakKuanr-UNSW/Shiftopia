@@ -1,6 +1,7 @@
 import {
   HOLIDAY_NAMES,
-  PACKED_BY_YEAR,
+  JURISDICTION_PARENTS,
+  PACKED_BY_JURISDICTION,
   MIN_YEAR,
   MAX_YEAR,
 } from './holidays.generated';
@@ -8,8 +9,10 @@ import {
 /**
  * Single source of truth for Australian public holidays across the whole app.
  *
- * The organisation operates out of ICC Sydney, so NSW state holidays apply on
- * top of the national ones. This same table backs the payroll/award cost
+ * One table per jurisdiction (AU-NSW, AU-QLD, Brisbane's AU-QLD-BNE under it),
+ * the same set and rules as `public.public_holidays`; a lookup in a jurisdiction
+ * includes its parents' days. Every lookup takes the jurisdiction, defaulting
+ * to NSW for the callers not yet passing one (DEFAULT_JURISDICTION). This same table backs the payroll/award cost
  * engine, the V8 compliance engine and every calendar surface — public holidays
  * are marked in amber on the shared `Calendar` primitive and the
  * roster/availability grids.
@@ -27,7 +30,7 @@ import {
  * do attract public-holiday penalty rates.
  *
  * WHERE THE DATES COME FROM — still `date-holidays`, but resolved at BUILD time
- * by `scripts/gen-au-nsw-holidays.mjs` into `holidays.generated.ts` rather than
+ * by `scripts/gen-au-holidays.mjs` into `holidays.generated.ts` rather than
  * at module scope in the browser. `new Holidays('AU', 'NSW')` used to run on
  * import, which dragged date-holidays → date-holidays-parser → moment-timezone
  * + astronomia into the eager entry chunk: 1,380 KB of the 2,417 KB bundle
@@ -46,38 +49,64 @@ import {
 export const PUBLIC_HOLIDAY_YEAR_RANGE = { min: MIN_YEAR, max: MAX_YEAR } as const;
 
 /**
- * Resolved holiday names keyed by `YYYY-MM-DD`, unpacked one year at a time.
+ * The jurisdiction every lookup uses unless told otherwise.
+ *
+ * INTERIM (docs/architecture/multi-organization.md H5): the 29 callers do not
+ * yet pass their shift's or organization's jurisdiction, so they ask NSW — the
+ * same answers as before. Threading the jurisdiction through them comes with the
+ * time foundation and pay work; a BCEC (AU-QLD-BNE) shift must pass it.
+ */
+export const DEFAULT_JURISDICTION = 'AU-NSW';
+
+/**
+ * The jurisdiction and its parents, nearest first (AU-QLD-BNE → AU-QLD → AU),
+ * matching `public.jurisdiction_lineage`. Throws for a code the generated table
+ * does not know: answering "not a holiday" for an unknown calendar is the
+ * fail-open bug this module exists to prevent.
+ */
+export function jurisdictionLineage(jurisdiction: string): readonly string[] {
+  if (!(jurisdiction in JURISDICTION_PARENTS)) {
+    throw new Error(`No public-holiday table for jurisdiction "${jurisdiction}" — run npm run gen:holidays`);
+  }
+  const lineage: string[] = [];
+  for (let j: string | null = jurisdiction; j; j = JURISDICTION_PARENTS[j] ?? null) lineage.push(j);
+  return lineage;
+}
+
+/**
+ * Resolved holiday names keyed by `YYYY-MM-DD`, unpacked one (jurisdiction,
+ * year) at a time, with the parents' days merged in (nearest name wins).
  *
  * A calendar asks a lot: a month grid asks 42 times per render and the roster
- * planner asks once per cell across a 31-day range. Unpacking a year's packed
- * string once turns every subsequent lookup into a `Map.get`.
+ * planner asks once per cell across a 31-day range. Unpacking once turns every
+ * subsequent lookup into a `Map.get`.
  */
-const holidayNamesByYear = new Map<number, Map<string, string>>();
+const holidayNamesByJurisdictionYear = new Map<string, Map<string, string>>();
 
-function getYearIndex(year: number): Map<string, string> {
-  const cached = holidayNamesByYear.get(year);
+function getYearIndex(year: number, jurisdiction: string): Map<string, string> {
+  const cacheKey = `${jurisdiction}|${year}`;
+  const cached = holidayNamesByJurisdictionYear.get(cacheKey);
   if (cached) return cached;
 
   const index = new Map<string, string>();
-  const packed = PACKED_BY_YEAR[String(year)];
-  if (packed) {
+  for (const level of jurisdictionLineage(jurisdiction)) {
+    const packed = PACKED_BY_JURISDICTION[level]?.[String(year)];
+    if (!packed) continue;
     for (const entry of packed.split(',')) {
       // 'MMDD:nameIdx' — the year is the key this string was stored under.
       const [mmdd, nameIdx] = entry.split(':');
-      index.set(
-        `${year}-${mmdd.slice(0, 2)}-${mmdd.slice(2, 4)}`,
-        HOLIDAY_NAMES[Number(nameIdx)],
-      );
+      const key = `${year}-${mmdd.slice(0, 2)}-${mmdd.slice(2, 4)}`;
+      if (!index.has(key)) index.set(key, HOLIDAY_NAMES[Number(nameIdx)]);
     }
   }
-  holidayNamesByYear.set(year, index);
+  holidayNamesByJurisdictionYear.set(cacheKey, index);
   return index;
 }
 
-/** True when the given date is an Australian (NSW) public holiday. */
-export function isPublicHoliday(date: Date): boolean {
+/** True when the given date is a public holiday in the jurisdiction (NSW by default). */
+export function isPublicHoliday(date: Date, jurisdiction: string = DEFAULT_JURISDICTION): boolean {
   if (Number.isNaN(date.getTime())) return false;
-  return getYearIndex(date.getFullYear()).has(toDateKey(date));
+  return getYearIndex(date.getFullYear(), jurisdiction).has(toDateKey(date));
 }
 
 /** Local-field `YYYY-MM-DD` key — never via `toISOString()`, which shifts to UTC. */
@@ -89,9 +118,9 @@ function toDateKey(date: Date): string {
 }
 
 /** Human-readable name of the public holiday on a date, or null if none. */
-export function getPublicHolidayName(date: Date): string | null {
+export function getPublicHolidayName(date: Date, jurisdiction: string = DEFAULT_JURISDICTION): string | null {
   if (Number.isNaN(date.getTime())) return null;
-  return getYearIndex(date.getFullYear()).get(toDateKey(date)) ?? null;
+  return getYearIndex(date.getFullYear(), jurisdiction).get(toDateKey(date)) ?? null;
 }
 
 /**
@@ -99,12 +128,15 @@ export function getPublicHolidayName(date: Date): string | null {
  * never through the `Date` string constructor (which is UTC and can roll the
  * day depending on the browser/server timezone).
  */
-export function isPublicHolidayISO(dateStr: string | null | undefined): boolean {
+export function isPublicHolidayISO(
+  dateStr: string | null | undefined,
+  jurisdiction: string = DEFAULT_JURISDICTION,
+): boolean {
   if (!dateStr) return false;
   const key = dateStr.slice(0, 10);
   const year = Number(key.slice(0, 4));
   if (!Number.isFinite(year)) return false;
-  return getYearIndex(year).has(key);
+  return getYearIndex(year, jurisdiction).has(key);
 }
 
 /**
@@ -113,13 +145,16 @@ export function isPublicHolidayISO(dateStr: string | null | undefined): boolean 
  * off (minimum engagement, penalty loadings) — callers should use this instead
  * of re-deriving `getDay() === 0` / `isHoliday()` themselves.
  */
-export function getShiftDayType(dateStr: string | null | undefined): { isSunday: boolean; isPublicHoliday: boolean } {
+export function getShiftDayType(
+  dateStr: string | null | undefined,
+  jurisdiction: string = DEFAULT_JURISDICTION,
+): { isSunday: boolean; isPublicHoliday: boolean } {
   if (!dateStr) return { isSunday: false, isPublicHoliday: false };
   const [year, month, day] = dateStr.split('-').map(Number);
   if (!year || !month || !day) return { isSunday: false, isPublicHoliday: false };
   const localDate = new Date(year, month - 1, day);
   return {
     isSunday: localDate.getDay() === 0,
-    isPublicHoliday: isPublicHoliday(localDate),
+    isPublicHoliday: isPublicHoliday(localDate, jurisdiction),
   };
 }

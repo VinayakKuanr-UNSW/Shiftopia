@@ -19,9 +19,9 @@ SELECT '-- GENERATED from production by scripts/db/rebaseline-from-prod.sh on '
        || to_char(now() AT TIME ZONE 'Australia/Sydney', 'YYYY-MM-DD') || ' — do not edit by hand.';
 
 WITH spec(ord, sch, rel, blank) AS (VALUES
-    -- first: CHECK organizations_jurisdiction_known calls jurisdiction_is_known(),
-    -- which looks the jurisdiction up in public_holidays
-    ( 0, 'public', 'public_holidays',          '{}'::text[]),
+    -- first: public_holidays and organizations reference jurisdictions
+    (-1, 'public', 'jurisdictions',            '{}'::text[]),
+    ( 0, 'public', 'public_holidays',          '{}'),
     -- org structure (public.* is canonical; hr.departments / hr.subdepartments still mirror it)
     ( 2, 'public', 'organizations',            '{email,phone}'),
     ( 3, 'hr',     'departments',              '{}'),

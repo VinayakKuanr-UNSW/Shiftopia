@@ -31,8 +31,8 @@
     "android:run": "npm run android:build:web && npx cap run android",
     "db:types": "node scripts/gen-types.mjs",
     "gen:eba-rates": "node scripts/gen-eba-rate-schedule.mjs",
-    "gen:holidays": "node scripts/gen-au-nsw-holidays.mjs",
-    "gen:holidays:check": "node scripts/gen-au-nsw-holidays.mjs --check",
+    "gen:holidays": "node scripts/gen-au-holidays.mjs",
+    "gen:holidays:check": "node scripts/gen-au-holidays.mjs --check",
     "graph:diff": "node scripts/graph-diff.js"
   },
   "dependencies": {
