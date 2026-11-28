@@ -10,7 +10,7 @@ import { surface } from '@/modules/core/ui/layout/pageTokens';
 
 // Components
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
-import { isSydneyPast } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone } from '@/modules/core/lib/date.utils';
 import {
   RosterFunctionBar,
   ViewType,
@@ -521,7 +521,7 @@ const NewRostersPage: React.FC = () => {
     date?: Date,
     rosterId?: string
   ) => {
-    if (date && isSydneyPast(date)) return;
+    if (date && isPastInTimezone(date)) return;
     const context: ShiftContext = {
       mode: 'group',
       launchSource: 'grid', // Date will be locked
@@ -1280,7 +1280,7 @@ const NewRostersPage: React.FC = () => {
             selectedShifts={selectedV8ShiftIdsArray}
             onToggleShiftSelection={handleToggleShiftSelection}
             onAddShift={(employee, date) => {
-              if (date && isSydneyPast(date)) return;
+              if (date && isPastInTimezone(date)) return;
               const context: ShiftContext = {
                 mode: 'people',
                 launchSource: 'grid', // Date will be locked

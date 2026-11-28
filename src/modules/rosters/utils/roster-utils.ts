@@ -1,5 +1,6 @@
 import { Shift, TemplateGroupType } from '../domain/shift.entity';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { isShiftLocked as isShiftLockedUtil, LockContext } from '../domain/shift-locking.utils';
 
 /**
@@ -63,15 +64,16 @@ export function resolveShiftStatus(
     const { shift_date, start_time } = rawShift;
     if (!shift_date || !start_time) return { isPast: false, isLocked: false };
 
-    // shiftStartAt is the absolute instant of the Sydney wall-clock start, so we
+    // shiftStartAt is the absolute instant of the venue wall-clock start, so we
     // compare it against the real current instant (tz-independent).
     const now = new Date();
-    const shiftStartAt = parseZonedDateTime(shift_date, start_time, SYDNEY_TZ);
+    const zone = shiftZone(rawShift);
+    const shiftStartAt = parseZonedDateTime(shift_date, start_time, zone);
 
     const isPast = now >= shiftStartAt;
     
     // isShiftLocked already exists and handles different context rules
-    const isLocked = isShiftLockedUtil(shift_date, start_time, context);
+    const isLocked = isShiftLockedUtil(shift_date, start_time, context, zone);
 
     return { isPast, isLocked };
 }

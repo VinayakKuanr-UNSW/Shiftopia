@@ -14,13 +14,14 @@
  * stored schedule-level flag.
  */
 
-import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 
 type BillableSideSource = 'manual' | 'snapped' | 'missing';
 
 export interface BillableSide {
-  /** 'HH:MM' Sydney wall-clock, or null if not yet resolvable / genuinely missing. */
+  /** 'HH:MM' venue wall-clock, or null if not yet resolvable / genuinely missing. */
   hhmm: string | null;
   /**
    * 'manual'  — a manager-entered timesheet value won this side.
@@ -39,8 +40,9 @@ export interface BillableSide {
  * Snap an HH:MM[:SS] or ISO datetime string to the nearest 15-minute boundary.
  * e.g. "09:07:00" → "09:00", "09:08" → "09:15", "09:52" → "09:45"
  * Seconds participate in the rounding ("09:07:59" is nearer 09:15 than 09:00).
- * ISO timestamps are read as VENUE wall-clock time (Australia/Sydney), not the
- * browser's, so every viewer snaps to the same billable time.
+ * ISO timestamps are read as VENUE wall-clock time (`timezone`, default the
+ * active venue's), not the browser's, so every viewer snaps to the same
+ * billable time.
  * Returns null if value is falsy or unparseable.
  *
  * NOTE: the returned string carries no date/day component — if snapping rolls
@@ -49,7 +51,10 @@ export interface BillableSide {
  * crossing from the sign of (end − start) on the resolved times (see
  * calculateNetMinutes below) rather than trusting a separately-stored flag.
  */
-export function snapToQuarterHour(value: string | null | undefined): string | null {
+export function snapToQuarterHour(
+  value: string | null | undefined,
+  timezone: string = venueZone(),
+): string | null {
   if (!value) return null;
 
   let h: number;
@@ -57,10 +62,10 @@ export function snapToQuarterHour(value: string | null | undefined): string | nu
   let s: number;
 
   if (value.includes('T') || (value.length > 8 && value.includes('-'))) {
-    // ISO datetime → extract Sydney wall-clock components
+    // ISO datetime → extract the venue's wall-clock components
     const d = new Date(value);
     if (isNaN(d.getTime())) return null;
-    const [hh, mm, ss] = formatInTimezone(d, SYDNEY_TZ, 'HH:mm:ss').split(':').map(Number);
+    const [hh, mm, ss] = formatInTimezone(d, timezone, 'HH:mm:ss').split(':').map(Number);
     h = hh; m = mm; s = ss;
   } else {
     // Plain HH:MM or HH:MM:SS string
@@ -83,15 +88,19 @@ export function snapToQuarterHour(value: string | null | undefined): string | nu
  * The raw clock time as 'HH:MM' venue wall-clock, to the minute — the
  * un-snapped counterpart of {@link snapToQuarterHour}, for pricing what was
  * actually clocked rather than what is billable. Accepts an ISO timestamp
- * (read as Australia/Sydney) or a plain 'HH:MM[:SS]'. Null if unparseable.
+ * (read in `timezone`, default the active venue's) or a plain 'HH:MM[:SS]'.
+ * Null if unparseable.
  */
-export function clockToWallTime(value: string | null | undefined): string | null {
+export function clockToWallTime(
+  value: string | null | undefined,
+  timezone: string = venueZone(),
+): string | null {
   if (isBlankSentinel(value)) return null;
   const v = value as string;
   if (v.includes('T') || (v.length > 8 && v.includes('-'))) {
     const d = new Date(v);
     if (isNaN(d.getTime())) return null;
-    return formatInTimezone(d, SYDNEY_TZ, 'HH:mm');
+    return formatInTimezone(d, timezone, 'HH:mm');
   }
   const [h, m] = v.split(':').map(Number);
   if (Number.isNaN(h) || Number.isNaN(m)) return null;
@@ -109,6 +118,7 @@ export function isShiftFinished(
   scheduledStart: string,
   scheduledEnd: string,
   actualEnd?: string | null,
+  timezone: string = venueZone(),
 ): boolean {
   if (actualEnd && actualEnd !== '-' && actualEnd !== '—') return true;
 
@@ -117,10 +127,10 @@ export function isShiftFinished(
   try {
     const dateStr = typeof date === 'string'
       ? date
-      : formatInTimezone(date, SYDNEY_TZ, 'yyyy-MM-dd');
+      : formatInTimezone(date, timezone, 'yyyy-MM-dd');
 
-    const startInstant = parseZonedDateTime(dateStr, scheduledStart, SYDNEY_TZ);
-    let endInstant = parseZonedDateTime(dateStr, scheduledEnd, SYDNEY_TZ);
+    const startInstant = parseZonedDateTime(dateStr, scheduledStart, timezone);
+    let endInstant = parseZonedDateTime(dateStr, scheduledEnd, timezone);
 
     if (endInstant.getTime() <= startInstant.getTime()) {
       endInstant = new Date(endInstant.getTime() + 24 * 60 * 60 * 1000);
@@ -148,10 +158,11 @@ export function resolveBillableSide(
   manualValue: string | null | undefined,
   actualValue: string | null | undefined,
   isFinished: boolean,
+  timezone: string = venueZone(),
 ): BillableSide {
   if (!isBlankSentinel(manualValue)) return { hhmm: manualValue as string, source: 'manual' };
   if (!isFinished) return { hhmm: null, source: null };
-  const snapped = snapToQuarterHour(isBlankSentinel(actualValue) ? null : actualValue);
+  const snapped = snapToQuarterHour(isBlankSentinel(actualValue) ? null : actualValue, timezone);
   if (snapped) return { hhmm: snapped, source: 'snapped' };
   return { hhmm: null, source: 'missing' };
 }

@@ -11,6 +11,7 @@ import {
     registerOrganizationJurisdiction,
     resolveJurisdiction,
 } from '@/modules/core/lib/jurisdiction-registry';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { getDailyToilByDay } from '@/modules/toil/api/toil.api';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import type { ScheduledBreakItem } from '@/modules/compliance/shape/types';
@@ -203,6 +204,7 @@ export async function getShiftsForTimesheet(
                 target_employment_type,
                 user_contract_id,
                 organization_id,
+                timezone,
                 department_id,
                 sub_department_id,
                 role_id,
@@ -344,9 +346,10 @@ export async function getShiftsForTimesheet(
             // Resolve each side ONCE — every field below (net minutes, adjusted
             // start/end, and their source) derives from these two results so the
             // tier logic can't drift between them.
-            const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, clockOut);
-            const resolvedStart = resolveBillableSide(billable?.billable_start, clockIn, finished);
-            const resolvedEnd = resolveBillableSide(billable?.billable_end, clockOut, finished);
+            const zone = shiftZone(shift);
+            const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, clockOut, zone);
+            const resolvedStart = resolveBillableSide(billable?.billable_start, clockIn, finished, zone);
+            const resolvedEnd = resolveBillableSide(billable?.billable_end, clockOut, finished, zone);
 
             // Zero-fallback rule: unpaid break derives from billables (if manager edited or DB synced)
             // or from actual completed timesheet_breaks. NEVER falls back to shift.unpaid_break_minutes!
@@ -391,14 +394,14 @@ export async function getShiftsForTimesheet(
             // ── Variances (drive attendance/performance metrics) ────────────
             // A manually adjusted time OVERRIDES the raw clock for its own side
             // only — mirrors the per-side `*` on the Live Rules badges. Sched-
-            // uled fallbacks are venue wall-clock (Sydney), never browser-local.
+            // uled fallbacks are the venue's wall clock, never browser-local.
             const scheduledStartMs = shift.start_at
                 ? new Date(shift.start_at).getTime()
-                : parseZonedDateTime(shift.shift_date, shift.start_time).getTime();
+                : parseZonedDateTime(shift.shift_date, shift.start_time, zone).getTime();
             const scheduledEndMs = shift.end_at
                 ? new Date(shift.end_at).getTime()
                 : (() => {
-                      const ms = parseZonedDateTime(shift.shift_date, shift.end_time).getTime();
+                      const ms = parseZonedDateTime(shift.shift_date, shift.end_time, zone).getTime();
                       return ms <= scheduledStartMs ? ms + 24 * 60 * 60 * 1000 : ms; // overnight
                   })();
             const clockInVariance = (() => {
@@ -650,7 +653,7 @@ export async function updateTimesheetEntry(
         // Always get shift + ground-truth timesheets details to determine default snapped/scheduled times and no_show status
         const { data: shift } = await supabase
             .from('shifts')
-            .select('assignment_outcome, start_time, end_time, shift_date, timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show)')
+            .select('assignment_outcome, start_time, end_time, shift_date, timezone, timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show)')
             .eq('id', shiftId)
             .single();
 
@@ -783,7 +786,7 @@ export async function updateTimesheetEntry(
         if (updates.adjustedStart !== undefined) {
             const adjStart = validTime(updates.adjustedStart);
             const normAdjStart = normalizeToHHMM(adjStart);
-            const defaultStart = shift ? normalizeToHHMM(snapToQuarterHour(effectiveClockIn)) : null;
+            const defaultStart = shift ? normalizeToHHMM(snapToQuarterHour(effectiveClockIn, shiftZone(shift))) : null;
 
             if (normAdjStart && normAdjStart !== defaultStart) {
                 payload.billable_start = adjStart;
@@ -795,7 +798,7 @@ export async function updateTimesheetEntry(
         if (updates.adjustedEnd !== undefined) {
             const adjEnd = validTime(updates.adjustedEnd);
             const normAdjEnd = normalizeToHHMM(adjEnd);
-            const defaultEnd = shift ? normalizeToHHMM(snapToQuarterHour(effectiveClockOut)) : null;
+            const defaultEnd = shift ? normalizeToHHMM(snapToQuarterHour(effectiveClockOut, shiftZone(shift))) : null;
 
             if (normAdjEnd && normAdjEnd !== defaultEnd) {
                 payload.billable_end = adjEnd;
@@ -846,14 +849,14 @@ export async function updateTimesheetEntry(
         // downstream pricing trusts an 'approved' status to mean real hours.
         if (payload.status === 'approved') {
             const finishedForApproval = isShiftFinished(
-                shift?.shift_date ?? '', shift?.start_time ?? '', shift?.end_time ?? '', effectiveClockOut,
+                shift?.shift_date ?? '', shift?.start_time ?? '', shift?.end_time ?? '', effectiveClockOut, shiftZone(shift),
             );
             const existingManualStart = existing?.billable_start ?? (existing as any)?.start_time ?? null;
             const existingManualEnd = existing?.billable_end ?? (existing as any)?.end_time ?? null;
             const effectiveManualStart = payload.billable_start !== undefined ? payload.billable_start : existingManualStart;
             const effectiveManualEnd = payload.billable_end !== undefined ? payload.billable_end : existingManualEnd;
-            const approvalStart = resolveBillableSide(effectiveManualStart, effectiveClockIn, finishedForApproval);
-            const approvalEnd = resolveBillableSide(effectiveManualEnd, effectiveClockOut, finishedForApproval);
+            const approvalStart = resolveBillableSide(effectiveManualStart, effectiveClockIn, finishedForApproval, shiftZone(shift));
+            const approvalEnd = resolveBillableSide(effectiveManualEnd, effectiveClockOut, finishedForApproval, shiftZone(shift));
 
             if (approvalStart.source === 'missing' || approvalEnd.source === 'missing') {
                 console.error(

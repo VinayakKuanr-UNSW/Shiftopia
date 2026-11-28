@@ -21,7 +21,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { page, surface } from '@/modules/core/ui/layout/pageTokens';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/supabase/client';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
@@ -104,13 +105,13 @@ function toMs(shift: Shift, type: 'start' | 'end'): number {
     // so the epoch is correct regardless of the viewer's browser timezone.
     return shift.start_at
       ? new Date(shift.start_at).getTime()
-      : parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime();
+      : parseZonedDateTime(shift.shift_date, shift.start_time, shiftZone(shift)).getTime();
   }
 
   // Handle end time with overnight support
   const end = shift.end_at
     ? new Date(shift.end_at)
-    : parseZonedDateTime(shift.shift_date, shift.end_time, SYDNEY_TZ);
+    : parseZonedDateTime(shift.shift_date, shift.end_time, shiftZone(shift));
   // start_at/end_at already encode the overnight rollover; only the naive-parse
   // fallback needs the +1 day bump.
   if (!shift.end_at && shift.is_overnight) {

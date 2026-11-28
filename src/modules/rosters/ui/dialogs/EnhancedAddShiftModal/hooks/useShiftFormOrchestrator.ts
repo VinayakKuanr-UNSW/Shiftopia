@@ -33,6 +33,7 @@ import { mapShiftOpResultToUx, type ShiftOpResult } from '@/modules/rosters/doma
 import { formatInTimezone, parseZonedDateTime, todayISO } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
+import { venueZone } from '@/modules/core/lib/venue';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
 import { calculateShiftLength, defaultShiftLevel, isDateInPast, isShiftStarted, newShiftStartRefusal } from '../utils';
@@ -49,8 +50,6 @@ import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import { getAvailabilityView } from '@/modules/availability/api/availability-view.api';
 import { parseScheduledBreaks } from '@/modules/rosters/domain/break-items';
-
-const SYDNEY_TZ = 'Australia/Sydney';
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -69,6 +68,10 @@ export function useShiftFormOrchestrator({
 }: EnhancedAddShiftModalProps) {
     const safeContext = context ?? {};
     const { toast } = useToast();
+    // The venue the shift is for: its zone (wall clock ↔ instant) and holiday
+    // jurisdiction. The database re-stamps the zone from the organization.
+    const venueOrgId = existingShift?.organization_id ?? safeContext.organizationId;
+    const venueTz = venueZone(venueOrgId);
 
     /** See `initialTargetEmploymentType`: the Office group starts as FT. */
     const defaultTargetFor = (ctx: typeof context) => initialTargetEmploymentType(
@@ -107,7 +110,7 @@ export function useShiftFormOrchestrator({
             break_start: undefined,
             break_end: undefined,
             unpaid_breaks: [],
-            timezone: SYDNEY_TZ,
+            timezone: venueTz,
             assigned_employee_id: safeContext.employeeId || null,
             required_skills: [],
             required_licenses: [],
@@ -144,7 +147,7 @@ export function useShiftFormOrchestrator({
     const watchEmployeeId = form.watch('assigned_employee_id');
     const watchShiftDate = form.watch('shift_date');
     const watchRemLevel = form.watch('remuneration_level');
-    const watchTimezone = form.watch('timezone') || SYDNEY_TZ;
+    const watchTimezone = form.watch('timezone') || venueTz;
     const watchGroup = form.watch('group_type');
     const watchSubGroupName = form.watch('sub_group_name');
     const watchIsTraining = form.watch('is_training');
@@ -521,7 +524,7 @@ export function useShiftFormOrchestrator({
                 break_start: initialUnpaidBreaks[0]?.start || undefined,
                 break_end: initialUnpaidBreaks[0]?.end || undefined,
                 unpaid_breaks: initialUnpaidBreaks,
-                timezone: existingShift.timezone || SYDNEY_TZ,
+                timezone: existingShift.timezone || venueTz,
                 assigned_employee_id: existingShift.assigned_employee_id || existingShift.assignedEmployeeId || null,
                 required_skills: (existingShift.required_skills || existingShift.skills || []).map((s: any) => typeof s === 'object' && s ? s.id : s),
                 required_licenses: (existingShift.required_licenses || existingShift.licenses || []).map((l: any) => typeof l === 'object' && l ? l.id : l),
@@ -563,7 +566,7 @@ export function useShiftFormOrchestrator({
                 break_start: undefined,
                 break_end: undefined,
                 unpaid_breaks: [],
-                timezone: SYDNEY_TZ,
+                timezone: venueTz,
                 assigned_employee_id: isTemplateMode ? null : (context?.employeeId || null),
                 required_skills: [],
                 required_licenses: [],
@@ -1157,7 +1160,7 @@ export function useShiftFormOrchestrator({
 
                 // Calculate UTC canonical timestamps (start_at, end_at)
                 const shiftDateStr = format(values.shift_date!, 'yyyy-MM-dd');
-                const tzone = values.timezone || SYDNEY_TZ;
+                const tzone = values.timezone || venueTz;
                 const startAtDate = parseZonedDateTime(shiftDateStr, values.start_time, tzone);
 
                 const [sh, sm] = values.start_time.split(':').map(Number);

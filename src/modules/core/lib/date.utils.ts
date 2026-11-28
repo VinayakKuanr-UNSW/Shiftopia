@@ -1,15 +1,20 @@
 import { startOfDay, isBefore, isSameDay, format as formatDateFns, parseISO } from 'date-fns';
 import { toZonedTime, format as formatZoned, toDate } from 'date-fns-tz';
+import { venueZone, shiftZone, DEFAULT_VENUE_ZONE, type VenueRef } from './venue';
 
-// Default fallback timezone if none provided
-export const SYDNEY_TZ = 'Australia/Sydney';
+/**
+ * ICC Sydney's zone. Only for code that is still Sydney-pinned (the
+ * AutoScheduler); everything else asks the venue (`./venue`): a shift's own
+ * zone, or `venueZone()` for the active venue, which every default below uses.
+ */
+export const SYDNEY_TZ = DEFAULT_VENUE_ZONE;
 
 /**
  * Gets the current date in the specified timezone, with time set to 00:00:00
  * Use this to get "Today" in the target timezone.
- * @param timezone The IANA timezone identifier (default: Australia/Sydney)
+ * @param timezone The IANA timezone identifier (default: the active venue's)
  */
-export const getTodayInTimezone = (timezone: string = SYDNEY_TZ): Date => {
+export const getTodayInTimezone = (timezone: string = venueZone()): Date => {
     // Get current time in target timezone
     const nowInTz = toZonedTime(new Date(), timezone);
     // Return start of that day
@@ -18,9 +23,9 @@ export const getTodayInTimezone = (timezone: string = SYDNEY_TZ): Date => {
 
 /**
  * Gets the current full Date object (timestamp) in the specified timezone
- * @param timezone The IANA timezone identifier (default: Australia/Sydney)
+ * @param timezone The IANA timezone identifier (default: the active venue's)
  */
-export const getNowInTimezone = (timezone: string = SYDNEY_TZ): Date => {
+export const getNowInTimezone = (timezone: string = venueZone()): Date => {
     return toZonedTime(new Date(), timezone);
 };
 
@@ -29,7 +34,7 @@ export const getNowInTimezone = (timezone: string = SYDNEY_TZ): Date => {
  * @param date The date to check
  * @param timezone The IANA timezone identifier
  */
-export const isPastInTimezone = (date: Date, timezone: string = SYDNEY_TZ): boolean => {
+export const isPastInTimezone = (date: Date, timezone: string = venueZone()): boolean => {
     const today = getTodayInTimezone(timezone);
     return isBefore(date, today);
 };
@@ -40,7 +45,7 @@ export const isPastInTimezone = (date: Date, timezone: string = SYDNEY_TZ): bool
  * @param date The date to check
  * @param timezone The IANA timezone identifier
  */
-export const isTodayInTimezone = (date: Date, timezone: string = SYDNEY_TZ): boolean => {
+export const isTodayInTimezone = (date: Date, timezone: string = venueZone()): boolean => {
     const today = getTodayInTimezone(timezone);
     return isSameDay(date, today);
 };
@@ -52,7 +57,7 @@ export const isTodayInTimezone = (date: Date, timezone: string = SYDNEY_TZ): boo
  * Example: "2023-10-01", "10:00", "Australia/Sydney"
  * Result: The UTC timestamp corresponding to 10:00 AM Sydney time on that date.
  */
-export const parseZonedDateTime = (dateStr: string, timeStr: string, timezone: string = SYDNEY_TZ): Date => {
+export const parseZonedDateTime = (dateStr: string, timeStr: string, timezone: string = venueZone()): Date => {
     // timeStr might be "HH:mm" or "HH:mm:ss" from postgres. We only want HH:mm to append ":00" safely
     const cleanTimeStr = timeStr.slice(0, 5);
     const dateTimeStr = `${dateStr}T${cleanTimeStr}:00`;
@@ -66,7 +71,7 @@ export const parseZonedDateTime = (dateStr: string, timeStr: string, timezone: s
  * @param timezone The IANA timezone identifier (e.g. 'Australia/Sydney')
  * @param formatStr The format string (e.g. 'yyyy-MM-dd', 'HH:mm', 'EEE')
  */
-export const formatInTimezone = (date: Date, timezone: string = SYDNEY_TZ, formatStr: string = 'yyyy-MM-dd'): string => {
+export const formatInTimezone = (date: Date, timezone: string = venueZone(), formatStr: string = 'yyyy-MM-dd'): string => {
     // date-fns-tz `format` only uses `timeZone` for zone-NAME tokens (z/zzz/xxx) —
     // it does NOT convert the numeric H/m/d fields. Passing a raw UTC instant would
     // therefore render in the runtime's LOCAL zone. `toZonedTime` shifts the instant
@@ -75,20 +80,21 @@ export const formatInTimezone = (date: Date, timezone: string = SYDNEY_TZ, forma
     return formatZoned(toZonedTime(date, timezone), formatStr, { timeZone: timezone });
 };
 
-// --- CANONICAL SHIFT WALL-CLOCK (always AEST/AEDT) ---------------------------
+// --- CANONICAL SHIFT WALL-CLOCK (the venue's) --------------------------------
 //
-// This is an Australian app: shift times must ALWAYS display in Australia/Sydney
-// (AEST in winter / AEDT in summer — the IANA zone handles DST automatically),
-// regardless of the viewer's browser timezone.
+// Shift times ALWAYS display as the VENUE's wall clock (Australia/Sydney for ICC
+// Sydney, Australia/Brisbane for BCEC — the IANA zone handles DST), regardless
+// of the viewer's browser timezone.
 //
 // Source of truth = the authored naive fields (shift_date + start_time/end_time),
-// which are the Sydney wall-clock the roster was built in. The `start_at`/`end_at`
-// timestamptz columns are DERIVED (a DB trigger recomputes them from the naive
-// fields) and can drift/go stale, so they are only a fallback. Never format shift
-// times through the browser's local zone, and never trust a per-row tz column for
-// DISPLAY — pin to SYDNEY_TZ.
+// which are the wall clock of the venue the roster was built in. The
+// `start_at`/`end_at` timestamptz columns are DERIVED (a DB trigger recomputes
+// them from the naive fields and the shift's zone) and are only a fallback.
+// The zone is the shift's own `timezone` (stamped by the database from its
+// organization), else its organization's, else the active venue's (`shiftZone`).
+// Never format shift times through the browser's local zone.
 
-export interface ShiftTimeFields {
+export interface ShiftTimeFields extends VenueRef {
     shift_date?: string | null;
     start_time?: string | null;
     end_time?: string | null;
@@ -97,7 +103,7 @@ export interface ShiftTimeFields {
 }
 
 /**
- * Resolve a shift's start/end as an absolute instant whose Sydney wall-clock is
+ * Resolve a shift's start/end as an absolute instant whose venue wall-clock is
  * the authored time. Prefers naive shift_date + start_time/end_time; falls back
  * to start_at/end_at. Returns null when nothing usable is present.
  */
@@ -108,7 +114,7 @@ export const getShiftInstant = (
     if (!shift) return null;
     const time = part === 'start' ? shift.start_time : shift.end_time;
     if (shift.shift_date && time) {
-        const d = parseZonedDateTime(shift.shift_date, time, SYDNEY_TZ);
+        const d = parseZonedDateTime(shift.shift_date, time, shiftZone(shift));
         if (!isNaN(d.getTime())) return d;
     }
     const at = part === 'start' ? shift.start_at : shift.end_at;
@@ -120,7 +126,7 @@ export const getShiftInstant = (
 };
 
 /**
- * Format a shift's start/end time in Australia/Sydney (AEST/AEDT),
+ * Format a shift's start/end time as the venue's wall clock,
  * browser-timezone-independent.
  * @param fmt date-fns format string (e.g. 'HH:mm', 'h:mm a')
  */
@@ -131,12 +137,13 @@ export const formatShiftTime = (
     fallback: string = '',
 ): string => {
     const d = getShiftInstant(shift, part);
-    return d ? formatInTimezone(d, SYDNEY_TZ, fmt) : fallback;
+    return d ? formatInTimezone(d, shiftZone(shift), fmt) : fallback;
 };
 
 /**
  * Format any clock value a shift card shows — scheduled, clocked or adjusted —
- * in Australia/Sydney, whatever the viewer's timezone.
+ * as the venue's wall clock (`timezone`, default the active venue's), whatever
+ * the viewer's timezone.
  *
  * The one formatter for the one job. There were three, and they disagreed:
  *
@@ -152,12 +159,13 @@ export const formatShiftTime = (
  *
  * Handles both shapes a card is handed: a full timestamp (`actual_start`, a
  * timestamptz) and a naive wall-clock string (`start_time`, "HH:mm[:ss]",
- * already Sydney by definition and so never converted).
+ * already the venue's wall clock by definition and so never converted).
  */
 export const formatClockTime = (
     value: string | null | undefined,
     fmt: string = 'h:mm a',
     fallback: string | null = null,
+    timezone: string = venueZone(),
 ): string | null => {
     if (!value) return fallback;
     const raw = value.trim();
@@ -165,7 +173,7 @@ export const formatClockTime = (
     // Already formatted upstream — pass it through rather than re-parsing.
     if (/[AP]M$/i.test(raw)) return raw;
 
-    // A full timestamp: an absolute instant, so convert it into Sydney.
+    // A full timestamp: an absolute instant, so convert it into the venue's zone.
     if (raw.includes('T') || (raw.length > 8 && raw.includes('-'))) {
         // Postgres renders a timestamptz as "2026-08-20 00:25:05+00" — a space
         // instead of T, and an hours-only offset that `new Date` rejects in
@@ -175,17 +183,17 @@ export const formatClockTime = (
             .replace(/([+-]\d{2})$/, '$1:00');
         const d = new Date(iso);
         if (isNaN(d.getTime())) return fallback;
-        return formatInTimezone(d, SYDNEY_TZ, fmt);
+        return formatInTimezone(d, timezone, fmt);
     }
 
-    // A naive wall-clock string is ALREADY Sydney; converting it would move it.
+    // A naive wall-clock string is ALREADY the venue's; converting it would move it.
     const [h, m] = raw.split(':').map(Number);
     if (isNaN(h) || isNaN(m)) return fallback;
     return formatZoned(new Date(2000, 0, 1, h, m), fmt);
 };
 
 /**
- * Format a shift's calendar date in Australia/Sydney (AEST/AEDT).
+ * Format a shift's calendar date in the venue's zone.
  * Prefers the authored shift_date; falls back to start_at.
  * @param fmt date-fns format string (e.g. 'EEE, MMM d', 'yyyy-MM-dd')
  */
@@ -195,11 +203,12 @@ export const formatShiftDate = (
     fallback: string = '',
 ): string => {
     if (shift?.shift_date) {
-        const d = parseZonedDateTime(shift.shift_date, shift.start_time || '00:00', SYDNEY_TZ);
-        if (!isNaN(d.getTime())) return formatInTimezone(d, SYDNEY_TZ, fmt);
+        const zone = shiftZone(shift);
+        const d = parseZonedDateTime(shift.shift_date, shift.start_time || '00:00', zone);
+        if (!isNaN(d.getTime())) return formatInTimezone(d, zone, fmt);
     }
     const d = getShiftInstant(shift, 'start');
-    return d ? formatInTimezone(d, SYDNEY_TZ, fmt) : fallback;
+    return d ? formatInTimezone(d, shiftZone(shift), fmt) : fallback;
 };
 
 /**
@@ -208,7 +217,7 @@ export const formatShiftDate = (
  * with date-fns (local fields), renders the PREVIOUS day west of Greenwich. A
  * calendar date has no timezone, so parse it as a local wall-clock date — the
  * output is then the literal date in every browser tz. Full ISO instants
- * (length > 10) are rendered in Sydney instead.
+ * (length > 10) are rendered in the active venue's zone instead.
  * @param fmt date-fns format (e.g. 'EEE, MMM d', 'MMM d, yyyy')
  */
 export const formatCalendarDate = (
@@ -222,49 +231,32 @@ export const formatCalendarDate = (
         return isNaN(d.getTime()) ? fallback : formatDateFns(d, fmt);
     }
     const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? fallback : formatInTimezone(d, SYDNEY_TZ, fmt);
+    return isNaN(d.getTime()) ? fallback : formatInTimezone(d, venueZone(), fmt);
 };
 
 /**
- * Today's calendar date as 'yyyy-MM-dd' in the given timezone (default Sydney).
- * Use instead of `format(new Date(), 'yyyy-MM-dd')`, which yields the browser's
- * local calendar day and can be off by one near midnight for non-Sydney viewers.
+ * Today's calendar date as 'yyyy-MM-dd' in the given timezone (default: the
+ * active venue's). Use instead of `format(new Date(), 'yyyy-MM-dd')`, which
+ * yields the browser's local calendar day and is off by one near midnight for a
+ * viewer outside the venue's zone.
  */
-export const todayISO = (timezone: string = SYDNEY_TZ): string =>
+export const todayISO = (timezone: string = venueZone()): string =>
     formatInTimezone(new Date(), timezone, 'yyyy-MM-dd');
 
-/** Sydney calendar date (yyyy-MM-dd) for range/bucket filtering. */
+/** The shift's venue calendar date (yyyy-MM-dd) for range/bucket filtering. */
 export const getShiftDateKey = (shift: ShiftTimeFields | null | undefined): string | undefined => {
     if (shift?.shift_date) return shift.shift_date;
     const d = getShiftInstant(shift, 'start');
-    return d ? formatInTimezone(d, SYDNEY_TZ, 'yyyy-MM-dd') : undefined;
+    return d ? formatInTimezone(d, shiftZone(shift), 'yyyy-MM-dd') : undefined;
 };
 
-// --- LEGACY COMPATIBILITY (Deprecate gradually) ---
+// --- LEGACY COMPATIBILITY ---
 
 /**
- * @deprecated Use getTodayInTimezone(timezone) instead
+ * @deprecated Sydney-pinned; kept only for the AutoScheduler. Use
+ * getTodayInTimezone(timezone) — its default is the active venue.
  */
 export const getSydneyToday = (): Date => getTodayInTimezone(SYDNEY_TZ);
-
-/**
- * @deprecated Use getNowInTimezone(timezone) instead
- */
-export const getSydneyNow = (): Date => getNowInTimezone(SYDNEY_TZ);
-
-/**
- * @deprecated Use isPastInTimezone(date, timezone) instead
- */
-export const isSydneyPast = (date: Date): boolean => isPastInTimezone(date, SYDNEY_TZ);
-
-
-/**
- * @deprecated Use isTodayInTimezone(date, timezone) instead
- */
-/**
- * @deprecated Use isTodayInTimezone(date, timezone) instead
- */
-export const isSydneyToday = (date: Date): boolean => isTodayInTimezone(date, SYDNEY_TZ);
 
 /**
  * Checks if a given date is an Australian (NSW) public holiday.
@@ -281,15 +273,21 @@ export const isSydneyToday = (date: Date): boolean => isTodayInTimezone(date, SY
 export { isPublicHoliday } from '@/modules/core/lib/holidays';
 
 /**
- * Checks if a specific wall-clock time on a specific date has already passed in Sydney.
- * Useful for locking "today's" shifts once they have started.
- * 
+ * Whether a wall-clock time on a date has already passed in the venue's zone
+ * (default: the active venue's; pass the shift's zone when a shift is at hand).
+ * Useful for locking "today's" shifts once they have started. Advisory: the
+ * database decides.
+ *
  * @param dateStr ISO date string (YYYY-MM-DD)
  * @param timeStr 24h time string (HH:mm)
  */
-export const isSydneyStarted = (dateStr: string, timeStr: string): boolean => {
+export const hasStartedInTimezone = (
+    dateStr: string,
+    timeStr: string,
+    timezone: string = venueZone(),
+): boolean => {
     if (!dateStr || !timeStr) return false;
-    const shiftStart = parseZonedDateTime(dateStr, timeStr, SYDNEY_TZ);
+    const shiftStart = parseZonedDateTime(dateStr, timeStr, timezone);
     const now = new Date(); // Absolute UTC comparison
     return now >= shiftStart;
 };

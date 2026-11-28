@@ -17,7 +17,7 @@ import type { UnfilledShift } from '../modes/UnfilledShiftsPanel';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { parse } from 'date-fns';
 import { canDropOnTarget } from '@/modules/rosters/utils/dnd.utils';
-import { isSydneyPast } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone } from '@/modules/core/lib/date.utils';
 
 interface DroppableDateCellProps {
   employeeId: string;
@@ -46,10 +46,10 @@ const DroppableDateCellImpl: React.FC<DroppableDateCellProps> = ({
 
   // Pre-compute the per-cell static portion of canDrop. react-dnd evaluates
   // canDrop on every mouseover during a drag — running the date parse +
-  // isSydneyPast for every one of ~1.4k cells per mousemove tick was the
+  // isPastInTimezone for every one of ~1.4k cells per mousemove tick was the
   // dominant cost behind "DnD super super high latency". Cached per cell.
   const isPastDate = React.useMemo(
-    () => isSydneyPast(parse(dateKey, 'yyyy-MM-dd', new Date())),
+    () => isPastInTimezone(parse(dateKey, 'yyyy-MM-dd', new Date())),
     [dateKey],
   );
 

@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { startOfWeekAU } from '@/modules/core/lib/date/week';
-import { formatInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatInTimezone, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { Clock } from 'lucide-react';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -109,12 +110,12 @@ const TimesheetPage: React.FC = () => {
         return `${h}:${m.toString().padStart(2, '0')}`;
     };
 
-    const formatClockDisplay = (value: string | null | undefined): string => {
+    const formatClockDisplay = (value: string | null | undefined, timezone: string): string => {
         if (!value || value === '-') return '-';
         const d = new Date(value);
-        // ISO timestamps render as VENUE wall-clock (Sydney) so every viewer
+        // ISO timestamps render as the VENUE's wall clock so every viewer
         // sees the same clock times the schedule columns are expressed in.
-        if (!isNaN(d.getTime())) return formatInTimezone(d, SYDNEY_TZ, 'h:mm a');
+        if (!isNaN(d.getTime())) return formatInTimezone(d, timezone, 'h:mm a');
         const parts = value.split(':').map(Number);
         if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
             const h = parts[0], m = parts[1];
@@ -160,11 +161,11 @@ const TimesheetPage: React.FC = () => {
         remunerationLevelNumber: shift.remunerationLevelNumber,
         scheduledStart: shift.scheduledStart,
         scheduledEnd: shift.scheduledEnd,
-        clockIn: formatClockDisplay(shift.clockIn),
-        clockOut: formatClockDisplay(shift.clockOut),
+        clockIn: formatClockDisplay(shift.clockIn, shiftZone(shift)),
+        clockOut: formatClockDisplay(shift.clockOut, shiftZone(shift)),
         // Raw ISO timestamps — the Live Rules engine and review gate MUST get
         // these (not the formatted display strings) or overnight shifts and
-        // non-Sydney viewers are misclassified.
+        // viewers outside the venue's zone are misclassified.
         rawActualStart: shift.clockIn,
         rawActualEnd: shift.clockOut,
         rawStartAt: shift.rawStartAt,
@@ -249,7 +250,7 @@ const TimesheetPage: React.FC = () => {
                 const endMs = s.rawEndAt
                     ? new Date(s.rawEndAt).getTime()
                     : (() => {
-                          const end = parseZonedDateTime(s.shiftDate, s.scheduledEnd, SYDNEY_TZ);
+                          const end = parseZonedDateTime(s.shiftDate, s.scheduledEnd, shiftZone(s));
                           if (s.scheduledEnd < s.scheduledStart) end.setDate(end.getDate() + 1);
                           return end.getTime();
                       })();

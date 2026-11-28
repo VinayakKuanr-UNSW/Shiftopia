@@ -73,7 +73,8 @@ import { FIELD_INPUT } from '@/modules/core/ui/components/PickerField';
 import { MonthGrid } from '@/modules/core/ui/calendar';
 import { toast } from 'sonner';
 import { useAuth } from '@/platform/auth/useAuth';
-import { getSydneyToday, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { getTodayInTimezone, formatInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import { useTemplates, useRostersLookup, useSubDepartments } from '@/modules/rosters/state/useRosterShifts';
 import {
     useApplyTemplate,
@@ -219,7 +220,7 @@ const HistoryItem: React.FC<{ batch: TemplateBatch }> = ({ batch }) => {
                 <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-bold truncate text-foreground">{batch.appliedByName || 'System'}</p>
                     <p className="text-[11px] text-muted-foreground">
-                        {formatInTimezone(new Date(batch.appliedAt), SYDNEY_TZ, 'd MMM, HH:mm')}
+                        {formatInTimezone(new Date(batch.appliedAt), venueZone(), 'd MMM, HH:mm')}
                     </p>
                 </div>
             </div>
@@ -243,7 +244,7 @@ const HistoryItem: React.FC<{ batch: TemplateBatch }> = ({ batch }) => {
                 open={isConfirmOpen}
                 onOpenChange={setIsConfirmOpen}
                 title="Undo this template application?"
-                description={<>Applied {formatInTimezone(new Date(batch.appliedAt), SYDNEY_TZ, 'd MMM, HH:mm')} by {batch.appliedByName || 'System'}.</>}
+                description={<>Applied {formatInTimezone(new Date(batch.appliedAt), venueZone(), 'd MMM, HH:mm')} by {batch.appliedByName || 'System'}.</>}
                 load={loadUndoPreview}
                 onConfirm={async () => { await undo.mutateAsync({ batchId: batch.id }); }}
                 acknowledgementLabel="I understand these shifts are removed for good, including ones staff are assigned to."
@@ -332,7 +333,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
         return set;
     }, [existingRosters]);
 
-    const today = getSydneyToday();
+    const today = getTodayInTimezone();
     const getDayStatus = (date: Date): DayStatus => {
         if (existingDates.has(format(date, 'yyyy-MM-dd'))) return 'existing';
         if (isBefore(startOfDay(date), today)) return 'past';

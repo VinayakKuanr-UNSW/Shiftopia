@@ -1,5 +1,6 @@
 import { supabase } from '@/platform/supabase/client';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { processInChunks, DEFAULT_CHUNK_CONCURRENCY } from '../domain/bulk-action-engine';
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
@@ -301,7 +302,7 @@ export const shiftsCommands = {
         const currentShift = await shiftsQueries.getShiftById(shiftId);
         if (currentShift) {
             const now = new Date();
-            const shiftStartAt = parseZonedDateTime(currentShift.shift_date, currentShift.start_time, SYDNEY_TZ);
+            const shiftStartAt = parseZonedDateTime(currentShift.shift_date, currentShift.start_time, shiftZone(currentShift));
             if (now >= shiftStartAt) {
                 throw new Error('Cannot edit a shift that is in the past.');
             }
@@ -674,7 +675,7 @@ export const shiftsCommands = {
                 }
                 const ttsMs = shift.start_at
                     ? new Date(shift.start_at).getTime() - Date.now()
-                    : parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime() - Date.now();
+                    : parseZonedDateTime(shift.shift_date, shift.start_time, shiftZone(shift)).getTime() - Date.now();
                 if (ttsMs <= 0) {
                     return { id, pass: false as const, reason: 'Already started — too late to publish' };
                 }
@@ -867,7 +868,7 @@ export const shiftsCommands = {
         const shift = await shiftsQueries.getShiftById(shiftId);
         if (shift) {
             const now = new Date();
-            const shiftStartAt = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
+            const shiftStartAt = parseZonedDateTime(shift.shift_date, shift.start_time, shiftZone(shift));
             if (now >= shiftStartAt) {
                 throw new Error('Cannot unpublish a shift that is in the past.');
             }

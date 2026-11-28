@@ -7,7 +7,8 @@ import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { SYDNEY_TZ, parseZonedDateTime, formatShiftTime, formatShiftDate, getShiftDateKey, formatInTimezone } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, formatShiftTime, formatShiftDate, getShiftDateKey, formatInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone, shiftZone } from '@/modules/core/lib/venue';
 import { biddingApi } from '../../api/bidding.api';
 import { validateCompliance, type ComplianceResult, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
@@ -238,8 +239,8 @@ const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     const availableShifts: ShiftData[] = React.useMemo(() => {
         return rawAvailableShifts.map(s => {
-            const shiftStartAt = (s as any).start_at ? new Date((s as any).start_at) : parseZonedDateTime(s.shift_date, s.start_time, (s as any).tz_identifier || SYDNEY_TZ);
-            const shiftEndAt = (s as any).end_at ? new Date((s as any).end_at) : parseZonedDateTime(s.shift_date, s.end_time, (s as any).tz_identifier || SYDNEY_TZ);
+            const shiftStartAt = (s as any).start_at ? new Date((s as any).start_at) : parseZonedDateTime(s.shift_date, s.start_time, (s as any).tz_identifier || shiftZone(s as any));
+            const shiftEndAt = (s as any).end_at ? new Date((s as any).end_at) : parseZonedDateTime(s.shift_date, s.end_time, (s as any).tz_identifier || shiftZone(s as any));
 
             if (!(s as any).end_at && shiftEndAt < shiftStartAt) {
                 shiftEndAt.setDate(shiftEndAt.getDate() + 1);
@@ -319,8 +320,8 @@ const EmployeeBidsPage: React.FC = () => {
         return rawMyBids.map(b => {
             const s = b.shift;
             if (!s) return null;
-            const shiftStartAt = (s as any).start_at ? new Date((s as any).start_at) : parseZonedDateTime(s.shift_date, s.start_time, (s as any).tz_identifier || SYDNEY_TZ);
-            const shiftEndAt = (s as any).end_at ? new Date((s as any).end_at) : parseZonedDateTime(s.shift_date, s.end_time, (s as any).tz_identifier || SYDNEY_TZ);
+            const shiftStartAt = (s as any).start_at ? new Date((s as any).start_at) : parseZonedDateTime(s.shift_date, s.start_time, (s as any).tz_identifier || shiftZone(s as any));
+            const shiftEndAt = (s as any).end_at ? new Date((s as any).end_at) : parseZonedDateTime(s.shift_date, s.end_time, (s as any).tz_identifier || shiftZone(s as any));
 
             if (!(s as any).end_at && shiftEndAt < shiftStartAt) {
                 shiftEndAt.setDate(shiftEndAt.getDate() + 1);
@@ -378,7 +379,7 @@ const EmployeeBidsPage: React.FC = () => {
                 remunerationLevel: (s.roles as any)?.remuneration_level ? `Level-${(s.roles as any).remuneration_level}` : (s as any).remuneration_levels?.level_name || 'Level-4',
                 status: b.status as any,
                 lifecycleStatus: s.lifecycle_status,
-                bidTime: formatInTimezone(parseISO(b.created_at), SYDNEY_TZ, 'yyyy-MM-dd HH:mm'),
+                bidTime: formatInTimezone(parseISO(b.created_at), venueZone(), 'yyyy-MM-dd HH:mm'),
                 notes: b.notes,
                 groupType,
                 subGroupColor: getDeptColor(groupType, s.departments?.name || '')

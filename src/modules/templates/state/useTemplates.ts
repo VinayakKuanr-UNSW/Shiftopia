@@ -5,7 +5,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/platform/supabase/client';
 import { assertWrote } from '@/platform/supabase/writes';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import {
   Template,
   SubGroup,
@@ -52,7 +53,7 @@ type LogLevel =
 const log = (level: LogLevel, message: string, data?: any) => {
   if (!IS_DEV && level !== 'error' && level !== 'security') return;
 
-  const timestamp = formatInTimezone(new Date(), SYDNEY_TZ, 'HH:mm:ss.SSS');
+  const timestamp = formatInTimezone(new Date(), venueZone(), 'HH:mm:ss.SSS');
   const prefix = `${timestamp} ${LOG_PREFIX}`;
 
   const styles: Record<LogLevel, string> = {

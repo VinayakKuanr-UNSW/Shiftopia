@@ -21,7 +21,8 @@ import {
     ChevronUp,
 } from 'lucide-react';
 import { parseISO } from 'date-fns';
-import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/supabase/client';
 import { getScenarioWindow } from '@/modules/compliance';
@@ -169,7 +170,7 @@ function StoredSnapshotPanel({ snapshot }: { snapshot: any }) {
                 </div>
                 {ts && (
                     <span className="text-[11px] font-mono text-muted-foreground/40">
-                        {formatInTimezone(parseISO(ts), SYDNEY_TZ, 'dd MMM yyyy HH:mm')}
+                        {formatInTimezone(parseISO(ts), venueZone(), 'dd MMM yyyy HH:mm')}
                     </span>
                 )}
             </div>

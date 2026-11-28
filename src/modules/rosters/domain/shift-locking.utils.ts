@@ -1,4 +1,5 @@
-import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 
 /**
  * Page context for determining lock rules.
@@ -15,14 +16,14 @@ export type LockContext = 'my_roster' | 'roster_management';
  * @param shiftDateStr The date string from database (YYYY-MM-DD)
  * @param startTimeStr The time string from database (HH:MM or HH:MM:SS)
  * @param context The page context ('my_roster' | 'roster_management') - Defaults to 'my_roster'
- * @param timezone Timezone identifier (default: SYDNEY_TZ)
+ * @param timezone Timezone identifier (default: the active venue's; pass the shift's)
  * @returns boolean
  */
 export const isShiftLocked = (
     shiftDateStr: string,
     startTimeStr: string,
     _context: LockContext = 'my_roster',
-    timezone: string = SYDNEY_TZ
+    timezone: string = venueZone()
 ): boolean => {
     try {
         const cleanStartTime = startTimeStr.length === 5 ? `${startTimeStr}:00` : startTimeStr;
@@ -44,12 +45,12 @@ export const isShiftLocked = (
 };
 
 /**
- * Checks if a shift has already started based on the current time and Sydney TZ.
+ * Checks if a shift has already started based on the current time and the venue's zone.
  */
 export const isShiftCommenced = (
     shiftDateStr: string,
     startTimeStr: string,
-    timezone: string = SYDNEY_TZ
+    timezone: string = venueZone()
 ): boolean => {
     try {
         const cleanStartTime = startTimeStr.length === 5 ? `${startTimeStr}:00` : startTimeStr;

@@ -8,7 +8,8 @@
  * "On bidding" is any bidding_status other than 'not_on_bidding' and 'bidding_closed_no_winner'.
  */
 
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 
 export type ShiftUrgency = 'normal' | 'urgent';
 
@@ -24,7 +25,7 @@ const TWENTY_FOUR_H_MS = 24 * 60 * 60 * 1000;
  * `tz` may be overridden for multi-region rosters. Parse failures are treated
  * as far-future (Infinity) so a bad row never spuriously locks a shift.
  */
-export function computeTTS(shiftDate: string, startTime: string, tz: string = SYDNEY_TZ): number {
+export function computeTTS(shiftDate: string, startTime: string, tz: string = venueZone()): number {
   try {
     const start = parseZonedDateTime(shiftDate, startTime, tz); // interprets wall-clock in `tz`
     return start.getTime() - Date.now();

@@ -6,7 +6,8 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { ELECTION_LEAVE_TYPES } from '../model/leave.types';
 import type {
@@ -196,7 +197,7 @@ export interface LeaveShiftConflict {
    */
   worked: boolean;
   /**
-   * Its start (Sydney) has passed — worked or not. A started shift is never
+   * Its start (in the venue's zone) has passed — worked or not. A started shift is never
    * deleted or unassigned (the database refuses both), so approval keeps and
    * reports it.
    */
@@ -239,7 +240,7 @@ export async function getLeaveShiftConflicts(
 ): Promise<LeaveShiftConflict[]> {
   const { data, error } = await (supabase as any)
     .from('shifts')
-    .select('id, shift_date, start_time, end_time, lifecycle_status, target_employment_type, timesheets(clock_in)')
+    .select('id, shift_date, start_time, end_time, lifecycle_status, target_employment_type, timezone, timesheets(clock_in)')
     .eq('assigned_employee_id', employeeId)
     .gte('shift_date', startDate)
     .lte('shift_date', endDate)
@@ -265,7 +266,7 @@ export async function getLeaveShiftConflicts(
       worked,
       started: worked
         || (Boolean(row.shift_date && row.start_time)
-          && parseZonedDateTime(String(row.shift_date).split('T')[0], row.start_time, SYDNEY_TZ).getTime() <= Date.now()),
+          && parseZonedDateTime(String(row.shift_date).split('T')[0], row.start_time, shiftZone(row)).getTime() <= Date.now()),
     };
   });
 }

@@ -12,7 +12,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
 import { runHardValidation, HardValidationResult, ShiftTimeRange } from '@/modules/compliance';
 import { format, addDays, subDays } from 'date-fns';
-import { getNowInTimezone, SYDNEY_TZ, todayISO } from '@/modules/core/lib/date.utils';
+import { getNowInTimezone, todayISO } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 // Deep import: `from 'lodash'` pulls the whole CJS bundle, which Rollup cannot
 // tree-shake and then hoists into the EAGER entry chunk (72 KB) because
@@ -72,7 +73,7 @@ export function useHardValidation({
     watchEmployeeId,
     isTemplateMode,
     existingV8ShiftId,
-    timezone = SYDNEY_TZ,
+    timezone = venueZone(),
     targetEmploymentType,
 }: UseHardValidationProps): UseHardValidationReturn {
     const [hardValidation, setHardValidation] = useState<HardValidationResult>({ passed: true, errors: [] });

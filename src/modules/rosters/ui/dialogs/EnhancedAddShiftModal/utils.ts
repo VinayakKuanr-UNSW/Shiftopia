@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
-import { isPastInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import type { Role } from './types';
 
 /**
@@ -28,12 +29,12 @@ export const formatHours = (h: number): string => {
 };
 
 
-export const isDateInPast = (date: Date | undefined, timezone: string = SYDNEY_TZ): boolean => {
+export const isDateInPast = (date: Date | undefined, timezone: string = venueZone()): boolean => {
     if (!date) return false;
     return isPastInTimezone(date, timezone);
 };
 
-export const isShiftStarted = (date: Date | string | undefined, startTime: string | undefined, timezone: string = SYDNEY_TZ): boolean => {
+export const isShiftStarted = (date: Date | string | undefined, startTime: string | undefined, timezone: string = venueZone()): boolean => {
     if (!date || !startTime) return false;
 
     // Guard: Only validate if we have a complete "HH:MM" format (4-5 chars with a colon)

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 import { LucideIcon } from 'lucide-react';
 import { ScopeFilterBanner } from './ScopeFilterBanner';
 import type { ScopeLevel } from './GlobalScopeFilter';
@@ -81,7 +82,7 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
                     </div>
                 </div>
                 {/* Merge note: the responsive `compactOnMobile` sizing comes from the
-                    mobile work, but the clock itself stays on formatInTimezone/SYDNEY_TZ
+                    mobile work, but the clock itself stays on formatInTimezone/venueZone()
                     and keeps its role="timer" label. The mobile branch had switched to
                     date-fns `format`, which renders the VIEWER's local time — wrong for
                     a venue clock, and a silent regression outside Australia. */}
@@ -90,21 +91,21 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
                         className="text-right"
                         role="timer"
                         aria-live="off"
-                        aria-label={`Current venue time: ${formatInTimezone(now, SYDNEY_TZ, 'HH:mm:ss')}`}
+                        aria-label={`Current venue time: ${formatInTimezone(now, venueZone(), 'HH:mm:ss')}`}
                     >
                         <div className={cn('flex items-center justify-end gap-3 mb-1', compactOnMobile && 'mb-0 sm:mb-1')}>
                             <p className={cn(
                                 'text-3xl font-mono font-black tabular-nums leading-none text-slate-800 dark:text-foreground',
                                 compactOnMobile && 'text-xl sm:text-3xl',
                             )}>
-                                {formatInTimezone(now, SYDNEY_TZ, 'HH:mm')}
+                                {formatInTimezone(now, venueZone(), 'HH:mm')}
                             </p>
                         </div>
                         <p className={cn(
                             'text-xs font-mono tabular-nums text-slate-400 dark:text-muted-foreground',
                             compactOnMobile && 'hidden sm:block',
                         )} aria-hidden="true">
-                            :{formatInTimezone(now, SYDNEY_TZ, 'ss')}
+                            :{formatInTimezone(now, venueZone(), 'ss')}
                         </p>
                     </div>
                     {rightActions && (

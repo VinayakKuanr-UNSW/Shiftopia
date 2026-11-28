@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/platform/auth/useAuth';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 import { computeShiftUrgency, isOnBidding } from '@/modules/rosters/domain/bidding-urgency';
 import type { ManagerBidShift, BidToggle } from './types';
@@ -56,7 +57,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
 
         const shiftStart = s.start_at
           ? new Date(s.start_at)
-          : parseZonedDateTime(s.shift_date, s.start_time || '00:00', s.tz_identifier || SYDNEY_TZ);
+          : parseZonedDateTime(s.shift_date, s.start_time || '00:00', s.tz_identifier || shiftZone(s));
         const biddingDeadline = shiftStart.toISOString();
 
         const stateId = determineShiftState(s);

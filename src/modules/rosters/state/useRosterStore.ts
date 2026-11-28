@@ -27,7 +27,8 @@ import {
   parseISO,
 } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatInTimezone } from '@/modules/core/lib/date.utils';
+import { venueZone } from '@/modules/core/lib/venue';
 
 // ── Re-exported types (match what was exported from RosterUIContext) ──────────
 
@@ -148,7 +149,7 @@ export const useRosterStore = create<RosterState>()(
       selectedV8ShiftIds: new Set(),
 
       // ── Initial values (the date is restored from storage when present) ────
-      _selectedDateISO: formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd'),
+      _selectedDateISO: formatInTimezone(new Date(), venueZone(), 'yyyy-MM-dd'),
       isDnDModeActive: false,
       showUnfilledPanel: false,
       showFatigueHeatmap: false,
@@ -277,7 +278,7 @@ export const useRosterStore = create<RosterState>()(
       },
 
       navigateToToday: () =>
-        set({ _selectedDateISO: formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd') }),
+        set({ _selectedDateISO: formatInTimezone(new Date(), venueZone(), 'yyyy-MM-dd') }),
     }),
 
     {

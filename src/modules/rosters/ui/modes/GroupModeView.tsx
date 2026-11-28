@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, startTransition } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { isPastInTimezone, hasStartedInTimezone, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { shiftZone } from '@/modules/core/lib/venue';
 import {
   Loader2,
   MoreHorizontal,
@@ -221,10 +222,10 @@ const DroppableCellActive: React.FC<DroppableCellProps> = ({
   disabled,
 }) => {
   // Pre-computed per cell. react-dnd evaluates canDrop on every mousemove
-  // for every registered target — running the date parse + isSydneyPast on
+  // for every registered target — running the date parse + isPastInTimezone on
   // each call across ~1.4k cells was a big contributor to drag latency.
   const isPastDate = React.useMemo(
-    () => isSydneyPast(parse(date, 'yyyy-MM-dd', new Date())),
+    () => isPastInTimezone(parse(date, 'yyyy-MM-dd', new Date())),
     [date],
   );
 
@@ -854,7 +855,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
               </div>
               {dates.map((date, idx) => {
                 const dateIsToday = isToday(date);
-                const dateIsPast = isSydneyPast(date);
+                const dateIsPast = isPastInTimezone(date);
                 const isGhost = !isDateInTemplate(date);
                 const holidayName = getPublicHolidayName(date, jurisdiction);
 
@@ -1016,7 +1017,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                       return timeA.localeCompare(timeB);
                     });
                     const cellIsToday = isToday(date);
-                    const cellIsPast = isSydneyPast(date);
+                    const cellIsPast = isPastInTimezone(date);
                     const isGhost = !isDateInTemplate(date);
                     const holidayName = getPublicHolidayName(date, jurisdiction);
 
@@ -1075,13 +1076,13 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                                   disabled={
                                     isBulkMode ||
                                     cellIsPast ||
-                                    isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime) ||
+                                    hasStartedInTimezone(format(date, 'yyyy-MM-dd'), shift.startTime, shiftZone(shift.rawShift)) ||
                                     !canEdit ||
                                     !isDnDModeActive ||
                                     (isDnDModeActive && !shift.isDraft)
                                   }
                                 >
-                                  {(isDnDModeActive && canEdit && !cellIsPast && !isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime) && shift.isDraft) ? (
+                                  {(isDnDModeActive && canEdit && !cellIsPast && !hasStartedInTimezone(format(date, 'yyyy-MM-dd'), shift.startTime, shiftZone(shift.rawShift)) && shift.isDraft) ? (
                                     <DroppableShiftAssign
                                       shiftId={shift.id}
                                       shiftRole={shift.role}
@@ -1814,7 +1815,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         const isDraft = shift.lifecycle_status === 'Draft';
 
         // Lock calculation: Check if shift start time is in the past
-        const isLocked = isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
+        const isLocked = isShiftLocked(shift.shift_date, shift.start_time, 'roster_management', shiftZone(shift));
 
         sgEntry.shifts[dateKey].push({
           id: shift.id,
@@ -1926,7 +1927,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // ==================== AUTO-COLLAPSE PAST GROUPS ====================
   // A group is "all-past" when every date in the current view window falls
-  // before today (start of Sydney day). This is memoized on visualGroups +
+  // before today (start of the venue's day). This is memoized on visualGroups +
   // dates so it only recomputes when the data or date window changes.
   const pastGroupIds = useMemo((): Set<string> => {
     if (dates.length === 0) return new Set();
@@ -1991,7 +1992,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     // 2. If date is today, allow
     // 3. If date > today, allow
 
-    if (isSydneyPast(date)) {
+    if (isPastInTimezone(date)) {
       toast({
         title: 'Past Date',
         description: 'Cannot add shifts on past dates.',
@@ -2033,8 +2034,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const startTimeStr = shift.rawShift.start_time;
     const shiftDateStr = shift.rawShift.shift_date;
 
-    // Started check in Sydney (AEST/AEDT) — independent of the viewer's browser tz.
-    const shiftStart = parseZonedDateTime(shiftDateStr, startTimeStr, SYDNEY_TZ);
+    // Started check in the shift's venue zone — independent of the viewer's browser tz.
+    const shiftStart = parseZonedDateTime(shiftDateStr, startTimeStr, shiftZone(shift.rawShift));
 
     if (new Date() >= shiftStart && shift.rawShift.lifecycle_status !== 'Published') {
       toast({
@@ -2096,7 +2097,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // Bidding window auto-closes 4 hours before shift start
   const handleRequestPublish = (shift: ShiftDisplay) => {
     // SECURITY: prevent publishing started shifts
-    if (isShiftLocked(shift.rawShift.shift_date, shift.rawShift.start_time, 'roster_management')) {
+    if (isShiftLocked(shift.rawShift.shift_date, shift.rawShift.start_time, 'roster_management', shiftZone(shift.rawShift))) {
       toast({
         title: 'Action Locked',
         description: 'Cannot publish a shift that has already started.',
@@ -2111,7 +2112,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   const handleRequestUnpublish = (shift: ShiftDisplay) => {
     // SECURITY: prevent unpublishing started shifts
-    if (isShiftLocked(shift.rawShift.shift_date, shift.rawShift.start_time, 'roster_management')) {
+    if (isShiftLocked(shift.rawShift.shift_date, shift.rawShift.start_time, 'roster_management', shiftZone(shift.rawShift))) {
       toast({
         title: 'Action Locked',
         description: 'Cannot unpublish a shift that has already started.',
@@ -2157,7 +2158,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const startTime = shift?.start_time;
 
     // Check if shift is locked before toggling
-    if (shift && shiftDate && startTime && isShiftLocked(shiftDate, startTime, 'roster_management')) {
+    if (shift && shiftDate && startTime && isShiftLocked(shiftDate, startTime, 'roster_management', shiftZone(shift))) {
       toast({
         title: 'Selection Blocked',
         description: 'You cannot select a locked shift.',
@@ -2180,7 +2181,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     date: Date
   ) => {
     // Check if this is a past shift (Date-wise)
-    const isPastDate = isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime);
+    const isPastDate = hasStartedInTimezone(format(date, 'yyyy-MM-dd'), shift.startTime, shiftZone(shift.rawShift));
 
     // Strict Locking Check (Includes past TIME on current day + 4h rule)
     const isLocked = shift.isLocked;
@@ -2189,7 +2190,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const accentColor = groupConfig.accent === 'emerald' ? 'green' : groupConfig.accent;
 
 
-    const hasStarted = isSydneyStarted(shift.rawShift.shift_date, shift.startTime);
+    const hasStarted = hasStartedInTimezone(shift.rawShift.shift_date, shift.startTime, shiftZone(shift.rawShift));
 
     const menu = (
       <ShiftCardOverflowMenu
@@ -2215,7 +2216,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         key={shift.id}
         className="h-full relative group/card"
         onDoubleClick={() => {
-          const hasStarted = isSydneyStarted(shift.rawShift.shift_date, shift.startTime);
+          const hasStarted = hasStartedInTimezone(shift.rawShift.shift_date, shift.startTime, shiftZone(shift.rawShift));
 
           if (hasStarted) {
             toast({
