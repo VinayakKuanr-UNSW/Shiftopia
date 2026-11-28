@@ -192,6 +192,12 @@ export interface CostCalculatorOptions {
   loadings?: import('./loadings').RateCardLoadings;
 
   /**
+   * Public-holiday jurisdiction for this shift (e.g. 'AU-NSW', 'AU-QLD-BNE').
+   * Overrides `ctx.jurisdiction`; omitted ⇒ falls back to `DEFAULT_JURISDICTION`.
+   */
+  jurisdiction?: string;
+
+  /**
    * The organization's PUBLISHED rate cards (rate-card-resolver.ts). Given, the
    * shift is priced from the card covering its date — rates, allowances,
    * loadings, trainee schedule — and is `unpriced` when none covers it.

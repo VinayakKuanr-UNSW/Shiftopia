@@ -148,6 +148,8 @@ const TimesheetPage: React.FC = () => {
         date: shift.shiftDate,
         employeeId: shift.employeeId || '',
         employee: shift.employeeName,
+        organizationId: shift.organizationId,
+        organizationJurisdiction: shift.organizationJurisdiction,
         organization: shift.organizationName,
         department: shift.departmentName,
         subDepartment: shift.subDepartmentName,

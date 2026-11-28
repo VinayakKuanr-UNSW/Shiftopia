@@ -241,6 +241,7 @@ const LeaveApprovalsPage: React.FC = () => {
                     onClose={() => setReviewing(null)}
                     readOnly={!canDecide}
                     toil={toilByEmployee?.get(reviewing.employeeId) ?? null}
+                    organizationIds={scope.org_ids}
                 />
             )}
         </LeavePageShell>

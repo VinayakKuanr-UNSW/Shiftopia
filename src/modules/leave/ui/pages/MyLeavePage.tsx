@@ -185,6 +185,7 @@ const MyLeavePage: React.FC = () => {
                     leaveType={requestType}
                     entries={entries}
                     toil={toil}
+                    organizationIds={scope.org_ids}
                 />
             )}
             {meId && (

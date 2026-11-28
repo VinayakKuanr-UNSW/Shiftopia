@@ -14,6 +14,7 @@ import type { AccessCertificate, AccessLevel } from './types';
 export interface OrganizationOption {
     id: string;
     name: string;
+    jurisdiction?: string;
 }
 
 const LADDER: readonly AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
@@ -45,6 +46,7 @@ export function organizationsOf(certificates: readonly AccessCertificate[] | und
         byId.set(certificate.organizationId, {
             id: certificate.organizationId,
             name: certificate.organizationName || 'Organization',
+            ...(certificate.organizationJurisdiction ? { jurisdiction: certificate.organizationJurisdiction } : {}),
         });
     }
     return [...byId.values()];

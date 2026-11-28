@@ -1,3 +1,4 @@
+import { DEFAULT_JURISDICTION } from '@/modules/core/lib/holidays';
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
 import { isPublicHolidayISO, SATURDAY, SUNDAY } from './constants';
 import { type RateCardLoadings } from './loadings';
@@ -165,16 +166,26 @@ export function estimateDetailedShiftCost(
     shift_date = shift_date.split('T')[0];
   }
   
+  // Rates, allowances, loadings and the trainee schedule are the organization's
+  // published rate card in force on the shift date (rate-card-resolver.ts);
+  // without a schedule, the embedded effective-dated set (cl 25.1 as data).
+  const pricing = resolvePricing(shift_date, options.rateCards ?? ctx?.rateCards, options.loadings, ctx?.loadings);
+  if (!pricing) return UNPRICED_COST_BREAKDOWN;
+  const rateSet = pricing.rateSet;
+
   // ── Date facts (Phase 3) ───────────────────────────────────────────────
+  // The card's organization types its own public holidays (e.g. Brisbane's Ekka).
+  const jurisdiction = pricing.jurisdiction ?? options.jurisdiction ?? ctx?.jurisdiction ?? DEFAULT_JURISDICTION;
+  const canUseCtx = !!ctx && jurisdiction === (ctx.jurisdiction ?? DEFAULT_JURISDICTION);
   let isHoliday: boolean;
   let dayOfWeek: number;
 
-  if (ctx) {
-    const facts = getDateFacts(ctx, shift_date);
+  if (canUseCtx) {
+    const facts = getDateFacts(ctx!, shift_date);
     isHoliday = facts.isPublicHoliday;
     dayOfWeek = facts.dayOfWeek;
   } else {
-    isHoliday = isPublicHolidayISO(shift_date);
+    isHoliday = isPublicHolidayISO(shift_date, jurisdiction);
     const dateObj = new Date(shift_date + 'T00:00:00');
     dayOfWeek = isNaN(dateObj.getTime()) ? 1 : dateObj.getDay();
   }
@@ -186,15 +197,6 @@ export function estimateDetailedShiftCost(
   // defensible reading (Flexible Part-Time is a sub-type of Part-Time under
   // cl 12.4), but the EA is not explicit. Kept as-is until the parties clarify.
   const isPartTime = /part/i.test(employmentType || '');
-  
-  // Rates, allowances, loadings and the trainee schedule are the organization's
-  // published rate card in force on the shift date (rate-card-resolver.ts);
-  // without a schedule, the embedded effective-dated set (cl 25.1 as data).
-  const pricing = resolvePricing(shift_date, options.rateCards ?? ctx?.rateCards, options.loadings, ctx?.loadings);
-  if (!pricing) return UNPRICED_COST_BREAKDOWN;
-  const rateSet = pricing.rateSet;
-  // The card's organization types its own public holidays (e.g. Brisbane's Ekka).
-  if (pricing.jurisdiction) isHoliday = isPublicHolidayISO(shift_date, pricing.jurisdiction);
 
   let baseRate = rate;
 
@@ -421,9 +423,9 @@ export function estimateDetailedShiftCost(
   let nextIsHoliday = false;
   if (shiftEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
-    nextIsHoliday = pricing.jurisdiction
-      ? isPublicHolidayISO(nextStr, pricing.jurisdiction)
-      : ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
+    nextIsHoliday = canUseCtx
+      ? getDateFacts(ctx!, nextStr).isPublicHoliday
+      : isPublicHolidayISO(nextStr, jurisdiction);
   }
 
   const segments = worked.ordinary.flatMap(([from, to]) =>

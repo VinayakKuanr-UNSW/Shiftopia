@@ -195,6 +195,7 @@ export const shiftsCommands = {
                 target_employment_type:   shiftData.target_employment_type,
                 target_requires_flexible: shiftData.target_requires_flexible,
                 role_id:                  shiftData.role_id,
+                organization_id:          shiftData.organization_id,
             },
             { rpcName: 'sm_create_shift' },
         );
@@ -356,6 +357,8 @@ export const shiftsCommands = {
                             updates.role_id === undefined
                                 ? currentShift.roles?.name ?? null
                                 : null,
+                        organization_id: currentShift.organization_id,
+                        jurisdiction: currentShift.organizations?.jurisdiction ?? null,
                     },
                     { rpcName: 'sm_apply_shift_op' },
                 );

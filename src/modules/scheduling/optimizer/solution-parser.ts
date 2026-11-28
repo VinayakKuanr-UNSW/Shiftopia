@@ -44,6 +44,10 @@ export interface ShiftMeta {
     is_training?: boolean;
     /** Which job this shift is for — the scope HC-5d matches slots against. */
     sub_department_id?: string | null;
+    /** Organization owning this shift (resolves the public-holiday jurisdiction). */
+    organization_id?: string | null;
+    /** Explicit public-holiday jurisdiction override for this shift. */
+    jurisdiction?: string;
 }
 
 export interface EmployeeMeta {

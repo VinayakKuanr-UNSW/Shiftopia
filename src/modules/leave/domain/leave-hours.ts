@@ -59,6 +59,8 @@ interface LeaveHoursInput {
      * the contract estimate); undefined = we did not look.
      */
     rosteredShifts?: LeaveHoursShift[];
+    /** Public-holiday jurisdiction for the employee's organization (e.g. 'AU-NSW', 'AU-QLD-BNE'). */
+    jurisdiction?: string;
 }
 
 interface LeaveHoursResult {
@@ -182,7 +184,7 @@ export function resolveRequestedLeaveHours(input: LeaveHoursInput): LeaveHoursRe
     let daysCounted = 0;
     for (const date of dates) {
         if (!workingDays.includes(isoWeekday(date))) continue;
-        if (isPublicHoliday(new Date(`${date}T00:00:00`))) {
+        if (isPublicHoliday(new Date(`${date}T00:00:00`), input.jurisdiction)) {
             publicHolidaysSkipped.push(date);
             continue;
         }

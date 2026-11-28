@@ -14,6 +14,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import {
@@ -690,6 +691,7 @@ interface GroupSectionProps {
   // Persisted collapse props
   isInitiallyCollapsed: boolean;
   onToggleCollapse: (groupId: string) => void;
+  jurisdiction: string;
 }
 
 const GroupSection: React.FC<GroupSectionProps> = ({
@@ -714,6 +716,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   subGroupActionsBlockedReason,
   isInitiallyCollapsed,
   onToggleCollapse,
+  jurisdiction,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(isInitiallyCollapsed);
 
@@ -853,7 +856,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                 const dateIsToday = isToday(date);
                 const dateIsPast = isSydneyPast(date);
                 const isGhost = !isDateInTemplate(date);
-                const holidayName = getPublicHolidayName(date);
+                const holidayName = getPublicHolidayName(date, jurisdiction);
 
                 return (
                   <div
@@ -1015,7 +1018,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                     const cellIsToday = isToday(date);
                     const cellIsPast = isSydneyPast(date);
                     const isGhost = !isDateInTemplate(date);
-                    const holidayName = getPublicHolidayName(date);
+                    const holidayName = getPublicHolidayName(date, jurisdiction);
 
 
                     return (
@@ -1168,6 +1171,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   summaryData,
 }) => {
   const { toast } = useToast();
+  const jurisdiction = useJurisdiction({ organizationId });
   useTheme();
   // Get enhanced filters and selection state from context
   const {
@@ -2305,6 +2309,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   subGroupActionsBlockedReason={subGroupActionsBlockedReason}
                   isInitiallyCollapsed={effectiveCollapsed.has(group.id)}
                   onToggleCollapse={handleToggleGroupCollapse}
+                  jurisdiction={jurisdiction}
                 />
               ))}
 

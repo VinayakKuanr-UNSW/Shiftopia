@@ -304,9 +304,9 @@ export async function getTeamMembers(scope: ScopeSelection): Promise<TeamMember[
  * guard if it is ever null (the schema permits that; the app does not).
  */
 const TEAM_SHIFT_SELECT =
-    'id,shift_date,start_time,end_time,assigned_employee_id,' +
+    'id,organization_id,shift_date,start_time,end_time,assigned_employee_id,' +
     'net_length_minutes,scheduled_length_minutes,unpaid_break_minutes,is_draft,lifecycle_status,target_employment_type,' +
-    'roles(name),departments(name),sub_departments(name)';
+    'organizations(id,jurisdiction),roles(name),departments(name),sub_departments(name)';
 
 const SHIFT_PAGE_SIZE = 1000;
 /** Matches `rosters/api/shifts.queries.ts` so the two readers truncate alike. */
@@ -385,6 +385,8 @@ export async function getTeamShifts(
             subDeptName: row.sub_departments?.name ?? null,
             unpaidBreakMinutes: Math.max(0, Number(row.unpaid_break_minutes) || 0),
             targetEmploymentType: row.target_employment_type ?? null,
+            organizationId: row.organization_id ?? null,
+            jurisdiction: row.organizations?.jurisdiction ?? null,
         })),
         truncated,
     };

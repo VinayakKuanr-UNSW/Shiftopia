@@ -51,6 +51,8 @@ import {
 } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { ComplianceError } from '@/platform/supabase/rpc/errors';
+import { getOrganizationJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
+import { fetchOrganizationJurisdiction } from '@/modules/core/lib/organizationJurisdiction';
 
 /* ────────────────────────────────────────────────────────────────────────────
    Security role resolution
@@ -131,6 +133,10 @@ export interface ShapeGateInput {
     role_id?:                string | null;
     /** Skips the role lookup when the caller already knows (the edit path reads `shift.roles`). */
     role_name?:              string | null;
+    /** Shift's organization id — resolves the public-holiday jurisdiction when `jurisdiction` is omitted. */
+    organization_id?:        string | null;
+    /** Explicit public-holiday jurisdiction (skips any org lookup when provided). */
+    jurisdiction?:           string | null;
 }
 
 /**
@@ -159,6 +165,12 @@ export async function evaluateShapeForRow(input: ShapeGateInput): Promise<ShapeR
         isSecurity = false;
     }
 
+    let jurisdiction: string | undefined = input.jurisdiction ?? undefined;
+    if (!jurisdiction && input.organization_id) {
+        jurisdiction = getOrganizationJurisdiction(input.organization_id)
+            ?? await fetchOrganizationJurisdiction(input.organization_id);
+    }
+
     return evaluateShiftShape({
         shift_date:             input.shift_date,
         start_time:             input.start_time,
@@ -172,6 +184,7 @@ export async function evaluateShapeForRow(input: ShapeGateInput): Promise<ShapeR
         target_employment_type: normaliseTarget(input.target_employment_type),
         target_requires_flexible: input.target_requires_flexible ?? false,
         is_security:            isSecurity,
+        jurisdiction,
     });
 }
 
@@ -210,7 +223,8 @@ export async function assertShapeForRow(
 const SHAPE_COLUMNS =
     'id, shift_date, start_time, end_time, unpaid_break_minutes, paid_break_minutes, ' +
     'break_start, break_end, unpaid_breaks, ' +
-    'is_training, target_employment_type, target_requires_flexible, role_id, roles(name)';
+    'is_training, target_employment_type, target_requires_flexible, role_id, roles(name), ' +
+    'organization_id, organizations(jurisdiction)';
 
 /** The subset of a shift a caller may be changing. Absent ⇒ unchanged. */
 type ShapePatch = Partial<Omit<ShapeGateInput, 'role_name'>>;
@@ -255,10 +269,18 @@ export async function assertShapeForShiftId(
         is_training: boolean | null; target_employment_type: string | null;
         target_requires_flexible: boolean | null; role_id: string | null;
         roles?: { name?: string | null } | null;
+        organization_id?: string | null;
+        organizations?: { jurisdiction?: string | null } | null;
     };
 
     const pick = <K extends keyof ShapePatch & keyof typeof current>(key: K) =>
         (patch[key] !== undefined ? patch[key] : current[key]);
+
+    const organizationId = pick('organization_id') as string | null | undefined;
+    const jurisdiction =
+        patch.jurisdiction !== undefined
+            ? patch.jurisdiction
+            : (patch.organization_id === undefined ? current.organizations?.jurisdiction ?? null : null);
 
     return assertShapeForRow(
         {
@@ -282,6 +304,8 @@ export async function assertShapeForShiftId(
             // The joined role travels with the row, so a patch that leaves
             // `role_id` alone needs no second lookup.
             role_name: patch.role_id === undefined ? current.roles?.name ?? null : null,
+            organization_id: organizationId ?? null,
+            jurisdiction,
         },
         options,
     );

@@ -19,8 +19,9 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import { DEFAULT_JURISDICTION, isPublicHolidayISO } from '@/modules/core/lib/holidays';
+import { fetchOrganizationJurisdictions } from '@/modules/core/lib/organizationJurisdiction';
 import type { RateCardScheduleCache } from './ebaRates.read.api';
-import { isPublicHolidayISO } from '@/modules/core/lib/holidays';
 import type { GrossPayShiftInput } from '../domain/computeShiftGrossPay';
 import type { CostCalculatorOptions } from '../../rosters/domain/projections/utils/cost/types';
 import type { PayBasis } from '@/modules/users/domain/contractPayTerms';
@@ -309,6 +310,8 @@ export interface LeaveEmployeeContext {
   trainee_year?: number;
   is_sws?: boolean;
   sws_capacity_percentage?: number;
+  /** Public-holiday jurisdiction for this employee's leave contract organization. */
+  jurisdiction?: string;
 }
 
 /** A minimal shape of an approved leave request (from the DB). */
@@ -408,6 +411,7 @@ export function buildLeaveInputs(
       trainee_year: ctx.trainee_year,
       is_sws: ctx.is_sws,
       sws_capacity_percentage: ctx.sws_capacity_percentage,
+      jurisdiction: ctx.jurisdiction,
       ...emitFlags,
     });
   }
@@ -446,6 +450,7 @@ export function buildPublicHolidayInputs(
     rate: ctx.rate,
     classificationLevel: ctx.classificationLevel,
     employmentType: ctx.employmentType,
+    jurisdiction: ctx.jurisdiction,
     isPublicHolidayNotWorked: true,
   }));
 }
@@ -514,20 +519,21 @@ export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds, rateCardC
   const ctxById = await resolveLeaveContexts(employeeIds, bounds);
   const rosterByEmp = await fetchRosteredMinutes(employeeIds, bounds);
 
-  // Each person's organization types its own public holidays (its rate cards
-  // carry the jurisdiction); without them, the default (AU-NSW).
+  // Each person's organization types its own public holidays (via org
+  // jurisdiction lookup or its rate cards); without either, the default (AU-NSW).
   const schedules = rateCardCache
     ? await rateCardCache.get([...ctxById.values()].map((c) => c.organizationId ?? ''))
     : null;
-  const jurisdictionOf = (orgId?: string) => schedules?.get(orgId ?? '')?.find((c) => c.jurisdiction)?.jurisdiction;
-  let isHoliday = (ymd: string) => isPublicHolidayISO(ymd);
+  const cardJurisdictionOf = (orgId?: string) => schedules?.get(orgId ?? '')?.find((c) => c.jurisdiction)?.jurisdiction;
   const out: GrossPayShiftInput[] = [];
   const phSeen = new Set<string>(); // employee:date — overlapping requests must not double-pay a PH
   for (const req of approved) {
-    const ctx = ctxById.get(req.employee_id);
-    if (!ctx) continue; // no resolvable contract/rate — skip rather than guess.
-    const jurisdiction = jurisdictionOf(ctx.organizationId);
-    isHoliday = (ymd: string) => isPublicHolidayISO(ymd, jurisdiction);
+    const baseCtx = ctxById.get(req.employee_id);
+    if (!baseCtx) continue; // no resolvable contract/rate — skip rather than guess.
+    const cardJur = cardJurisdictionOf(baseCtx.organizationId);
+    const jurisdiction = baseCtx.jurisdiction ?? cardJur ?? DEFAULT_JURISDICTION;
+    const ctx = baseCtx.jurisdiction || !cardJur ? baseCtx : { ...baseCtx, jurisdiction: cardJur };
+    const isHoliday = (ymd: string) => isPublicHolidayISO(ymd, jurisdiction);
     const flags = leaveTypeToFlags(req.leave_type, req.election_mode)!; // non-null: filtered above
     if (flags.isToilLeave) {
       // Hours, not days: each day carries its share of the request. No separate
@@ -663,6 +669,15 @@ async function resolveLeaveContexts(
 
   const bestByUser = pickLeaveContracts<any>(contracts ?? [], bounds.periodStart);
 
+  const contractOrgIds = Array.from(
+    new Set(
+      Array.from(bestByUser.values())
+        .map((c: any) => c.organization_id as string | null | undefined)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  const orgJurisdictions = await fetchOrganizationJurisdictions(contractOrgIds);
+
   // Employment type from profiles (parity with the shift path).
   const empTypeById = new Map<string, string | null>();
   const { data: profiles, error: pErr } = await (supabase as any)
@@ -743,6 +758,7 @@ async function resolveLeaveContexts(
       trainee_year: c.trainee_year ?? undefined,
       is_sws: !!c.is_sws,
       sws_capacity_percentage: c.sws_capacity_percentage ?? undefined,
+      jurisdiction: c.organization_id ? orgJurisdictions.get(c.organization_id) : undefined,
     });
   }
   return out;

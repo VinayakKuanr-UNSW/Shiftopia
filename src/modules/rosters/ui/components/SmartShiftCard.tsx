@@ -51,6 +51,7 @@ import {
     applyMinEngagementFloor,
 } from '@/modules/timesheets/domain/billable-time';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
@@ -782,10 +783,15 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
      * worked — never rendered on the roster planner or its drill-down, while
      * Timesheets and My Roster both showed it for the same shift.
      */
+    const shiftJurisdiction = useJurisdiction({
+        jurisdiction: shift.organizations?.jurisdiction,
+        organizationId: shift.organization_id,
+    });
+
     const billableFloor = useMemo(() => {
         const rawNet = calculateNetMinutes(resolvedStart, resolvedEnd, shift.unpaid_break_minutes || 0);
         if (rawNet === null) return null;
-        const { isSunday, isPublicHoliday } = getShiftDayType(shift.shift_date);
+        const { isSunday, isPublicHoliday } = getShiftDayType(shift.shift_date, shiftJurisdiction);
         return applyMinEngagementFloor(rawNet, {
             isTraining: shift.is_training === true,
             isSunday,
@@ -793,7 +799,7 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
             employmentType,
             isSecurityRole,
         });
-    }, [resolvedStart, resolvedEnd, shift.unpaid_break_minutes, shift.shift_date, shift.is_training, employmentType, isSecurityRole]);
+    }, [resolvedStart, resolvedEnd, shift.unpaid_break_minutes, shift.shift_date, shift.is_training, employmentType, isSecurityRole, shiftJurisdiction]);
 
     const billableNetMinutes = billableFloor?.netMinutes ?? null;
 

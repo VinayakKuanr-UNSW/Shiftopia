@@ -29,6 +29,7 @@ import {
   type PlacedTemplateShift,
   type TemplateShiftRow,
 } from '@/modules/templates/model/templateShape';
+import { fetchOrganizationJurisdiction } from '@/modules/core/lib/organizationJurisdiction';
 
 // ── Helper to extract a user-facing message from any thrown value ─────────────
 
@@ -228,11 +229,24 @@ async function loadPlacedTemplateShifts(templateId: string): Promise<PlacedTempl
  * Returns the lines to show rather than throwing. A failure to LOAD still
  * throws: not knowing is not the same as nothing being wrong.
  */
+async function resolveTemplateJurisdiction(templateId: string): Promise<string | undefined> {
+  const { data, error } = await supabase
+    .from('roster_templates')
+    .select('organization_id')
+    .eq('id', templateId)
+    .maybeSingle();
+  if (error || !data?.organization_id) return undefined;
+  return fetchOrganizationJurisdiction(data.organization_id);
+}
+
 async function previewTemplateApplicationShape(vars: ApplyTemplateVariables): Promise<string[]> {
-  const placed = await loadPlacedTemplateShifts(vars.templateId);
+  const [placed, jurisdiction] = await Promise.all([
+    loadPlacedTemplateShifts(vars.templateId),
+    resolveTemplateJurisdiction(vars.templateId),
+  ]);
   if (placed.length === 0) return [];
 
-  const failures = validateTemplateApplication(placed, vars.startDate, vars.endDate);
+  const failures = validateTemplateApplication(placed, vars.startDate, vars.endDate, jurisdiction);
   if (failures.length === 0) return [];
 
   return describeTemplateApplicationFailures(failures);

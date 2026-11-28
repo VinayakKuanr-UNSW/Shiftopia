@@ -66,6 +66,8 @@ export interface V8Shift {
     is_training?:          boolean;
     is_sunday?:            boolean;
     is_public_holiday?:    boolean;
+    /** Public-holiday jurisdiction for this shift (e.g. 'AU-NSW', 'AU-QLD-BNE'). */
+    jurisdiction?:         string;
     shift_type?:           'NORMAL' | 'MULTI_HIRE';
     /**
      * Which employment type this shift is for. MANDATORY on the shifts table;

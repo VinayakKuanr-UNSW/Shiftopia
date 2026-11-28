@@ -24,6 +24,7 @@ import { isShiftFinished, isEntryReviewable, cleanTime } from './TimesheetTable.
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { validateBillableEdit, parseHHMM } from '../../domain/billable-edit';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
 
@@ -86,6 +87,10 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     const [departureReason, setDepartureReason] = useState('');
 
     const { toast } = useToast();
+    const jurisdiction = useJurisdiction({
+        jurisdiction: entry.organizationJurisdiction,
+        organizationId: entry.organizationId,
+    });
 
     const handleStartEditing = () => {
         if (reviewLocked) {
@@ -159,7 +164,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         // that window must still meet the guarantee (only a BLANK edit, which
         // validateBillableEdit already skips the check for, means "no billable
         // time at all").
-        const { isSunday, isPublicHoliday } = getShiftDayType(String(entry.date));
+        const { isSunday, isPublicHoliday } = getShiftDayType(String(entry.date), jurisdiction);
         const requiredMinutes = resolvePaymentMinEngagementMinutes({
             isTraining: !!entry.isTraining,
             isSunday,

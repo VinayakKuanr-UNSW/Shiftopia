@@ -50,6 +50,7 @@ import { periodLabel } from './LedgerCards';
 import { CardDialogClose, LeaveCardDialog, cardDivide, cardField, cardSection } from './LeaveCardDialog';
 import type { ToilPosition } from '@/modules/toil/model/toil.types';
 import { fmtToil, isPartialDayToil, rosteredSpanMinutes, toilApprovalCheck } from '@/modules/toil/domain/toil-rules';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 
 interface LeaveReviewDialogProps {
     request: LeaveRequest | null;
@@ -64,15 +65,20 @@ interface LeaveReviewDialogProps {
     readOnly?: boolean;
     /** The requester's TOIL position — a TOIL request is approved against it. */
     toil?: ToilPosition | null;
+    /** Organization id(s) in scope — selects the public-holiday calendar for adjacency checks. */
+    organizationIds?: readonly string[];
+    jurisdiction?: string;
 }
 
 type Mode = 'idle' | 'reject' | 'revoke';
 
 export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
     request, member, personRequests = [], nameOf, meId, today, onClose, readOnly = false, toil = null,
+    organizationIds, jurisdiction: jurisdictionProp,
 }) => {
     const { toast } = useToast();
     const invalidate = useLeaveInvalidation();
+    const jurisdiction = useJurisdiction({ jurisdiction: jurisdictionProp, organizationIds });
     const [mode, setMode] = React.useState<Mode>('idle');
     const [reason, setReason] = React.useState('');
     const [busy, setBusy] = React.useState(false);
@@ -114,6 +120,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
             otherLeave: personRequests
                 .filter(r => r.id !== request.id && (r.status === 'pending' || r.status === 'approved'))
                 .map(r => ({ startDate: r.startDate, endDate: r.endDate ?? r.startDate })),
+            jurisdiction,
         }))
         : [];
 

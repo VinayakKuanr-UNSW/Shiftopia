@@ -7,6 +7,10 @@ import { supabase } from '@/platform/supabase/client';
 import { assertWrote } from '@/platform/supabase/writes';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import {
+    registerOrganizationJurisdiction,
+    resolveJurisdiction,
+} from '@/modules/core/lib/jurisdiction-registry';
 import { getDailyToilByDay } from '@/modules/toil/api/toil.api';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import type { ScheduledBreakItem } from '@/modules/compliance/shape/types';
@@ -37,6 +41,7 @@ export interface TimesheetShiftRow {
     // Organizational hierarchy
     organizationId: string | null;
     organizationName: string;
+    organizationJurisdiction?: string;
     departmentId: string;
     departmentName: string;
     subDepartmentId: string;
@@ -203,7 +208,7 @@ export async function getShiftsForTimesheet(
                 role_id,
                 assigned_employee_id,
                 notes,
-                organizations(id, name),
+                organizations(id, name, jurisdiction),
                 departments(id, name),
                 sub_departments(id, name),
                 roles(id, name, remuneration_level),
@@ -360,7 +365,14 @@ export async function getShiftsForTimesheet(
             // manager can legitimately enter a manual billable override on a shift
             // still flagged no-show/cancelled, and that resolved window must still
             // get the floor (see applyMinEngagementFloor's docstring).
-            const { isSunday, isPublicHoliday } = getShiftDayType(shift.shift_date);
+            if (org?.jurisdiction) {
+                registerOrganizationJurisdiction(org.id ?? shift.organization_id, org.jurisdiction);
+            }
+            const shiftJurisdiction = resolveJurisdiction({
+                jurisdiction: org?.jurisdiction,
+                organizationId: shift.organization_id,
+            });
+            const { isSunday, isPublicHoliday } = getShiftDayType(shift.shift_date, shiftJurisdiction);
             const isSecurityRoleForFloor = isSecurityRoleName(role?.name);
             const flooredNet = rawNetMins !== null
                 ? applyMinEngagementFloor(rawNetMins, {
@@ -411,6 +423,7 @@ export async function getShiftsForTimesheet(
 
                 organizationId: shift.organization_id,
                 organizationName: org?.name || '',
+                organizationJurisdiction: shiftJurisdiction,
                 departmentId: shift.department_id,
                 departmentName: dept?.name || '',
                 subDepartmentId: shift.sub_department_id,

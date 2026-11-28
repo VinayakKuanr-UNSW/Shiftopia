@@ -1,7 +1,8 @@
 import { V8Employee, V8Shift, V8Hit } from '../types';
 import { V8OrchestratorInput, V8OrchestratorShift } from '../orchestrator/types';
 import { v8Engine } from '../engine';
-import { isPublicHoliday } from '@/modules/core/lib/date.utils';
+import { isPublicHoliday } from '@/modules/core/lib/holidays';
+import { resolveJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
 
 const parseLocalDateStr = (dateStr: string) => {
     if (!dateStr) return new Date();
@@ -57,6 +58,10 @@ export function runV8ComplexBridge(
 
     const v8Shifts: V8Shift[] = simulatedShifts.map(s => {
         const dateStr = s.date || s.shift_date || '';
+        const jurisdiction = resolveJurisdiction({
+            jurisdiction: s.jurisdiction,
+            organizationId: s.organization_id,
+        });
         return {
             id: s.id,
             date: dateStr,
@@ -69,7 +74,8 @@ export function runV8ComplexBridge(
             unpaid_breaks: s.unpaid_breaks ?? null,
             is_training: s.is_training ?? false,
             is_sunday: s.is_sunday ?? isSunday(dateStr),
-            is_public_holiday: s.is_public_holiday ?? isPublicHoliday(parseLocalDateStr(dateStr)),
+            is_public_holiday: s.is_public_holiday ?? isPublicHoliday(parseLocalDateStr(dateStr), jurisdiction),
+            jurisdiction,
             is_candidate: candidateIds.has(s.id),
             // WHICH JOB this shift is for. Both were dropped here, and both are
             // read downstream:

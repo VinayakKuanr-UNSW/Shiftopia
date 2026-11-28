@@ -199,6 +199,8 @@ interface FairnessCandidateShift {
     startTime: string;
     endTime: string;
     unpaidBreakMinutes?: number;
+    /** Public-holiday jurisdiction for this shift (used when `isPublicHoliday` callback is omitted). */
+    jurisdiction?: string;
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -228,7 +230,11 @@ export function projectFairnessImpact(
     let s1 = toMinutes(candidate.endTime);
     if (s1 <= s0) s1 += 1440;
     const net = Math.max(0, s1 - s0 - (candidate.unpaidBreakMinutes ?? 0));
-    const minutes = categoryMinutes(candidate.shiftDate, candidate.startTime, candidate.endTime, net, isPublicHoliday);
+    const holidayFn = isPublicHoliday
+        ?? (candidate.jurisdiction
+            ? (d: string) => getShiftDayType(d, candidate.jurisdiction).isPublicHoliday
+            : undefined);
+    const minutes = categoryMinutes(candidate.shiftDate, candidate.startTime, candidate.endTime, net, holidayFn);
     const pool = Math.max(1, poolSize);
 
     const impact: FairnessImpact = { changed: [], before: {}, after: {} };

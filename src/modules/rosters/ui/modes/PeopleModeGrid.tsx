@@ -26,6 +26,7 @@ import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog'
 import type { RawLeaveDay } from '@/modules/office/domain/types';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { 
   PeopleModeEmployee, 
@@ -98,6 +99,10 @@ interface PeopleModeGridProps {
   /** Integrated column header search */
   searchTerm?: string;
   onSearchChange?: (term: string) => void;
+  /** Selected organization id (drives public-holiday highlights). */
+  organizationId?: string;
+  /** Explicit public-holiday jurisdiction override. */
+  jurisdiction?: string;
 }
 
 /* ============================================================
@@ -218,7 +223,10 @@ const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   onMoveShift,
   searchTerm = '',
   onSearchChange,
+  organizationId,
+  jurisdiction: jurisdictionProp,
 }) => {
+  const jurisdiction = useJurisdiction({ jurisdiction: jurisdictionProp, organizationId });
   const [isSearchOpen, setIsSearchOpen] = React.useState(Boolean(searchTerm));
   React.useEffect(() => {
     if (searchTerm) setIsSearchOpen(true);
@@ -420,7 +428,7 @@ const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                   {/* Date Column Headers */}
                   {dates.map((date, idx) => {
                     const dateIsToday = format(date, 'yyyy-MM-dd') === todayISO();
-                    const holidayName = getPublicHolidayName(date);
+                    const holidayName = getPublicHolidayName(date, jurisdiction);
                     return (
                       <div
                         role="columnheader"
@@ -439,7 +447,7 @@ const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                             {format(date, 'MMM d')}
                           </span>
                           {holidayName && (
-                            <span className="text-[11px] italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`ANZ Public Holiday: ${holidayName}`}>
+                            <span className="text-[11px] italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`Public Holiday: ${holidayName}`}>
                               {holidayName}
                             </span>
                           )}
@@ -472,6 +480,7 @@ const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                           ref={rowVirtualizer.measureElement}
                           data-index={vi.index}
                           gridTemplateColumns={peopleGridCols(dates.length)}
+                          jurisdiction={jurisdiction}
                           employee={employee}
                           empIdx={vi.index}
                           dates={dates}
@@ -539,6 +548,7 @@ interface EmployeeRowProps {
   onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
   /** CSS grid track template shared with the header row so columns align. */
   gridTemplateColumns: string;
+  jurisdiction: string;
   // Forwarded by the virtualizer for absolute positioning + dynamic
   // measurement. `style` carries the translateY transform; `data-index`
   // lets `measureElement` correlate the DOM node back to the row index.
@@ -567,6 +577,7 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
   onAssign,
   onMoveShift,
   gridTemplateColumns,
+  jurisdiction,
   style,
   'data-index': dataIndex,
 }, ref) => {
@@ -669,6 +680,7 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
           onUnpublishShift={onUnpublishShift}
           onAssign={onAssign}
           onMoveShift={onMoveShift}
+          jurisdiction={jurisdiction}
         />
       ))}
     </div>
@@ -701,6 +713,7 @@ interface EmployeeDateCellProps {
   onUnpublishShift?: (shiftId: string) => void;
   onAssign: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
   onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
+  jurisdiction: string;
 }
 
 const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
@@ -722,6 +735,7 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   onUnpublishShift,
   onAssign,
   onMoveShift,
+  jurisdiction,
 }) => {
   const dateKey = format(date, 'yyyy-MM-dd');
   const shifts = employee.shifts[dateKey] ?? [];
@@ -730,7 +744,7 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   /** Approved leave closes the day to rostering. */
   const closed = datePast || Boolean(leave);
 
-  const holidayName = getPublicHolidayName(date);
+  const holidayName = getPublicHolidayName(date, jurisdiction);
   const isTodayDate = format(date, 'yyyy-MM-dd') === todayISO();
 
   const cellClassName = cn(

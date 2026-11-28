@@ -14,6 +14,7 @@ export interface UserContract {
     employmentStatus?: string | null;
     status: string;
     organizationName?: string;
+    organizationJurisdiction?: string;
     departmentName?: string;
     subDepartmentName?: string;
     roleName?: string;
@@ -30,6 +31,7 @@ export interface AccessCertificate {
     isActive: boolean;
     // Resolved names for display
     organizationName?: string;
+    organizationJurisdiction?: string;
     departmentName?: string | null;
     subDepartmentName?: string | null;
 }
@@ -123,6 +125,8 @@ export interface User {
     avatar?: string;
     contracts: UserContract[];
     certificates: AccessCertificate[];
+    /** Known organizationId → public-holiday jurisdiction map for all orgs the user belongs to. */
+    organizationJurisdictions?: Record<string, string>;
     highestAccessLevel: AccessLevel;
     preferences?: {
         appearance?: {

@@ -58,6 +58,7 @@ import { getAvailabilitySlots } from '@/modules/availability/api/availability.ap
 import { classifyBuckets, getBucketSummary } from '@/modules/compliance/ui/bucket-map';
 import type { UseCompliancePanelReturn, PanelStatus, PanelResult } from '@/modules/compliance/ui/useCompliancePanel';
 import { calculateFatigueWithRecovery, getFatigueBand } from '@/modules/rosters/domain/projections/utils/fatigue';
+import { resolveJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
 import { projectFairnessImpact } from '@/modules/rosters/domain/fairness-ledger';
 import { fairnessLedgerQueries } from '@/modules/rosters/api/fairnessLedger.queries';
 import { BidLedgerImpact, type BidLedgerImpactData } from './BidLedgerImpact';
@@ -374,6 +375,7 @@ export function useBidsCompliancePanel(
             fairness = projectFairnessImpact(standings, {
               shiftDate: expandedShift.date, startTime: expandedShift.startTime,
               endTime: expandedShift.endTime, unpaidBreakMinutes: expandedShift.unpaidBreak || 0,
+              jurisdiction: resolveJurisdiction({ organizationId: orgId }),
             }, Math.max(1, expandedShift.bidCount));
           } catch (fairnessErr) {
             console.warn('[useBidsCompliancePanel] fairness standing unavailable', fairnessErr);
@@ -1152,7 +1154,10 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
               organizationId,
               allBids.map(b => b.employee_id),
             );
-            orderedBids = orderBidsByFairness(allBids, standings, shift);
+            orderedBids = orderBidsByFairness(allBids, standings, {
+              ...shift,
+              organizationId: shift.organizationId ?? organizationId,
+            });
           } catch (err) {
             console.warn('[Bidding] fairness ordering skipped:', err);
           }

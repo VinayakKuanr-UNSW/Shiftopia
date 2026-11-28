@@ -365,8 +365,11 @@ export function useAutoScheduler({
                 is_training: s.is_training ?? false,
                 // Feeds the solver's skill/level matching.
                 level: (s as any).remuneration_level ?? undefined,
+                // Resolves the venue's public-holiday calendar for solver + V8 parity.
+                organization_id: (s as any).organization_id ?? organizationId ?? null,
+                jurisdiction: (s as any).organizations?.jurisdiction ?? undefined,
             } as ShiftMeta));
-    }, [rawShifts, startDate, endDate, validationError]);
+    }, [rawShifts, startDate, endDate, validationError, organizationId]);
 
     const filteredShifts = useMemo(
         () => (mode === 'FT_STANDARD'

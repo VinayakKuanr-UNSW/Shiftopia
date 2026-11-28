@@ -168,6 +168,8 @@ export interface GrossPayShiftInput {
 
   // Weekly-OT sequencing (supplied by the period aggregator).
   priorOrdinaryHoursThisWeek?: number;
+  /** Public-holiday jurisdiction for this shift (e.g. 'AU-NSW', 'AU-QLD-BNE'). */
+  jurisdiction?: string;
   timesheetStatus?: string | null;
   lifecycleStatus?: string | null;
   rawShift?: any;
@@ -213,7 +215,7 @@ const NOT_WORKED = (input: GrossPayShiftInput): ShiftGrossPay => ({
  */
 export function buildOrdinaryEarningsLines(
   b: ShiftCostBreakdown,
-  ctx: { isSecurityRole?: boolean; shiftDate: string; startTime?: string },
+  ctx: { isSecurityRole?: boolean; shiftDate: string; startTime?: string; jurisdiction?: string },
 ): EarningsLine[] {
   const lines: EarningsLine[] = [];
   const baseRate = b.breakdown.baseRate || 0;
@@ -256,7 +258,7 @@ export function buildOrdinaryEarningsLines(
   } else {
     const dateObj = new Date(ctx.shiftDate + 'T00:00:00');
     const dayOfWeek = isNaN(dateObj.getTime()) ? 1 : dateObj.getDay();
-    const isHoliday = isPublicHolidayISO(ctx.shiftDate);
+    const isHoliday = isPublicHolidayISO(ctx.shiftDate, ctx.jurisdiction);
 
     let startMins = 0;
     let endMins = (b.ordinaryHours || 0) * 60;
@@ -286,7 +288,7 @@ export function buildOrdinaryEarningsLines(
         segments.push({
           hours: secondDayHours,
           day: (dayOfWeek + 1) % 7,
-          isHoliday: isPublicHolidayISO(nextDateStr),
+          isHoliday: isPublicHolidayISO(nextDateStr, ctx.jurisdiction),
         });
       }
     }
@@ -522,6 +524,7 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
     is_sws: input.is_sws,
     sws_capacity_percentage: input.sws_capacity_percentage,
     swsWeeklyHours: input.swsWeeklyHours,
+    jurisdiction: input.jurisdiction,
   };
 
   const b = estimateDetailedShiftCost(opts);
@@ -584,6 +587,7 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
     isSecurityRole: input.isSecurityRole,
     shiftDate: input.shiftDate,
     startTime: input.startTime,
+    jurisdiction: input.jurisdiction,
   });
 
   const grossPay = round2(lines.reduce((s, l) => s + l.amount, 0));

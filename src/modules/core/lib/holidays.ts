@@ -49,12 +49,13 @@ import {
 export const PUBLIC_HOLIDAY_YEAR_RANGE = { min: MIN_YEAR, max: MAX_YEAR } as const;
 
 /**
- * The jurisdiction every lookup uses unless told otherwise.
+ * Fallback jurisdiction when a caller has no organization or explicit
+ * jurisdiction context (e.g. legacy unit tests or synthetic previews).
  *
- * INTERIM (docs/architecture/multi-organization.md H5): the 29 callers do not
- * yet pass their shift's or organization's jurisdiction, so they ask NSW — the
- * same answers as before. Threading the jurisdiction through them comes with the
- * time foundation and pay work; a BCEC (AU-QLD-BNE) shift must pass it.
+ * Production callers resolve the shift's or selected organization's
+ * jurisdiction (`organizations.jurisdiction`, e.g. `AU-QLD-BNE` for BCEC) via
+ * `useJurisdiction`, `resolveJurisdiction`, or `fetchOrganizationJurisdictions`
+ * and pass it explicitly.
  */
 export const DEFAULT_JURISDICTION = 'AU-NSW';
 

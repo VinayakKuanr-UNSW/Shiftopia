@@ -56,6 +56,7 @@ import { LedgerFigure, periodLabel } from './LedgerCards';
 import { CardDialogClose, LeaveCardDialog, cardDivide, cardField, cardSection } from './LeaveCardDialog';
 import type { ToilPosition } from '@/modules/toil/model/toil.types';
 import { fmtToil, isPartialDayToil, rosteredSpanMinutes, toilRequestCheck } from '@/modules/toil/domain/toil-rules';
+import { useJurisdiction } from '@/modules/core/hooks/useJurisdiction';
 
 /** Weekdays in a range — the certificate threshold counts working days. */
 function weekdaysBetween(start: string, end: string): number {
@@ -89,14 +90,19 @@ interface RequestLeaveDialogProps {
     entries?: readonly LedgerEntry[];
     /** TOIL position — what a TOIL request is measured against. */
     toil?: ToilPosition | null;
+    /** Organization id(s) currently in scope — selects the public-holiday calendar. */
+    organizationIds?: readonly string[];
+    jurisdiction?: string;
 }
 
 export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
     open, onOpenChange, employeeId, balances, requests, policies, isCasual,
     contractedWeeklyHours, ordinaryDays, serviceStart = null, leaveType: type, entries, toil = null,
+    organizationIds, jurisdiction: jurisdictionProp,
 }) => {
     const { toast } = useToast();
     const invalidate = useLeaveInvalidation();
+    const jurisdiction = useJurisdiction({ jurisdiction: jurisdictionProp, organizationIds });
 
     const [election, setElection] = React.useState<LeaveElectionMode | ''>('');
     const [start, setStart] = React.useState('');
@@ -122,6 +128,7 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
         endDate: end,
         contractedWeeklyHours: contractedWeeklyHours ?? undefined,
         ordinaryDays: ordinaryDays ? [...ordinaryDays] : undefined,
+        jurisdiction,
         // `undefined` = not looked yet; [] = looked, nothing rostered. They differ.
         rosteredShifts: conflicts.data?.map(c => ({
             shiftDate: c.shiftDate, startTime: c.startTime, endTime: c.endTime,
@@ -130,7 +137,7 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
             unpaidBreakMinutes: 0,
         })),
     }),
-    [type, start, end, contractedWeeklyHours, ordinaryDays, conflicts.data]);
+    [type, start, end, contractedWeeklyHours, ordinaryDays, jurisdiction, conflicts.data]);
 
     const hours = isToil && toilHoursText !== ''
         ? Math.max(0, Math.round((Number(toilHoursText) || 0) * 100) / 100)
@@ -165,8 +172,8 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
         const rosteredDates = new Set((around.data ?? []).map(sh => sh.shiftDate));
         const otherLeave = requests.filter(r => r.status === 'pending' || r.status === 'approved');
         return certificateReasons(type, weekdaysBetween(start, end),
-            computeCertificateAdjacency(start, end, { rosteredDates, otherLeave }));
-    }, [rangeValid, around.data, requests, type, start, end]);
+            computeCertificateAdjacency(start, end, { rosteredDates, otherLeave, jurisdiction }));
+    }, [rangeValid, around.data, requests, type, start, end, jurisdiction]);
 
     /** Where this goes past what the Agreement gives — warned, never blocked. */
     const warnings = React.useMemo(() => (rangeValid && hours > 0

@@ -1,3 +1,4 @@
+import { DEFAULT_JURISDICTION } from '@/modules/core/lib/holidays';
 import {
   isPublicHolidayISO, SATURDAY, SUNDAY, ZERO_COST_BREAKDOWN, UNPRICED_COST_BREAKDOWN,
 } from './constants';
@@ -154,18 +155,19 @@ export function estimateDetailedShiftCost(
   const finalEffectiveRate = (previousWage != null && previousWage > effectiveRate) ? previousWage : effectiveRate;
 
   // ── Date facts (Phase 3) ───────────────────────────────────────────────
+  // The card's organization types its own public holidays (e.g. Brisbane's Ekka).
+  const jurisdiction = pricing.jurisdiction ?? options.jurisdiction ?? ctx?.jurisdiction ?? DEFAULT_JURISDICTION;
+  const canUseCtx = !!ctx && jurisdiction === (ctx.jurisdiction ?? DEFAULT_JURISDICTION);
   let isHoliday: boolean;
   let shiftDay: number;
-  if (ctx) {
-    const facts = getDateFacts(ctx, shift_date);
+  if (canUseCtx) {
+    const facts = getDateFacts(ctx!, shift_date);
     isHoliday = facts.isPublicHoliday;
     shiftDay = facts.dayOfWeek;
   } else {
-    isHoliday = isPublicHolidayISO(shift_date);
+    isHoliday = isPublicHolidayISO(shift_date, jurisdiction);
     shiftDay = new Date(shift_date + 'T00:00:00').getDay();
   }
-  // The card's organization types its own public holidays (e.g. Brisbane's Ekka).
-  if (pricing.jurisdiction) isHoliday = isPublicHolidayISO(shift_date, pricing.jurisdiction);
 
   // Schedule 3 §3.2 / §5.3: security meal breaks are PAID — price the full span.
   let calculatedMinutes = netMinutes;
@@ -199,9 +201,9 @@ export function estimateDetailedShiftCost(
   let nextIsHoliday = false;
   if (ordinaryEndMins > 1440 || otEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
-    nextIsHoliday = pricing.jurisdiction
-      ? isPublicHolidayISO(nextStr, pricing.jurisdiction)
-      : ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
+    nextIsHoliday = canUseCtx
+      ? getDateFacts(ctx!, nextStr).isPublicHoliday
+      : isPublicHolidayISO(nextStr, jurisdiction);
   }
 
   interface Seg { fromMins: number; toMins: number; day: number; isHoliday: boolean; }

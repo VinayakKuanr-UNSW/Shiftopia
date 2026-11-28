@@ -113,6 +113,8 @@ async function runFullCompliancePreCheck(
         date:                    shift.shift_date,
         start_time:              shift.start_time,
         end_time:                shift.end_time,
+        organization_id:         (shift as { organization_id?: string | null }).organization_id ?? undefined,
+        jurisdiction:            (shift as { organizations?: { jurisdiction?: string | null } | null }).organizations?.jurisdiction ?? undefined,
         role_id:                 shift.role_id ?? '',
         required_qualifications: [
             ...(shift.required_skills  ?? []),

@@ -57,6 +57,8 @@ import {
     type FairnessMetric,
 } from '@/modules/rosters/domain/fairness-ledger';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { resolveJurisdiction } from '@/modules/core/lib/jurisdiction-registry';
+import { fetchOrganizationJurisdictions } from '@/modules/core/lib/organizationJurisdiction';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { v8ConfigFromLoadings } from '@/modules/compliance/v8/swap-engine/constraint-engine';
 import type { SolverConfig } from '@/modules/compliance/v8/swap-engine/types';
@@ -657,6 +659,7 @@ export function estimateGreedyFallbackCost(
     empDet: Partial<OptimizerEmployee> | undefined,
     priorOrdinaryHoursThisWeek: number | undefined,
     rateCards?: RateCardSchedule,
+    jurisdiction?: string,
 ): number {
     // cl 36.1 vs Sch.3 §3.2/§5.3: the unpaid meal break is
     // deducted for general staff, but Security meal breaks are
@@ -706,6 +709,10 @@ export function estimateGreedyFallbackCost(
             : extractLevel(shift.roleName),
         priorOrdinaryHoursThisWeek,
         rateCards,
+        jurisdiction: jurisdiction ?? resolveJurisdiction({
+            jurisdiction: shift.jurisdiction,
+            organizationId: shift.organization_id,
+        }),
     }).totalCost;
 }
 
@@ -798,6 +805,8 @@ export interface AutoSchedulerInput {
      * The ledger is recomputed nightly from approved billables, never here.
      */
     organizationId?: string;
+    /** Optional public-holiday jurisdiction override for the solve (resolved from orgId when omitted). */
+    jurisdiction?: string;
     /** B4 — when true, the solver also returns Pareto "what-if" alternatives
      *  (cheapest / most-balanced) for the trade-off explorer. Adds solve time,
      *  so the UI requests it explicitly. */
@@ -1137,6 +1146,8 @@ async function greedyFallback(
     validationCtx?: ValidationContextMaps,
     mode: SchedulerMode = 'ALL',
     card?: PricedCard | null,
+    /** Public-holiday jurisdiction resolver per shift (matches the optimizer's day typing). */
+    jurisdictionFor?: (shift: ShiftMeta) => string,
 ): Promise<ValidatedProposal[]> {
     const isFtStandard = mode === 'FT_STANDARD';
     const isFtSecurity = mode === 'FT_SECURITY';
@@ -1180,6 +1191,12 @@ async function greedyFallback(
 
     for (const shift of shifts) {
         let assigned = false;
+        const shiftJurisdiction = jurisdictionFor
+            ? jurisdictionFor(shift)
+            : resolveJurisdiction({
+                jurisdiction: shift.jurisdiction ?? card?.jurisdiction,
+                organizationId: shift.organization_id,
+            });
         const netMins = shiftNetMinutes(shift, isFtSecurity);
         const ftMaxDaily = dailyCapMins(isFtSecurity);
         if (isFtMode && (netMins < FT_MIN_DAILY_NET_MINUTES || netMins > ftMaxDaily)) {
@@ -1213,9 +1230,10 @@ async function greedyFallback(
             shift.start_time,
             shift.end_time,
             netMins,
+            (d) => getShiftDayType(d, shiftJurisdiction).isPublicHoliday,
         );
 
-        const shiftDayType = getShiftDayType(shift.shift_date, card?.jurisdiction);
+        const shiftDayType = getShiftDayType(shift.shift_date, shiftJurisdiction);
         const minStd = cardLoadings?.minEngagementMinutes ?? PT_MIN_ENGAGEMENT_MINUTES;
         const minSun = cardLoadings?.minEngagementSundayMinutes ?? FPT_SUNDAY_PH_MIN_ENGAGEMENT_MINUTES;
         const minPh  = cardLoadings?.minEngagementPublicHolidayMinutes ?? PT_PH_MIN_ENGAGEMENT_MINUTES;
@@ -1850,8 +1868,31 @@ export class AutoSchedulerController {
         }
         const v8SolverConfig: SolverConfig | undefined = windowCard ? v8ConfigFromLoadings(windowCard.loadings) : undefined;
 
+        const orgJurisdictions = await fetchOrganizationJurisdictions([
+            input.organizationId,
+            ...futureShifts.map(s => s.organization_id),
+        ]);
+        const jurisdictionFor = (s: ShiftMeta): string =>
+            s.jurisdiction
+            ?? (s.organization_id ? orgJurisdictions.get(s.organization_id) : undefined)
+            ?? input.jurisdiction
+            ?? windowCard?.jurisdiction
+            ?? (input.organizationId ? orgJurisdictions.get(input.organizationId) : undefined)
+            ?? resolveJurisdiction({ organizationId: s.organization_id ?? input.organizationId });
+
         const optimizerShifts: OptimizerShift[] = futureShifts.map(s => {
-            const dayType = getShiftDayType(s.shift_date, windowCard?.jurisdiction);
+            // Day-type flags (audit F-01). These were declared on OptimizerShift and
+            // read by the solver — `_penalty_day` for the cl 41 loadings, and
+            // `undesirable_shift_ids` for the SC-10/SC-11 fairness terms — but no
+            // producer ever set them, so `is_sunday`/`is_public_holiday` arrived
+            // permanently false: Sunday and PH work was priced at ordinary rates and
+            // was invisible to every fairness balancing term (the
+            // `public_holiday_shifts` debt branch was unreachable outright).
+            // Resolved via the app-wide holiday helper — never a local literal set
+            // and never `new Date(dateStr)`, which parses as UTC midnight and rolls
+            // the day for any viewer west of UTC.
+            const shiftJur = jurisdictionFor(s);
+            const dayType = getShiftDayType(s.shift_date, shiftJur);
             return {
                 id: s.id,
                 shift_date: s.shift_date,
@@ -1870,7 +1911,9 @@ export class AutoSchedulerController {
                 paid_break_minutes: s.paid_break_minutes ?? 0,
                 is_sunday: dayType.isSunday,
                 is_public_holiday: dayType.isPublicHoliday,
-                is_public_holiday_next_day: getShiftDayType(shiftDate(s.shift_date, 1), windowCard?.jurisdiction).isPublicHoliday,
+                // A cross-midnight shift's minutes after 00:00 fall on the next
+                // day; the solver's fairness split needs to know if that is a PH.
+                is_public_holiday_next_day: getShiftDayType(shiftDate(s.shift_date, 1), shiftJur).isPublicHoliday,
             };
         });
 
@@ -2258,6 +2301,8 @@ export class AutoSchedulerController {
                 console.warn('[AutoScheduler] Optimizer returned %s — falling back to greedy engine', optimizerStatus);
                 usedFallback = true;
                 const validationStart = performance.now();
+                // Past shifts are excluded from greedy too — appended
+                // back as failed proposals so they stay visible in the UI.
                 validatedProposals = await greedyFallback(
                     futureShifts,
                     scopedEmployees,
@@ -2269,6 +2314,7 @@ export class AutoSchedulerController {
                     validationCtx,
                     activeMode,
                     windowCard,
+                    jurisdictionFor,
                 );
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
@@ -2318,6 +2364,7 @@ export class AutoSchedulerController {
                     validationCtx,
                     activeMode,
                     windowCard,
+                    jurisdictionFor,
                 );
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
@@ -2368,7 +2415,7 @@ export class AutoSchedulerController {
 
                 if (usedFallback && shift && emp) {
                     p.optimizerCost = estimateGreedyFallbackCost(
-                        shift, emp, employeeDetails.get(emp.id), fallbackPriorOrdinaryMap.get(p.shiftId), rateCards,
+                        shift, emp, employeeDetails.get(emp.id), fallbackPriorOrdinaryMap.get(p.shiftId), rateCards, jurisdictionFor(shift),
                     );
                 }
 

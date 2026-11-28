@@ -11,6 +11,7 @@
  * This module is worker-safe — no DOM, no React, no Supabase.
  */
 
+import { DEFAULT_JURISDICTION } from '@/modules/core/lib/holidays';
 import { isPublicHolidayISO } from './constants';
 import type { RateCardLoadings } from './loadings';
 
@@ -26,7 +27,7 @@ interface DateFacts {
   dateStr: string;
   /** 0 = Sunday, 6 = Saturday */
   dayOfWeek: number;
-  /** Whether this date is a NSW public holiday */
+  /** Whether this date is a public holiday in the context's jurisdiction */
   isPublicHoliday: boolean;
   /** Epoch-ms at 00:00 on this date (for cheap arithmetic) */
   midnightMs: number;
@@ -41,6 +42,8 @@ export interface AwardContext {
   dateFacts: Map<string, DateFacts>;
   /** Optional rate-card loadings shared by every shift in this projection run. */
   loadings?: RateCardLoadings;
+  /** Public-holiday jurisdiction the dateFacts were pre-computed for. */
+  jurisdiction?: string;
   /** Optional published rate cards for this run (see CostCalculatorOptions.rateCards). */
   rateCards?: import('./rate-card-resolver').RateCardSchedule;
 }
@@ -94,6 +97,7 @@ function toDateString(d: string | Date): string {
 export function buildAwardContext(
   shiftDates: (string | Date)[],
   loadings?: RateCardLoadings,
+  jurisdiction: string = DEFAULT_JURISDICTION,
 ): AwardContext {
   const dateFacts = new Map<string, DateFacts>();
 
@@ -104,7 +108,7 @@ export function buildAwardContext(
     // One-time per unique date
     const dateObj = new Date(dateStr + 'T00:00:00');
     const dayOfWeek = dateObj.getDay();
-    const isPublicHoliday = isPublicHolidayISO(dateStr);
+    const isPublicHoliday = isPublicHolidayISO(dateStr, jurisdiction);
     const midnightMs = dateObj.getTime();
 
     dateFacts.set(dateStr, {
@@ -115,7 +119,7 @@ export function buildAwardContext(
     });
   }
 
-  return loadings ? { dateFacts, loadings } : { dateFacts };
+  return loadings ? { dateFacts, loadings, jurisdiction } : { dateFacts, jurisdiction };
 }
 
 /**
@@ -133,7 +137,7 @@ export function getDateFacts(ctx: AwardContext, dateStr: string): DateFacts {
     facts = {
       dateStr: normalized,
       dayOfWeek: dateObj.getDay(),
-      isPublicHoliday: isPublicHolidayISO(normalized),
+      isPublicHoliday: isPublicHolidayISO(normalized, ctx.jurisdiction ?? DEFAULT_JURISDICTION),
       midnightMs: dateObj.getTime(),
     };
     ctx.dateFacts.set(normalized, facts);
